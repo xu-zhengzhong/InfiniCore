@@ -9,6 +9,7 @@
 #include "ops/linear.hpp"
 #include "ops/matmul.hpp"
 #include "ops/mul.hpp"
+#include "ops/narrow.hpp"
 #include "ops/random_sample.hpp"
 #include "ops/rearrange.hpp"
 #include "ops/rms_norm.hpp"
@@ -28,6 +29,7 @@ inline void bind(py::module &m) {
     bind_linear(m);
     bind_matmul(m);
     bind_mul(m);
+    bind_narrow(m);
     bind_rearrange(m);
     bind_rms_norm(m);
     bind_silu(m);

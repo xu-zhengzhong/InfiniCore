@@ -14,6 +14,7 @@
 #include "infiniop/ops/logsoftmax.h"
 #include "infiniop/ops/lp_norm.h"
 #include "infiniop/ops/mul.h"
+#include "infiniop/ops/narrow.h"
 #include "infiniop/ops/ones.h"
 #include "infiniop/ops/random_sample.h"
 #include "infiniop/ops/rearrange.h"
