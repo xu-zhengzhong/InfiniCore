@@ -53,7 +53,7 @@ def parse_test_cases():
                 output_spec=None,
                 comparison_target=None,
                 tolerance=_TOLERANCE_MAP[infinicore.float32],
-                description=f"narrow_copy - OUT_OF_PLACE",
+                description=f"narrow - OUT_OF_PLACE",
             )
         )
 
@@ -61,20 +61,20 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """NarrowCopy operator test with simplified implementation"""
+    """Narrow operator test with simplified implementation"""
 
     def __init__(self):
-        super().__init__("NarrowCopy")
+        super().__init__("Narrow")
 
     def get_test_cases(self):
         return parse_test_cases()
 
     def torch_operator(self, *args, **kwargs):
-        return torch.narrow_copy(*args, **kwargs)
+        return torch.narrow(*args, **kwargs)
 
-    # def infinicore_operator(self, *args, **kwargs):
-    #     """InfiniCore implementation (operator not yet available)."""
-    #     return infinicore.narrow_copy(*args, **kwargs)
+    def infinicore_operator(self, *args, **kwargs):
+        """InfiniCore implementation."""
+        return infinicore.narrow(*args, **kwargs)
 
 
 def main():
