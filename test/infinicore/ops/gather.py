@@ -85,9 +85,9 @@ class OpTest(BaseOperatorTest):
 
         return torch.gather(input, dim, index)
 
-    # def infinicore_operator(self, *args, **kwargs):
-    #     """InfiniCore implementation (operator not yet available)."""
-    #     return infinicore.gather(*args, **kwargs)
+    def infinicore_operator(self, *args, **kwargs):
+        """InfiniCore implementation (operator not yet available)."""
+        return infinicore.gather(*args, **kwargs)
 
 
 def main():

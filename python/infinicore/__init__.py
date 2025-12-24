@@ -41,6 +41,7 @@ from infinicore.dtype import (
 )
 from infinicore.ops.add import add
 from infinicore.ops.attention import attention
+from infinicore.ops.gather import gather
 from infinicore.ops.log import log
 from infinicore.ops.matmul import matmul
 from infinicore.ops.mul import mul
@@ -104,6 +105,7 @@ __all__ = [
     # Operations.
     "add",
     "attention",
+    "gather",
     "log",
     "matmul",
     "mul",

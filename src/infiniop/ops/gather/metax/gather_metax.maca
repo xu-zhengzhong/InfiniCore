@@ -1,0 +1,241 @@
+#include "gather_metax.h"
+#include "../../../devices/metax/metax_common.h"
+#include "../../../devices/metax/metax_handle.h"
+
+#include <mcr/mc_runtime.h>
+#include <common/mc_library_types.h>
+
+#include <maca_fp16.h>
+#include <maca_bfloat16.h>
+
+namespace op::gather::metax {
+
+// ===== helpers =====
+static __host__ __device__ inline size_t prod_range_host(const std::vector<size_t> &shape, int start, int end) {
+    size_t p = 1;
+    for (int i = start; i < end; ++i) p *= shape[i];
+    return p;
+}
+
+// ===== kernel (stride-aware) =====
+template <typename T, typename TIdx>
+__global__ void gather_kernel_strided(
+    T *output,
+    const T *input,
+    const TIdx *index,
+    size_t num_out,
+    int ndim,
+    int dim,
+    const size_t *out_shape,      // device array [ndim]
+    const size_t *in_shape,       // device array [ndim]
+    const ptrdiff_t *in_strides   // device array [ndim] (in elements)
+) {
+    size_t t = blockIdx.x * blockDim.x + threadIdx.x;
+    if (t >= num_out) return;
+
+    // compute inner = prod(out_shape[dim+1:])
+    size_t inner = 1;
+    for (int k = dim + 1; k < ndim; ++k) inner *= out_shape[k];
+
+    size_t dim_size_out = out_shape[dim];
+    size_t dim_size_in = in_shape[dim];
+
+    TIdx g = index[t];
+    if (g < 0 || (size_t)g >= dim_size_in) {
+        output[t] = (T)0;
+        return;
+    }
+
+    size_t inner_idx = (inner == 0) ? 0 : (t % inner);
+    size_t tmp = (inner == 0) ? t : (t / inner);
+
+    size_t outer_flat = (dim_size_out == 0) ? tmp : (tmp / dim_size_out);
+
+    ptrdiff_t in_offset = 0;
+
+    // prefix dims: decode outer_flat into coords using out_shape[0..dim-1]
+    size_t rem = outer_flat;
+    for (int k = dim - 1; k >= 0; --k) {
+        size_t sz = out_shape[k];
+        size_t coord = (sz == 0) ? 0 : (rem % sz);
+        rem = (sz == 0) ? 0 : (rem / sz);
+        in_offset += (ptrdiff_t)coord * in_strides[k];
+        if (k == 0) break;
+    }
+
+    // dim uses gather index g
+    in_offset += (ptrdiff_t)g * in_strides[dim];
+
+    // suffix dims: decode inner_idx into coords using out_shape[dim+1..]
+    size_t rem2 = inner_idx;
+    for (int k = ndim - 1; k >= dim + 1; --k) {
+        size_t sz = out_shape[k];
+        size_t coord = (sz == 0) ? 0 : (rem2 % sz);
+        rem2 = (sz == 0) ? 0 : (rem2 / sz);
+        in_offset += (ptrdiff_t)coord * in_strides[k];
+    }
+
+    output[t] = input[in_offset];
+}
+
+// ===== Descriptor Impl =====
+struct Descriptor::Opaque {
+    std::shared_ptr<device::metax::Handle::Internal> internal;
+    // device copies of meta
+    size_t *d_out_shape;
+    size_t *d_in_shape;
+    ptrdiff_t *d_in_strides;
+    int ndim;
+};
+
+Descriptor::~Descriptor() {
+    if (_opaque) {
+        if (_opaque->d_out_shape) mcFree(_opaque->d_out_shape);
+        if (_opaque->d_in_shape) mcFree(_opaque->d_in_shape);
+        if (_opaque->d_in_strides) mcFree(_opaque->d_in_strides);
+        delete _opaque;
+    }
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopTensorDescriptor_t out_desc,
+    infiniopTensorDescriptor_t in_desc,
+    infiniopTensorDescriptor_t idx_desc,
+    int dim) {
+
+    auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
+
+    auto info_result = GatherInfo::create(out_desc, in_desc, idx_desc, dim);
+    CHECK_RESULT(info_result);
+    auto info = info_result.take();
+
+    int ndim = info._ndim;
+
+    // allocate device meta
+    size_t *d_out_shape = nullptr;
+    size_t *d_in_shape = nullptr;
+    ptrdiff_t *d_in_strides = nullptr;
+
+    mcMalloc((void **)&d_out_shape, sizeof(size_t) * ndim);
+    mcMalloc((void **)&d_in_shape, sizeof(size_t) * ndim);
+    mcMalloc((void **)&d_in_strides, sizeof(ptrdiff_t) * ndim);
+
+    mcMemcpy(d_out_shape, info._out_shape.data(), sizeof(size_t) * ndim, mcMemcpyHostToDevice);
+    mcMemcpy(d_in_shape, info._in_shape.data(), sizeof(size_t) * ndim, mcMemcpyHostToDevice);
+    mcMemcpy(d_in_strides, info._in_strides.data(), sizeof(ptrdiff_t) * ndim, mcMemcpyHostToDevice);
+
+    auto opaque = new Opaque{
+        handle->internal(),
+        d_out_shape,
+        d_in_shape,
+        d_in_strides,
+        ndim};
+
+    *desc_ptr = new Descriptor(
+        opaque,
+        std::move(info),
+        0,
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+template <typename T, typename TIdx>
+static void launch_impl(
+    const GatherInfo &info,
+    const Descriptor::Opaque *opaque,
+    void *output,
+    const void *input,
+    const void *index,
+    void *stream) {
+
+    auto hc_stream = reinterpret_cast<hcStream_t>(stream);
+
+    size_t num_out = info._num_out;
+    int block = 256;
+    int grid = (int)((num_out + block - 1) / block);
+    if (grid > 4096) grid = 4096;
+
+    gather_kernel_strided<T, TIdx><<<grid, block, 0, hc_stream>>>(
+        (T *)output,
+        (const T *)input,
+        (const TIdx *)index,
+        num_out,
+        opaque->ndim,
+        info._dim,
+        opaque->d_out_shape,
+        opaque->d_in_shape,
+        opaque->d_in_strides);
+}
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    void *output,
+    const void *input,
+    const void *index,
+    void *stream) const {
+
+    auto dtype = _info.dtype();
+    auto idx_dtype = _info.idx_dtype();
+
+#define LAUNCH(T)                                                        \
+    do {                                                                 \
+        if (idx_dtype == INFINI_DTYPE_I32) {                             \
+            launch_impl<T, int32_t>(_info, _opaque, output, input, index, stream); \
+        } else if (idx_dtype == INFINI_DTYPE_I64) {                      \
+            launch_impl<T, int64_t>(_info, _opaque, output, input, index, stream); \
+        } else {                                                         \
+            return INFINI_STATUS_BAD_TENSOR_DTYPE;                       \
+        }                                                                \
+    } while (0)
+
+    switch (dtype) {
+    case INFINI_DTYPE_F16:
+        LAUNCH(__half);
+        break;
+    case INFINI_DTYPE_BF16:
+        LAUNCH(__maca_bfloat16);
+        break;
+    case INFINI_DTYPE_F32:
+        LAUNCH(float);
+        break;
+    case INFINI_DTYPE_F64:
+        LAUNCH(double);
+        break;
+    case INFINI_DTYPE_I8:
+        LAUNCH(int8_t);
+        break;
+    case INFINI_DTYPE_U8:
+        LAUNCH(uint8_t);
+        break;
+    case INFINI_DTYPE_I16:
+        LAUNCH(int16_t);
+        break;
+    case INFINI_DTYPE_U16:
+        LAUNCH(uint16_t);
+        break;
+    case INFINI_DTYPE_I32:
+        LAUNCH(int32_t);
+        break;
+    case INFINI_DTYPE_U32:
+        LAUNCH(uint32_t);
+        break;
+    case INFINI_DTYPE_I64:
+        LAUNCH(int64_t);
+        break;
+    case INFINI_DTYPE_U64:
+        LAUNCH(uint64_t);
+        break;
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
+#undef LAUNCH
+    return INFINI_STATUS_SUCCESS;
+}
+
+} // namespace op::gather::metax
