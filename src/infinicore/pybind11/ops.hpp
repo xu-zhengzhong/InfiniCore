@@ -17,6 +17,7 @@
 #include "ops/rearrange.hpp"
 #include "ops/rms_norm.hpp"
 #include "ops/rope.hpp"
+#include "ops/sgn.hpp"
 #include "ops/silu.hpp"
 #include "ops/signbit.hpp"
 #include "ops/swiglu.hpp"
@@ -39,6 +40,7 @@ inline void bind(py::module &m) {
     bind_paged_caching(m);
     bind_rearrange(m);
     bind_rms_norm(m);
+    bind_sgn(m);
     bind_silu(m);
     bind_signbit(m);
     bind_swiglu(m);
