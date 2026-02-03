@@ -20,7 +20,7 @@ _TEST_CASES_DATA = [
     ((3, 4), 1, (0, 1), None),
     ((2, 3, 4), 2, (1, 2), (24, 8, 2)),
     ((4, 5, 6, 7), 3, (2, 3), None),
-    ((6, 7), 1, (0, 1), None),
+    ((6, 7), 3, (0, 1), None),
     ((2, 2, 3, 4), 2, (1, 3), None),
     ((5, 6, 7), 1, (0, 2), None),
 ]
@@ -73,9 +73,9 @@ class OpTest(BaseOperatorTest):
     def torch_operator(self, *args, **kwargs):
         return torch.rot90(*args, **kwargs)
 
-    # def infinicore_operator(self, *args, **kwargs):
-    #     """InfiniCore implementation (operator not yet available)."""
-    #     return infinicore.rot90(*args, **kwargs)
+    def infinicore_operator(self, *args, **kwargs):
+        """InfiniCore implementation (operator not yet available)."""
+        return infinicore.rot90(*args, **kwargs)
 
 
 def main():

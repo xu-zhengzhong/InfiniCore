@@ -52,6 +52,7 @@ from infinicore.ops.paged_attention import paged_attention
 from infinicore.ops.paged_attention_prefill import paged_attention_prefill
 from infinicore.ops.paged_caching import paged_caching
 from infinicore.ops.rearrange import rearrange
+from infinicore.ops.rot90 import rot90
 from infinicore.ops.sgn import sgn
 from infinicore.ops.signbit import signbit
 from infinicore.ops.squeeze import squeeze
@@ -133,6 +134,7 @@ __all__ = [
     "paged_attention",
     "paged_attention_prefill",
     "ones",
+    "rot90",
     "sgn",
     "signbit",
     "strided_empty",
