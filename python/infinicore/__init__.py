@@ -51,6 +51,7 @@ from infinicore.ops.narrow import narrow
 from infinicore.ops.paged_attention import paged_attention
 from infinicore.ops.paged_attention_prefill import paged_attention_prefill
 from infinicore.ops.paged_caching import paged_caching
+from infinicore.ops.quantile import quantile
 from infinicore.ops.rearrange import rearrange
 from infinicore.ops.rot90 import rot90
 from infinicore.ops.sgn import sgn
@@ -133,6 +134,7 @@ __all__ = [
     "paged_caching",
     "paged_attention",
     "paged_attention_prefill",
+    "quantile",
     "ones",
     "rot90",
     "sgn",
