@@ -721,6 +721,37 @@ def rope_(lib):
         infiniopOperatorDescriptor_t,
     ]
 
+@OpRegister.operator
+def scal_(lib):
+    lib.infiniopCreateScalDescriptor.restype = c_int32
+    lib.infiniopCreateScalDescriptor.argtypes = [
+        infiniopHandle_t,                       # handle
+        POINTER(infiniopOperatorDescriptor_t),  # desc_ptr
+        infiniopTensorDescriptor_t,             # x_desc
+    ]
+
+    lib.infiniopGetScalWorkspaceSize.restype = c_int32
+    lib.infiniopGetScalWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+        POINTER(c_size_t),                      # size_ptr
+    ]
+
+    lib.infiniopScal.restype = c_int32
+    lib.infiniopScal.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+        c_void_p,                               # workspace
+        c_size_t,                               # workspace_size
+        c_void_p,                               # x
+        c_void_p,                               # alpha
+        c_void_p,                               # stream
+    ]
+
+    lib.infiniopDestroyScalDescriptor.restype = c_int32
+    lib.infiniopDestroyScalDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+    ]
+    
+
 
 @OpRegister.operator
 def sub_(lib):
