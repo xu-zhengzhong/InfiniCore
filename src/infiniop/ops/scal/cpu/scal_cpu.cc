@@ -8,11 +8,11 @@ Descriptor::~Descriptor() = default;
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
     Descriptor **desc_ptr,
+    infiniopTensorDescriptor_t y_desc,
     infiniopTensorDescriptor_t x_desc) {
 
     auto handle = reinterpret_cast<device::cpu::Handle *>(handle_);
-
-    auto info = ScalInfo::createScalInfo(x_desc);
+    auto info = ScalInfo::createScalInfo(y_desc, x_desc);
     CHECK_RESULT(info);
 
     // Create descriptor
@@ -27,21 +27,25 @@ infiniStatus_t Descriptor::create(
 }
 
 template <typename Tdata>
-infiniStatus_t calculateScal(const ScalInfo &info, void *x, const void *alpha) {
-    Tdata *x_ptr = reinterpret_cast<Tdata *>(x);
+infiniStatus_t calculateScal(const ScalInfo &info, void *y, const void *x, const void *alpha) {
+    Tdata *y_ptr = reinterpret_cast<Tdata *>(y);
+    const Tdata *x_ptr = reinterpret_cast<const Tdata *>(x);
     Tdata a = *reinterpret_cast<const Tdata *>(alpha);
     const ptrdiff_t size = info.getSize();
 
 #pragma omp parallel for if (size > 1024)
     for (ptrdiff_t i = 0; i < size; ++i) {
-        size_t idx = info.isContiguous()
+        size_t y_idx = info.isYContiguous()
                          ? i
-                         : op::common_cpu::indexToOffset(i, info.getNdim(), info.getShape(), info.getStrides());
+                         : op::common_cpu::indexToOffset(i, info.getNdim(), info.getShape(), info.getYStrides());
+        size_t x_idx = info.isXContiguous()
+                         ? i
+                         : op::common_cpu::indexToOffset(i, info.getNdim(), info.getShape(), info.getXStrides());
 
         if constexpr (std::is_same_v<Tdata, fp16_t> || std::is_same_v<Tdata, bf16_t>) {
-            x_ptr[idx] = utils::cast<Tdata>(utils::cast<float>(x_ptr[idx]) * utils::cast<float>(a));
+            y_ptr[y_idx] = utils::cast<Tdata>(utils::cast<float>(x_ptr[x_idx]) * utils::cast<float>(a));
         } else {
-            x_ptr[idx] = x_ptr[idx] * a;
+            y_ptr[y_idx] = x_ptr[x_idx] * a;
         }
     }
 
@@ -49,34 +53,21 @@ infiniStatus_t calculateScal(const ScalInfo &info, void *x, const void *alpha) {
 }
 
 infiniStatus_t Descriptor::calculate(
-    void *workspace,
-    size_t workspace_size,
-    void *x,
-    const void *alpha,
-    void *stream) const {
+    void *workspace, size_t workspace_size, void *y, const void *x, const void *alpha, void *stream) const {
 
     (void)workspace;
     (void)workspace_size;
 
     switch (_info.getDtype()) {
-    case INFINI_DTYPE_F32:
-        return calculateScal<float>(_info, x, alpha);
-    case INFINI_DTYPE_F16:
-        return calculateScal<fp16_t>(_info, x, alpha);
-    case INFINI_DTYPE_BF16:
-        return calculateScal<bf16_t>(_info, x, alpha);
-    case INFINI_DTYPE_F64:
-        return calculateScal<double>(_info, x, alpha);
-    case INFINI_DTYPE_I32:
-        return calculateScal<int32_t>(_info, x, alpha);
-    case INFINI_DTYPE_I64:
-        return calculateScal<int64_t>(_info, x, alpha);
-    case INFINI_DTYPE_I16:
-        return calculateScal<int16_t>(_info, x, alpha);
-    case INFINI_DTYPE_I8:
-        return calculateScal<int8_t>(_info, x, alpha);
-    default:
-        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    case INFINI_DTYPE_F32: return calculateScal<float>(_info, y, x, alpha);
+    case INFINI_DTYPE_F16: return calculateScal<fp16_t>(_info, y, x, alpha);
+    case INFINI_DTYPE_BF16: return calculateScal<bf16_t>(_info, y, x, alpha);
+    case INFINI_DTYPE_F64: return calculateScal<double>(_info, y, x, alpha);
+    case INFINI_DTYPE_I32: return calculateScal<int32_t>(_info, y, x, alpha);
+    case INFINI_DTYPE_I64: return calculateScal<int64_t>(_info, y, x, alpha);
+    case INFINI_DTYPE_I16: return calculateScal<int16_t>(_info, y, x, alpha);
+    case INFINI_DTYPE_I8: return calculateScal<int8_t>(_info, y, x, alpha);
+    default: return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
 }
 

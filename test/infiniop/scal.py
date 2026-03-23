@@ -24,15 +24,15 @@ from libinfiniop import (
 # These are not meant to be imported from other modules
 # Format: (shape, x_stride)
 _TEST_CASES = [
-    ((13, 4), None),
-    ((13, 4), (10, 1)),
-    ((13, 4, 4), None),
-    ((13, 4, 4), (20, 4, 1)),
-    ((16, 5632), None),
-    ((16, 5632), (13312, 1)),
-    ((13, 16, 2), (128, 4, 1)),
-    ((4, 4, 5632), None),
-    ((4, 4, 5632), (45056, 5632, 1)),
+    # shape, x_stride, y_stride
+    ((13, 4), None, None),
+    ((13, 4), (10, 1), (10, 1)),
+    ((13, 4), (16, 4), None),
+    ((13, 4, 4), None, None),
+    ((13, 4, 4), (20, 4, 1), (20, 4, 1)),
+    ((16, 5632), None, None),
+    ((16, 5632), None, (13312, 1)),
+    ((13, 16, 2), (128, 4, 1), (64, 4, 1)),
 ]
 
 # Data types used for testing
@@ -55,35 +55,32 @@ NUM_PRERUN = 10
 NUM_ITERATIONS = 1000
 
 
-def scal(x, alpha):
-    x.mul_(alpha)
+def scal(y, x, alpha):
+    torch.mul(x, alpha, out=y)
 
 
 def test(
     handle,
     device,
     shape,
+    y_stride=None,
     x_stride=None,
     dtype=torch.float16,
     sync=None,
 ):
+    y = TestTensor(shape, y_stride, dtype, device, mode="ones")
     x = TestTensor(shape, x_stride, dtype, device)
 
-    # In-place broadcast target is structurally invalid for scal
-    if x.is_broadcast():
+    if y.is_broadcast():
         return
 
     print(
-        f"Testing Scal on {InfiniDeviceNames[device]} with shape:{shape} x_stride:{x_stride} "
+        f"Testing Scal on {InfiniDeviceNames[device]} with shape:{shape} y_stride:{y_stride} x_stride:{x_stride} "
         f"dtype:{InfiniDtypeNames[dtype]}"
     )
 
     # Generate a scalar multiplier
-    # Use integers for int dtypes, floats for float/half dtypes
-    if dtype in [InfiniDtype.I32, InfiniDtype.I64, InfiniDtype.I16, InfiniDtype.I8]:
-        alpha_val = 3
-    else:
-        alpha_val = 2.5
+    alpha_val = 2.5
 
     # Create a 0-D tensor for alpha on the same device to extract a valid C data pointer
     alpha_tensor = torch.tensor(
@@ -91,7 +88,7 @@ def test(
     )
 
     # Compute PyTorch reference
-    scal(x.torch_tensor(), alpha_val)
+    scal(y.torch_tensor(), x.torch_tensor(), alpha_val)
 
     if sync is not None:
         sync()
@@ -102,11 +99,13 @@ def test(
         LIBINFINIOP.infiniopCreateScalDescriptor(
             handle,
             ctypes.byref(descriptor),
+            y.descriptor,
             x.descriptor,
         )
     )
 
     # Invalidate the shape and strides in the descriptor to prevent them from being directly used by the kernel
+    y.destroy_desc()
     x.destroy_desc()
 
     # Allocate Workspace
@@ -116,7 +115,7 @@ def test(
             descriptor, ctypes.byref(workspace_size)
         )
     )
-    workspace = TestWorkspace(workspace_size.value, x.device)
+    workspace = TestWorkspace(workspace_size.value, y.device)
 
     # Execute C library op
     def lib_scal():
@@ -125,6 +124,7 @@ def test(
                 descriptor,
                 workspace.data(),
                 workspace.size(),
+                y.data(),
                 x.data(),
                 alpha_tensor.data_ptr(),  # Pass the scalar pointer
                 None,
@@ -136,14 +136,14 @@ def test(
     # Compare results
     atol, rtol = get_tolerance(_TOLERANCE_MAP, dtype)
     if DEBUG:
-        debug(x.actual_tensor(), x.torch_tensor(), atol=atol, rtol=rtol)
+        debug(y.actual_tensor(), y.torch_tensor(), atol=atol, rtol=rtol)
     
-    assert torch.allclose(x.actual_tensor(), x.torch_tensor(), atol=atol, rtol=rtol)
+    assert torch.allclose(y.actual_tensor(), y.torch_tensor(), atol=atol, rtol=rtol)
 
     # Profiling workflow
     if PROFILE:
         # fmt: off
-        profile_operation("PyTorch", lambda: scal(x.torch_tensor(), alpha_val), device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("PyTorch", lambda: scal(y.torch_tensor(), x.torch_tensor(), alpha_val), device, NUM_PRERUN, NUM_ITERATIONS)
         profile_operation("    lib", lambda: lib_scal(), device, NUM_PRERUN, NUM_ITERATIONS)
         # fmt: on
         
