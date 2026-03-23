@@ -87,10 +87,6 @@ infiniStatus_t Descriptor::calculate(
         return CALCULATE_SCAL(bfloat16_t);
     case INFINI_DTYPE_F32:
         return CALCULATE_SCAL(float);
-    case INFINI_DTYPE_I32:
-        return CALCULATE_SCAL(int32_t);
-    case INFINI_DTYPE_I64:
-        return CALCULATE_SCAL(int64_t);
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
