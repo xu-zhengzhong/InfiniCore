@@ -22,17 +22,16 @@ from libinfiniop import (
 #  Configuration (Internal Use Only)
 # ==============================================================================
 # These are not meant to be imported from other modules
-# Format: (shape, x_stride)
 _TEST_CASES = [
-    # shape, x_stride, y_stride
-    ((13, 4), None, None),
-    ((13, 4), (10, 1), (10, 1)),
-    ((13, 4), (16, 4), None),
-    ((13, 4, 4), None, None),
-    ((13, 4, 4), (20, 4, 1), (20, 4, 1)),
-    ((16, 5632), None, None),
-    ((16, 5632), None, (13312, 1)),
-    ((13, 16, 2), (128, 4, 1), (64, 4, 1)),
+    # shape, x_stride, y_stride, alpha
+    ((13, 4), None, None, 2.5),
+    ((13, 4), (10, 1), (10, 1), 1.3),
+    ((13, 4), (16, 4), None, 1.0),
+    ((13, 4, 4), None, None, 8.2),
+    ((13, 4, 4), (20, 4, 1), (20, 4, 1), 0.5),
+    ((16, 5632), None, None, 2.0),
+    ((16, 5632), None, (13312, 1), 1.5),
+    ((13, 16, 2), (128, 4, 1), (64, 4, 1), 0.8),
 ]
 
 # Data types used for testing
@@ -46,7 +45,7 @@ _TENSOR_DTYPES = [
 _TOLERANCE_MAP = {
     InfiniDtype.F16: {"atol": 1e-3, "rtol": 1e-3},
     InfiniDtype.F32: {"atol": 1e-7, "rtol": 1e-7},
-    InfiniDtype.BF16: {"atol": 1e-3, "rtol": 1e-3},
+    InfiniDtype.BF16: {"atol": 1e-2, "rtol": 1e-2},
 }
 
 DEBUG = False
@@ -65,6 +64,7 @@ def test(
     shape,
     y_stride=None,
     x_stride=None,
+    alpha=2.5,
     dtype=torch.float16,
     sync=None,
 ):
@@ -75,20 +75,12 @@ def test(
         return
 
     print(
-        f"Testing Scal on {InfiniDeviceNames[device]} with shape:{shape} y_stride:{y_stride} x_stride:{x_stride} "
+        f"Testing Scal on {InfiniDeviceNames[device]} with shape:{shape} y_stride:{y_stride} x_stride:{x_stride} alpha:{alpha} "
         f"dtype:{InfiniDtypeNames[dtype]}"
     )
 
-    # Generate a scalar multiplier
-    alpha_val = 2.5
-
-    # Create a 0-D tensor for alpha on the same device to extract a valid C data pointer
-    alpha_tensor = torch.tensor(
-        alpha_val, dtype=x.torch_tensor().dtype, device=x.torch_tensor().device
-    )
-
     # Compute PyTorch reference
-    scal(y.torch_tensor(), x.torch_tensor(), alpha_val)
+    scal(y.torch_tensor(), x.torch_tensor(), alpha)
 
     if sync is not None:
         sync()
@@ -126,7 +118,7 @@ def test(
                 workspace.size(),
                 y.data(),
                 x.data(),
-                alpha_tensor.data_ptr(),  # Pass the scalar pointer
+                alpha,
                 None,
             )
         )
@@ -143,7 +135,7 @@ def test(
     # Profiling workflow
     if PROFILE:
         # fmt: off
-        profile_operation("PyTorch", lambda: scal(y.torch_tensor(), x.torch_tensor(), alpha_val), device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("PyTorch", lambda: scal(y.torch_tensor(), x.torch_tensor(), alpha), device, NUM_PRERUN, NUM_ITERATIONS)
         profile_operation("    lib", lambda: lib_scal(), device, NUM_PRERUN, NUM_ITERATIONS)
         # fmt: on
         

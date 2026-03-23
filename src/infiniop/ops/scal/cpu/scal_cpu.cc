@@ -27,10 +27,10 @@ infiniStatus_t Descriptor::create(
 }
 
 template <typename Tdata>
-infiniStatus_t calculateScal(const ScalInfo &info, void *y, const void *x, const void *alpha) {
+infiniStatus_t calculateScal(const ScalInfo &info, void *y, const void *x, float alpha) {
     Tdata *y_ptr = reinterpret_cast<Tdata *>(y);
     const Tdata *x_ptr = reinterpret_cast<const Tdata *>(x);
-    Tdata a = *reinterpret_cast<const Tdata *>(alpha);
+
     const ptrdiff_t size = info.getSize();
 
 #pragma omp parallel for if (size > 1024)
@@ -43,9 +43,9 @@ infiniStatus_t calculateScal(const ScalInfo &info, void *y, const void *x, const
                          : op::common_cpu::indexToOffset(i, info.getNdim(), info.getShape(), info.getXStrides());
 
         if constexpr (std::is_same_v<Tdata, fp16_t> || std::is_same_v<Tdata, bf16_t>) {
-            y_ptr[y_idx] = utils::cast<Tdata>(utils::cast<float>(x_ptr[x_idx]) * utils::cast<float>(a));
+            y_ptr[y_idx] = utils::cast<Tdata>(utils::cast<float>(x_ptr[x_idx]) * utils::cast<float>(alpha));
         } else {
-            y_ptr[y_idx] = x_ptr[x_idx] * a;
+            y_ptr[y_idx] = x_ptr[x_idx] * alpha;
         }
     }
 
@@ -53,21 +53,25 @@ infiniStatus_t calculateScal(const ScalInfo &info, void *y, const void *x, const
 }
 
 infiniStatus_t Descriptor::calculate(
-    void *workspace, size_t workspace_size, void *y, const void *x, const void *alpha, void *stream) const {
+    void *workspace,
+    size_t workspace_size,
+    void *y,
+    const void *x,
+    float alpha,
+    void *stream) const {
 
     (void)workspace;
     (void)workspace_size;
 
     switch (_info.getDtype()) {
-    case INFINI_DTYPE_F32: return calculateScal<float>(_info, y, x, alpha);
-    case INFINI_DTYPE_F16: return calculateScal<fp16_t>(_info, y, x, alpha);
-    case INFINI_DTYPE_BF16: return calculateScal<bf16_t>(_info, y, x, alpha);
-    case INFINI_DTYPE_F64: return calculateScal<double>(_info, y, x, alpha);
-    case INFINI_DTYPE_I32: return calculateScal<int32_t>(_info, y, x, alpha);
-    case INFINI_DTYPE_I64: return calculateScal<int64_t>(_info, y, x, alpha);
-    case INFINI_DTYPE_I16: return calculateScal<int16_t>(_info, y, x, alpha);
-    case INFINI_DTYPE_I8: return calculateScal<int8_t>(_info, y, x, alpha);
-    default: return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    case INFINI_DTYPE_F32:
+        return calculateScal<float>(_info, y, x, alpha);
+    case INFINI_DTYPE_F16:
+        return calculateScal<fp16_t>(_info, y, x, alpha);
+    case INFINI_DTYPE_BF16:
+        return calculateScal<bf16_t>(_info, y, x, alpha);
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
 }
 

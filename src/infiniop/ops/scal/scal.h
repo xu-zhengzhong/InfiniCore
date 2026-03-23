@@ -44,7 +44,7 @@
             size_t workspace_size,                               \
             void *y,                                             \
             const void *x,                                       \
-            const void *alpha,                                   \
+            float alpha,                                   \
             void *stream) const;                                 \
     };                                                           \
     }

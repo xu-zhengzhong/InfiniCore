@@ -727,6 +727,7 @@ def scal_(lib):
     lib.infiniopCreateScalDescriptor.argtypes = [
         infiniopHandle_t,                       # handle
         POINTER(infiniopOperatorDescriptor_t),  # desc_ptr
+        infiniopTensorDescriptor_t,             # y_desc
         infiniopTensorDescriptor_t,             # x_desc
     ]
 
@@ -741,8 +742,9 @@ def scal_(lib):
         infiniopOperatorDescriptor_t,           # descriptor
         c_void_p,                               # workspace
         c_size_t,                               # workspace_size
+        c_void_p,                               # y
         c_void_p,                               # x
-        c_void_p,                               # alpha
+        c_float,                                # alpha
         c_void_p,                               # stream
     ]
 

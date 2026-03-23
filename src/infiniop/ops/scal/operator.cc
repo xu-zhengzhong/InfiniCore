@@ -129,7 +129,7 @@ __INFINI_C infiniStatus_t infiniopScal(
     size_t workspace_size,
     void *y,
     const void *x,
-    const void *alpha,
+    float alpha,
     void *stream) {
 
 #define CALCULATE(CASE, NAMESPACE)                                             \

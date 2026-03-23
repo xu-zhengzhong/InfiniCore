@@ -21,7 +21,7 @@ __INFINI_C __export infiniStatus_t infiniopScal(
     size_t workspace_size,
     void *y,
     const void *x,
-    const void *alpha,
+    float alpha,
     void *stream);
 
 __INFINI_C __export infiniStatus_t infiniopDestroyScalDescriptor(

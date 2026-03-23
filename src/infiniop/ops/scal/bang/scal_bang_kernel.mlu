@@ -15,7 +15,7 @@ template <typename Tdata>
 __mlu_global__ void scalKernelContiguous(
     Tdata *y,
     const Tdata *x,
-    const Tdata *alpha,
+    Tdata alpha,
     size_t size) {
 
     Tdata *nram_x = (Tdata *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
@@ -43,7 +43,7 @@ __mlu_global__ void scalKernelContiguous(
         size_t current_offset = core_offset + c * max_chunk_elements;
         __memcpy(nram_x, x + current_offset, max_chunk_elements * sizeof(Tdata), GDRAM2NRAM);
         
-        __bang_mul_scalar(nram_x, nram_x, (*alpha), max_chunk_elements);
+        __bang_mul_scalar(nram_x, nram_x, alpha, max_chunk_elements);
         
         __memcpy(y + current_offset, nram_x, max_chunk_elements * sizeof(Tdata), NRAM2GDRAM);
     }
@@ -54,7 +54,7 @@ __mlu_global__ void scalKernelContiguous(
         
         __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
         
-        __bang_mul_scalar(nram_x, nram_x, (*alpha), align_rem);
+        __bang_mul_scalar(nram_x, nram_x, alpha, align_rem);
         
         __memcpy(y + current_offset, nram_x, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
     }
@@ -64,7 +64,7 @@ template <typename Tdata>
 __mlu_global__ void scalKernelStrided(
     Tdata *y,
     const Tdata *x,
-    const Tdata *alpha,
+    Tdata alpha,
     size_t size,
     TensorLayout layout) {
 
@@ -85,6 +85,6 @@ __mlu_global__ void scalKernelStrided(
             temp /= layout.shape[d];
         }
 
-        y[y_offset] = x[x_offset] * (*alpha);
+        y[y_offset] = x[x_offset] * alpha;
     }
 }

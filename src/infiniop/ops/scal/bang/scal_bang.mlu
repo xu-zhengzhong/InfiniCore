@@ -31,7 +31,7 @@ template <typename Tdata>
 infiniStatus_t calculateScal(const ScalInfo &info,
                              void *y,
                              const void *x,
-                             const void *alpha,
+                             float alpha,
                              cnrtQueue_t queue) {
 
     cnrtDim3_t k_dim;
@@ -47,7 +47,7 @@ infiniStatus_t calculateScal(const ScalInfo &info,
         scalKernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
             (Tdata *)y, 
             (const Tdata *)x, 
-            (const Tdata *)alpha, 
+            static_cast<Tdata>(alpha), 
             info.getSize());
     } else {
         TensorLayout layout;
@@ -61,7 +61,7 @@ infiniStatus_t calculateScal(const ScalInfo &info,
         scalKernelStrided<Tdata><<<k_dim, k_type, queue>>>(
             (Tdata *)y, 
             (const Tdata *)x, 
-            (const Tdata *)alpha, 
+            static_cast<Tdata>(alpha), 
             info.getSize(), 
             layout);
     }
@@ -79,7 +79,7 @@ infiniStatus_t Descriptor::calculate(
     size_t workspace_size,
     void *y,
     const void *x,
-    const void *alpha,
+    float alpha,
     void *stream) const {
 
     (void)workspace;
