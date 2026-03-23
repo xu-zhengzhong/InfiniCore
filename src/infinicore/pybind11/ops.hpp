@@ -38,6 +38,7 @@
 #include "ops/reciprocal.hpp"
 #include "ops/rms_norm.hpp"
 #include "ops/rope.hpp"
+#include "ops/scal.hpp"
 #include "ops/silu.hpp"
 #include "ops/silu_and_mul.hpp"
 #include "ops/sum.hpp"
@@ -78,6 +79,7 @@ inline void bind(py::module &m) {
     bind_rearrange(m);
     bind_rms_norm(m);
     bind_avg_pool1d(m);
+    bind_scal(m);
     bind_silu(m);
     bind_swiglu(m);
     bind_rope(m);
