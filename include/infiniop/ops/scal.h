@@ -8,7 +8,6 @@ typedef struct InfiniopDescriptor *infiniopScalDescriptor_t;
 __INFINI_C __export infiniStatus_t infiniopCreateScalDescriptor(
     infiniopHandle_t handle,
     infiniopScalDescriptor_t *desc_ptr,
-    infiniopTensorDescriptor_t y,
     infiniopTensorDescriptor_t x);
 
 __INFINI_C __export infiniStatus_t infiniopGetScalWorkspaceSize(
@@ -19,8 +18,7 @@ __INFINI_C __export infiniStatus_t infiniopScal(
     infiniopScalDescriptor_t desc,
     void *workspace,
     size_t workspace_size,
-    void *y,
-    const void *x,
+    void *x,
     float alpha,
     void *stream);
 

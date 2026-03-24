@@ -15,8 +15,8 @@ thread_local common::OpCache<size_t, infiniopScalDescriptor_t> caches(
         }
     });
 
-void calculate(Tensor y, Tensor x, float alpha) {
-    size_t seed = hash_combine(y, x);
+void calculate(Tensor y, float alpha) {
+    size_t seed = hash_combine(y);
 
     auto device_type = context::getDevice().getType();
     auto device_index = context::getDevice().getIndex();
@@ -29,7 +29,7 @@ void calculate(Tensor y, Tensor x, float alpha) {
     if (!desc_opt) {
         INFINICORE_CHECK_ERROR(infiniopCreateScalDescriptor(
             context::getInfiniopHandle(y->device()), &desc,
-            y->desc(), x->desc()));
+            y->desc()));
         cache.put(seed, desc);
     } else {
         desc = *desc_opt;
@@ -41,7 +41,7 @@ void calculate(Tensor y, Tensor x, float alpha) {
 
     INFINICORE_CHECK_ERROR(infiniopScal(
         desc, workspace->data(), workspace_size,
-        y->data(), x->data(), alpha, context::getStream()));
+        y->data(), alpha, context::getStream()));
 }
 
 static bool registered = []() {

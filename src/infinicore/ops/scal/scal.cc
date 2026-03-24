@@ -8,10 +8,9 @@ common::OpDispatcher<Scal::schema> &Scal::dispatcher() {
     return dispatcher_;
 };
 
-void Scal::execute(Tensor y, Tensor x, float alpha) {
-    INFINICORE_ASSERT_TENSORS_SAME_DEVICE(y, x);
+void Scal::execute(Tensor y, float alpha) {
     infinicore::context::setDevice(y->device());
-    dispatcher().lookup(y->device().getType())(y, x, alpha);
+    dispatcher().lookup(y->device().getType())(y, alpha);
 }
 
 Tensor scal(Tensor x, float alpha) {
@@ -21,7 +20,8 @@ Tensor scal(Tensor x, float alpha) {
 }
 
 void scal_(Tensor y, Tensor x, float alpha) {
-    Scal::execute(y, x, alpha);
+    y->copy_from(x);
+    Scal::execute(y, alpha);
 }
 
 } // namespace infinicore::op

@@ -6,15 +6,13 @@ __nram__ char nram_buffer[NRAM_MAX_SIZE];
 // Helper struct to pass non-contiguous metadata to the kernel by value
 struct TensorLayout {
     size_t shape[8];
-    ptrdiff_t y_strides[8];
-    ptrdiff_t x_strides[8];
+    ptrdiff_t strides[8];
     size_t ndim;
 };
 
 template <typename Tdata>
 __mlu_global__ void scalKernelContiguous(
-    Tdata *y,
-    const Tdata *x,
+    Tdata *x,
     Tdata alpha,
     size_t size) {
 
@@ -45,7 +43,7 @@ __mlu_global__ void scalKernelContiguous(
         
         __bang_mul_scalar(nram_x, nram_x, alpha, max_chunk_elements);
         
-        __memcpy(y + current_offset, nram_x, max_chunk_elements * sizeof(Tdata), NRAM2GDRAM);
+        __memcpy(x + current_offset, nram_x, max_chunk_elements * sizeof(Tdata), NRAM2GDRAM);
     }
 
     if (chunk_rem > 0) {
@@ -56,14 +54,13 @@ __mlu_global__ void scalKernelContiguous(
         
         __bang_mul_scalar(nram_x, nram_x, alpha, align_rem);
         
-        __memcpy(y + current_offset, nram_x, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
+        __memcpy(x + current_offset, nram_x, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
     }
 }
 
 template <typename Tdata>
 __mlu_global__ void scalKernelStrided(
-    Tdata *y,
-    const Tdata *x,
+    Tdata *x,
     Tdata alpha,
     size_t size,
     TensorLayout layout) {
@@ -74,17 +71,15 @@ __mlu_global__ void scalKernelStrided(
     int start_idx = taskId < remain ? taskId * actual_tasks : taskId * elements_per_core + remain;
 
     for (int i = start_idx; i < start_idx + actual_tasks; ++i) {
-        size_t y_offset = 0;
-        size_t x_offset = 0;
+        size_t offset = 0;
         size_t temp = i;
         
         for (int d = layout.ndim - 1; d >= 0; --d) {
             size_t idx = temp % layout.shape[d];
-            y_offset += idx * layout.y_strides[d];
-            x_offset += idx * layout.x_strides[d];
+            offset += idx * layout.strides[d];
             temp /= layout.shape[d];
         }
 
-        y[y_offset] = x[x_offset] * alpha;
+        x[offset] *= alpha;
     }
 }

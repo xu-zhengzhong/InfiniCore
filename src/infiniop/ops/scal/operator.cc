@@ -24,7 +24,6 @@
 __INFINI_C infiniStatus_t infiniopCreateScalDescriptor(
     infiniopHandle_t handle,
     infiniopScalDescriptor_t *desc_ptr,
-    infiniopTensorDescriptor_t y_desc,
     infiniopTensorDescriptor_t x_desc) {
 
 #define CREATE(CASE, NAMESPACE)                                             \
@@ -32,7 +31,6 @@ __INFINI_C infiniStatus_t infiniopCreateScalDescriptor(
         return op::scal::NAMESPACE::Descriptor::create(                     \
             handle,                                                         \
             reinterpret_cast<op::scal::NAMESPACE::Descriptor **>(desc_ptr), \
-            y_desc,                                                         \
             x_desc)
 
     switch (handle->device) {
@@ -127,15 +125,14 @@ __INFINI_C infiniStatus_t infiniopScal(
     infiniopScalDescriptor_t desc,
     void *workspace,
     size_t workspace_size,
-    void *y,
-    const void *x,
+    void *x,
     float alpha,
     void *stream) {
 
 #define CALCULATE(CASE, NAMESPACE)                                             \
     case CASE:                                                                 \
         return reinterpret_cast<const op::scal::NAMESPACE::Descriptor *>(desc) \
-            ->calculate(workspace, workspace_size, y, x, alpha, stream)
+            ->calculate(workspace, workspace_size, x, alpha, stream)
 
     switch (desc->device_type) {
 

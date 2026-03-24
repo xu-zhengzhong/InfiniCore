@@ -6,8 +6,8 @@
 namespace infinicore::op {
 class Scal {
 public:
-    using schema = void (*)(Tensor, Tensor, float);
-    static void execute(Tensor y, Tensor x, float alpha);
+    using schema = void (*)(Tensor, float);
+    static void execute(Tensor y, float alpha);
     static common::OpDispatcher<schema> &dispatcher();
 };
 
