@@ -33,9 +33,7 @@ infiniStatus_t calculateScal(const ScalInfo &info, void *x, float alpha) {
 
 #pragma omp parallel for if (size > 1024)
     for (ptrdiff_t i = 0; i < size; ++i) {
-        size_t idx = info.isContiguous()
-                         ? i
-                         : op::common_cpu::indexToOffset(i, info.getNdim(), info.getShape(), info.getStrides());
+        size_t idx = i * info.getIncx();
 
         if constexpr (std::is_same_v<Tdata, fp16_t> || std::is_same_v<Tdata, bf16_t>) {
             x_ptr[idx] = utils::cast<Tdata>(utils::cast<float>(x_ptr[idx]) * alpha);

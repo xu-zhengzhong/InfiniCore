@@ -3,18 +3,11 @@
 
 __nram__ char nram_buffer[NRAM_MAX_SIZE];
 
-// Helper struct to pass non-contiguous metadata to the kernel by value
-struct TensorLayout {
-    size_t shape[8];
-    ptrdiff_t strides[8];
-    size_t ndim;
-};
-
 template <typename Tdata>
-__mlu_global__ void scalKernelContiguous(
-    Tdata *x,
+__mlu_global__ void scalKernel(
+    size_t n,
     Tdata alpha,
-    size_t size) {
+    Tdata *x) {
 
     Tdata *nram_x = (Tdata *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
 
@@ -25,8 +18,8 @@ __mlu_global__ void scalKernelContiguous(
     if (align_elements == 0) align_elements = 1;
     max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
 
-    int elements_per_core = size / taskDim;
-    int remain = size % taskDim;
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
     int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
     int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
 
@@ -60,25 +53,18 @@ __mlu_global__ void scalKernelContiguous(
 
 template <typename Tdata>
 __mlu_global__ void scalKernelStrided(
-    Tdata *x,
+    size_t n,
     Tdata alpha,
-    size_t size,
-    TensorLayout layout) {
+    Tdata *x,
+    size_t incx) {
 
-    int elements_per_core = size / taskDim;
-    int remain = size % taskDim;
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
     int actual_tasks = elements_per_core + (taskId < remain ? 1 : 0);
     int start_idx = taskId < remain ? taskId * actual_tasks : taskId * elements_per_core + remain;
 
     for (int i = start_idx; i < start_idx + actual_tasks; ++i) {
-        size_t offset = 0;
-        size_t temp = i;
-        
-        for (int d = layout.ndim - 1; d >= 0; --d) {
-            size_t idx = temp % layout.shape[d];
-            offset += idx * layout.strides[d];
-            temp /= layout.shape[d];
-        }
+        size_t offset = i * incx;
 
         x[offset] *= alpha;
     }

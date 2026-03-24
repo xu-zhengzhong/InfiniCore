@@ -41,24 +41,17 @@ infiniStatus_t calculateScal(
     k_dim.z = 1;
     k_type = cnrtFuncTypeUnion1;
 
-    if (info.isContiguous()) {
+    if (info.getIncx() == 1) {
         scalKernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
-            (Tdata *)x, 
-            static_cast<Tdata>(alpha), 
-            info.getSize());
-    } else {
-        TensorLayout layout;
-        layout.ndim = info.getNdim();
-        for (size_t i = 0; i < layout.ndim && i < 8; i++) {
-            layout.shape[i] = info.getShape()[i];
-            layout.strides[i] = info.getStrides()[i];
-        }
-        
-        scalKernelStrided<Tdata><<<k_dim, k_type, queue>>>(
-            (Tdata *)x, 
-            static_cast<Tdata>(alpha), 
             info.getSize(), 
-            layout);
+            static_cast<Tdata>(alpha),
+            (Tdata *)x);
+    } else {
+        scalKernelStrided<Tdata><<<k_dim, k_type, queue>>>(
+            info.getSize(), 
+            static_cast<Tdata>(alpha),
+            (Tdata *)x,
+            info.getIncx());
     }
 
     cnrtQueueSync(queue);
