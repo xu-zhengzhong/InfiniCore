@@ -69,6 +69,7 @@
 #define HCBLAS_OP_T MCBLAS_OP_T
 #define HCBLAS_GEMM_DEFAULT_TENSOR_OP MCBLAS_GEMM_DEFAULT_TENSOR_OP
 #define hcblasGemmStridedBatchedEx mcblasGemmStridedBatchedEx
+#define hcblasScalEx mcblasScalEx
 #define hcLaunchKernel mcLaunchKernel
 #define hcclDataType_t mcclDataType_t
 #define hcclRedOp_t mcclRedOp_t
