@@ -721,6 +721,7 @@ def rope_(lib):
         infiniopOperatorDescriptor_t,
     ]
 
+
 @OpRegister.operator
 def scal_(lib):
     lib.infiniopCreateScalDescriptor.restype = c_int32
@@ -750,7 +751,37 @@ def scal_(lib):
     lib.infiniopDestroyScalDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,           # descriptor
     ]
-    
+
+
+@OpRegister.operator
+def blas_amax_(lib):
+    lib.infiniopCreateBlasAmaxDescriptor.restype = c_int32
+    lib.infiniopCreateBlasAmaxDescriptor.argtypes = [
+        infiniopHandle_t,                       # handle
+        POINTER(infiniopOperatorDescriptor_t),  # desc_ptr
+        infiniopTensorDescriptor_t,             # x_desc
+    ]
+
+    lib.infiniopGetBlasAmaxWorkspaceSize.restype = c_int32
+    lib.infiniopGetBlasAmaxWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+        POINTER(c_size_t),                      # size_ptr
+    ]
+
+    lib.infiniopBlasAmax.restype = c_int32
+    lib.infiniopBlasAmax.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+        c_void_p,                               # workspace
+        c_size_t,                               # workspace_size
+        c_void_p,                               # x
+        POINTER(c_int32),                       # result
+        c_void_p,                               # stream
+    ]
+
+    lib.infiniopDestroyBlasAmaxDescriptor.restype = c_int32
+    lib.infiniopDestroyBlasAmaxDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+    ]
 
 
 @OpRegister.operator
