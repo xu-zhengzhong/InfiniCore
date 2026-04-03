@@ -5,6 +5,7 @@
 #include "ops/add_rms_norm.hpp"
 #include "ops/addcmul.hpp"
 #include "ops/asinh.hpp"
+#include "ops/asum.hpp"
 #include "ops/atanh.hpp"
 #include "ops/attention.hpp"
 #include "ops/avg_pool1d.hpp"

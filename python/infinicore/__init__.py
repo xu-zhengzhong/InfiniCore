@@ -52,6 +52,7 @@ from infinicore.ops.add_rms_norm import add_rms_norm
 from infinicore.ops.addcmul import addcmul
 from infinicore.ops.all import all
 from infinicore.ops.asinh import asinh
+from infinicore.ops.asum import asum
 from infinicore.ops.atanh import atanh
 from infinicore.ops.attention import attention
 from infinicore.ops.baddbmm import baddbmm
@@ -140,6 +141,7 @@ __all__ = [
     "uint8",
     # Operations.
     "addcmul",
+    "asum",
     "atanh",
     "binary_cross_entropy_with_logits",
     "blas_amax",

@@ -8,6 +8,7 @@
 #include "ops/addcmul.hpp"
 #include "ops/all.hpp"
 #include "ops/asinh.hpp"
+#include "ops/asum.hpp"
 #include "ops/atanh.hpp"
 #include "ops/attention.hpp"
 #include "ops/avg_pool1d.hpp"
@@ -58,6 +59,7 @@ inline void bind(py::module &m) {
     bind_add_rms_norm(m);
     bind_attention(m);
     bind_asinh(m);
+    bind_asum(m);
     bind_baddbmm(m);
     bind_bilinear(m);
     bind_blas_amax(m);
