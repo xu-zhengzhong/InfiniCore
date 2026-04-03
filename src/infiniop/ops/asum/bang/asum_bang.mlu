@@ -1,8 +1,8 @@
 #include "../../../devices/bang/common_bang.h"
-#include "blas_amax_bang.h"
-#include "blas_amax_bang_kernel.mlu"
+#include "asum_bang.h"
+#include "asum_bang_kernel.mlu"
 
-namespace op::blas_amax::bang {
+namespace op::asum::bang {
 
 Descriptor::~Descriptor() = default;
 
@@ -12,10 +12,10 @@ infiniStatus_t Descriptor::create(
     infiniopTensorDescriptor_t x_desc) {
 
     auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
-    auto info = BlasAmaxInfo::createBlasAmaxInfo(x_desc);
+    auto info = AsumInfo::createAsumInfo(x_desc);
     CHECK_RESULT(info);
 
-    size_t workspace_size = sizeof(int);
+    size_t workspace_size = infiniSizeOf(x_desc->dtype());
 
     // Create descriptor
     *desc_ptr = new Descriptor(
@@ -29,10 +29,10 @@ infiniStatus_t Descriptor::create(
 }
 
 template <typename Tdata>
-infiniStatus_t calculateBlasAmax(
-    const BlasAmaxInfo &info,
+infiniStatus_t calculateAsum(
+    const AsumInfo &info,
     const void *x,
-    int *result,
+    void *result,
     cnrtQueue_t queue,
     void *workspace,
     size_t workspace_size) {
@@ -45,7 +45,7 @@ infiniStatus_t calculateBlasAmax(
     k_dim.z = 1;
     k_type = cnrtFuncTypeUnion1;
 
-    int *d_result = (int *)workspace;
+    Tdata *d_result = (Tdata *)workspace;
 
     if (info.getIncx() == 1) {
         blasAmaxKernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
@@ -71,21 +71,17 @@ infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
     const void *x,
-    int *result,
+    void *result,
     void *stream) const {
 
 #define CALCULATE_SCAL(TDATA)                          \
-    calculateBlasAmax<TDATA>(                          \
+    calculateAsum<TDATA>(                              \
         _info,                                         \
         x, result,                                     \
         (cnrtQueue_t)stream, workspace, workspace_size \
     )
 
     switch (_info.getDtype()) {
-    case INFINI_DTYPE_F16:
-        return CALCULATE_SCAL(half);
-    case INFINI_DTYPE_BF16:
-        return CALCULATE_SCAL(bfloat16_t);
     case INFINI_DTYPE_F32:
         return CALCULATE_SCAL(float);
     default:
@@ -95,4 +91,4 @@ infiniStatus_t Descriptor::calculate(
 
 #undef CALCULATE_SCAL
 
-} // namespace op::blas_amax::bang
+} // namespace op::asum::bang

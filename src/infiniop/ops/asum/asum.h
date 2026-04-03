@@ -1,24 +1,24 @@
-#ifndef __BLAS_AMAX_H__
-#define __BLAS_AMAX_H__
+#ifndef __ASUM_H__
+#define __ASUM_H__
 
 #include "../../../utils.h"
 #include "../../operator.h"
 #include "../../tensor.h"
-#include "infiniop/ops/blas_amax.h"
+#include "infiniop/ops/asum.h"
 #include <vector>
 #include <cstring>
 
 #define DESCRIPTOR(NAMESPACE)                                    \
                                                                  \
-    namespace op::blas_amax::NAMESPACE {                         \
+    namespace op::asum::NAMESPACE {                              \
     class Descriptor final : public InfiniopDescriptor {         \
         struct Opaque;                                           \
         Opaque *_opaque;                                         \
-        BlasAmaxInfo _info;                                      \
+        AsumInfo _info;                                          \
         size_t _workspace_size;                                  \
                                                                  \
         Descriptor(                                              \
-            BlasAmaxInfo info,                                   \
+            AsumInfo info,                                       \
             size_t workspace_size_,                              \
             Opaque *opaque,                                      \
             infiniDevice_t device_type,                          \
@@ -42,21 +42,21 @@
             void *workspace,                                     \
             size_t workspace_size,                               \
             const void *x,                                       \
-            int *result,                                         \
+            void *result,                                        \
             void *stream) const;                                 \
     };                                                           \
     }
 
-class BlasAmaxInfo {
+class AsumInfo {
 private:
     size_t _size;
     size_t _incx;
     infiniDtype_t _dtype;
 
 public:
-    BlasAmaxInfo() = default;
+    AsumInfo() = default;
 
-    BlasAmaxInfo(size_t size,
+    AsumInfo(size_t size,
              size_t incx,
              infiniDtype_t dtype)
         : _size(size), _incx(incx), _dtype(dtype) {}
@@ -65,7 +65,7 @@ public:
     inline size_t getIncx() const { return _incx; }
     inline infiniDtype_t getDtype() const { return _dtype; }
 
-    static utils::Result<BlasAmaxInfo> createBlasAmaxInfo(
+    static utils::Result<AsumInfo> createAsumInfo(
         infiniopTensorDescriptor_t x_desc) {
         CHECK_OR_RETURN(x_desc != nullptr, INFINI_STATUS_NULL_POINTER);
         CHECK_OR_RETURN(x_desc->ndim() == 1, INFINI_STATUS_BAD_TENSOR_SHAPE);
@@ -74,8 +74,8 @@ public:
         auto dtype = x_desc->dtype();
         auto incx = x_desc->stride(0);
 
-        return utils::Result<BlasAmaxInfo>(BlasAmaxInfo(size, incx, dtype));
+        return utils::Result<AsumInfo>(AsumInfo(size, incx, dtype));
     }
 };
 
-#endif // __BLAS_AMAX_H__
+#endif // __ASUM_H__

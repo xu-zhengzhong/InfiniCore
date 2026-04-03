@@ -1,5 +1,5 @@
 #include "../../../devices/bang/common_bang.h"
-#include "blas_amax_bang.h"
+#include "asum_bang.h"
 
 __nram__ char nram_buffer[NRAM_MAX_SIZE];
 
@@ -7,9 +7,8 @@ template <typename Tdata>
 __mlu_global__ void blasAmaxKernelContiguous(
     size_t n,
     const Tdata *x,
-    int *result) {
-    __mlu_shared__ int shared_max_index[4];
-    __mlu_shared__ Tdata shared_max_value[4];
+    Tdata *result) {
+    __mlu_shared__ Tdata shared_partial_sum[4];
 
     Tdata *nram_x = (Tdata *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
 
@@ -32,8 +31,7 @@ __mlu_global__ void blasAmaxKernelContiguous(
     int chunks = core_elements / max_chunk_elements;
     int chunk_rem = core_elements % max_chunk_elements;
 
-    int max_index = -1;
-    Tdata max_value = static_cast<Tdata>(0);
+    Tdata partial_sum = static_cast<Tdata>(0);
 
     for (int c = 0; c < chunks; c++) {
         size_t current_offset = core_offset + c * max_chunk_elements;
@@ -41,13 +39,7 @@ __mlu_global__ void blasAmaxKernelContiguous(
         
         __bang_abs(nram_x, nram_x, max_chunk_elements);
 
-        for (int i = 0; i < max_chunk_elements; i++) {
-            Tdata abs_val = nram_x[i];
-            if (abs_val > max_value) {
-                max_value = abs_val;
-                max_index = current_offset + i;
-            }
-        }
+        partial_sum += __bang_sum(nram_x, max_chunk_elements);
     }
 
     if (chunk_rem > 0) {
@@ -57,32 +49,21 @@ __mlu_global__ void blasAmaxKernelContiguous(
         
         __bang_abs(nram_x, nram_x, chunk_rem);
         
-        for (int i = 0; i < chunk_rem; i++) {
-            Tdata abs_val = nram_x[i];
-            if (abs_val > max_value) {
-                max_value = abs_val;
-                max_index = current_offset + i;
-            }
-        }
+        partial_sum += __bang_sum(nram_x, chunk_rem);
     }
     
-    shared_max_index[coreId] = max_index;
-    shared_max_value[coreId] = max_value;
+    shared_partial_sum[coreId] = partial_sum;
 
     __sync_cluster();
 
     if (coreId == 0) {
-        int cluster_max_index = -1;
-        Tdata cluster_max_value = static_cast<Tdata>(0);
+        Tdata cluster_sum = static_cast<Tdata>(0);
 
         for (int i = 0; i < coreDim; i++) {
-            if (shared_max_value[i] > cluster_max_value) {
-                cluster_max_value = shared_max_value[i];
-                cluster_max_index = shared_max_index[i];
-            }
+            cluster_sum += shared_partial_sum[i];
         }
 
-        result[0] = cluster_max_index + 1; // Convert to 1-based index
+        result[0] = cluster_sum;
     }
 }
 
@@ -91,44 +72,34 @@ __mlu_global__ void blasAmaxKernelStrided(
     size_t n,
     const Tdata *x,
     size_t incx,
-    int *result) {
-    __mlu_shared__ int shared_max_index[4];
-    __mlu_shared__ Tdata shared_max_value[4];
+    Tdata *result) {
+    __mlu_shared__ Tdata shared_partial_sum[4];
 
     int elements_per_core = n / taskDim;
     int remain = n % taskDim;
     int actual_tasks = elements_per_core + (taskId < remain ? 1 : 0);
     int start_idx = taskId < remain ? taskId * actual_tasks : taskId * elements_per_core + remain;
 
-    int max_index = -1;
-    Tdata max_value = static_cast<Tdata>(0);
+    Tdata partial_sum = static_cast<Tdata>(0);
 
     for (int i = start_idx; i < start_idx + actual_tasks; ++i) {
         size_t offset = i * incx;
         Tdata abs_val = x[offset] > static_cast<Tdata>(0) ? x[offset] : -x[offset];
 
-        if (abs_val > max_value) {
-            max_value = abs_val;
-            max_index = i;
-        }
+        partial_sum += abs_val;
     }
     
-    shared_max_index[coreId] = max_index;
-    shared_max_value[coreId] = max_value;
+    shared_partial_sum[coreId] = partial_sum;
 
     __sync_cluster();
 
     if (coreId == 0) {
-        int cluster_max_index = -1;
-        Tdata cluster_max_value = static_cast<Tdata>(0);
+        Tdata cluster_sum = static_cast<Tdata>(0);
 
         for (int i = 0; i < coreDim; i++) {
-            if (shared_max_value[i] > cluster_max_value) {
-                cluster_max_value = shared_max_value[i];
-                cluster_max_index = shared_max_index[i];
-            }
+            cluster_sum += shared_partial_sum[i];
         }
 
-        result[0] = cluster_max_index + 1; // Convert to 1-based index
+        result[0] = cluster_sum;
     }
 }

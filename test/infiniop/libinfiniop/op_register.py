@@ -785,6 +785,37 @@ def blas_amax_(lib):
 
 
 @OpRegister.operator
+def asum_(lib):
+    lib.infiniopCreateAsumDescriptor.restype = c_int32
+    lib.infiniopCreateAsumDescriptor.argtypes = [
+        infiniopHandle_t,                       # handle
+        POINTER(infiniopOperatorDescriptor_t),  # desc_ptr
+        infiniopTensorDescriptor_t,             # x_desc
+    ]
+
+    lib.infiniopGetAsumWorkspaceSize.restype = c_int32
+    lib.infiniopGetAsumWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+        POINTER(c_size_t),                      # size_ptr
+    ]
+
+    lib.infiniopAsum.restype = c_int32
+    lib.infiniopAsum.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+        c_void_p,                               # workspace
+        c_size_t,                               # workspace_size
+        c_void_p,                               # x
+        c_void_p,                               # result
+        c_void_p,                               # stream
+    ]
+
+    lib.infiniopDestroyAsumDescriptor.restype = c_int32
+    lib.infiniopDestroyAsumDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+    ]
+
+
+@OpRegister.operator
 def sub_(lib):
     lib.infiniopCreateSubDescriptor.restype = c_int32
     lib.infiniopCreateSubDescriptor.argtypes = [

@@ -66,13 +66,11 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(self, *args, **kwargs):
-        # PyTorch reference for BLAS amax: 1-based index of the max absolute value
         x = args[0]
         return torch.argmax(x.abs()) + 1
 
     def infinicore_operator(self, *args, **kwargs):
         """InfiniCore implementation for BLAS amax."""
-        # Assuming the operator is mapped to `amax` or `blas_amax` in infinicore
         return infinicore.blas_amax(*args, **kwargs)
 
 

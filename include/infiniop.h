@@ -8,6 +8,7 @@
 #include "infiniop/ops/addcmul.h"
 #include "infiniop/ops/all.h"
 #include "infiniop/ops/asinh.h"
+#include "infiniop/ops/asum.h"
 #include "infiniop/ops/atanh.h"
 #include "infiniop/ops/attention.h"
 #include "infiniop/ops/avg_pool1d.h"
