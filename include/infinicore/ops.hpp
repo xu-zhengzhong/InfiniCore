@@ -11,6 +11,7 @@
 #include "ops/baddbmm.hpp"
 #include "ops/bilinear.hpp"
 #include "ops/binary_cross_entropy_with_logits.hpp"
+#include "ops/blas_amax.hpp"
 #include "ops/causal_softmax.hpp"
 #include "ops/cdist.hpp"
 #include "ops/cross_entropy.hpp"

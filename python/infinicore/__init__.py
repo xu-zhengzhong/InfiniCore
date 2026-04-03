@@ -59,6 +59,7 @@ from infinicore.ops.bilinear import bilinear
 from infinicore.ops.binary_cross_entropy_with_logits import (
     binary_cross_entropy_with_logits,
 )
+from infinicore.ops.blas_amax import blas_amax
 from infinicore.ops.cdist import cdist
 from infinicore.ops.cross_entropy import cross_entropy
 from infinicore.ops.equal import equal
@@ -141,6 +142,7 @@ __all__ = [
     "addcmul",
     "atanh",
     "binary_cross_entropy_with_logits",
+    "blas_amax",
     "cdist",
     "reciprocal",
     "add",
