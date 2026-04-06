@@ -71,6 +71,7 @@ from infinicore.ops.mha_kvcache import mha_kvcache
 from infinicore.ops.mha_varlen import mha_varlen
 from infinicore.ops.mul import mul
 from infinicore.ops.narrow import narrow
+from infinicore.ops.nrm2 import nrm2
 from infinicore.ops.paged_attention import paged_attention
 from infinicore.ops.paged_attention_prefill import paged_attention_prefill
 from infinicore.ops.paged_caching import paged_caching
@@ -160,6 +161,7 @@ __all__ = [
     "equal",
     "mul",
     "narrow",
+    "nrm2",
     "squeeze",
     "unsqueeze",
     "rearrange",

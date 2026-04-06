@@ -73,6 +73,8 @@
 #define hcblasIsamax mcblasIsamax
 #define hcblasSasum mcblasSasum
 #define hcblasDasum mcblasDasum
+#define hcblasSnrm2 mcblasSnrm2
+#define hcblasDnrm2 mcblasDnrm2
 #define hcLaunchKernel mcLaunchKernel
 #define hcclDataType_t mcclDataType_t
 #define hcclRedOp_t mcclRedOp_t

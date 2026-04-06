@@ -23,6 +23,7 @@
 #include "ops/hardtanh.hpp"
 #include "ops/kv_caching.hpp"
 #include "ops/matmul.hpp"
+#include "ops/nrm2.hpp"
 #include "ops/ones.hpp"
 #include "ops/paged_attention.hpp"
 #include "ops/paged_attention_prefill.hpp"

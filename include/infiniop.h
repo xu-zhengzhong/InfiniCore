@@ -36,6 +36,7 @@
 #include "infiniop/ops/logsoftmax.h"
 #include "infiniop/ops/lp_norm.h"
 #include "infiniop/ops/mul.h"
+#include "infiniop/ops/nrm2.h"
 #include "infiniop/ops/ones.h"
 #include "infiniop/ops/paged_attention.h"
 #include "infiniop/ops/paged_attention_prefill.h"

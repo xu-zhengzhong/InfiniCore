@@ -816,6 +816,37 @@ def asum_(lib):
 
 
 @OpRegister.operator
+def nrm2_(lib):
+    lib.infiniopCreateNrm2Descriptor.restype = c_int32
+    lib.infiniopCreateNrm2Descriptor.argtypes = [
+        infiniopHandle_t,                       # handle
+        POINTER(infiniopOperatorDescriptor_t),  # desc_ptr
+        infiniopTensorDescriptor_t,             # x_desc
+    ]
+
+    lib.infiniopGetNrm2WorkspaceSize.restype = c_int32
+    lib.infiniopGetNrm2WorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+        POINTER(c_size_t),                      # size_ptr
+    ]
+
+    lib.infiniopNrm2.restype = c_int32
+    lib.infiniopNrm2.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+        c_void_p,                               # workspace
+        c_size_t,                               # workspace_size
+        c_void_p,                               # x
+        c_void_p,                               # result
+        c_void_p,                               # stream
+    ]
+
+    lib.infiniopDestroyNrm2Descriptor.restype = c_int32
+    lib.infiniopDestroyNrm2Descriptor.argtypes = [
+        infiniopOperatorDescriptor_t,           # descriptor
+    ]
+
+
+@OpRegister.operator
 def sub_(lib):
     lib.infiniopCreateSubDescriptor.restype = c_int32
     lib.infiniopCreateSubDescriptor.argtypes = [

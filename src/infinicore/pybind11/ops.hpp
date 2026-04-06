@@ -32,6 +32,7 @@
 #include "ops/mha_kvcache.hpp"
 #include "ops/mha_varlen.hpp"
 #include "ops/mul.hpp"
+#include "ops/nrm2.hpp"
 #include "ops/paged_attention.hpp"
 #include "ops/paged_attention_prefill.hpp"
 #include "ops/paged_caching.hpp"
@@ -73,6 +74,7 @@ inline void bind(py::module &m) {
     bind_mul(m);
     bind_mha_kvcache(m);
     bind_mha_varlen(m);
+    bind_nrm2(m);
     bind_hardswish(m);
     bind_hardtanh(m);
     bind_paged_attention(m);
