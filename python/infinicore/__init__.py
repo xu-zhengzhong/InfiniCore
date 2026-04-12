@@ -55,6 +55,7 @@ from infinicore.ops.asinh import asinh
 from infinicore.ops.asum import asum
 from infinicore.ops.atanh import atanh
 from infinicore.ops.attention import attention
+from infinicore.ops.axpy import axpy
 from infinicore.ops.baddbmm import baddbmm
 from infinicore.ops.bilinear import bilinear
 from infinicore.ops.binary_cross_entropy_with_logits import (
@@ -144,6 +145,7 @@ __all__ = [
     "addcmul",
     "asum",
     "atanh",
+    "axpy",
     "binary_cross_entropy_with_logits",
     "blas_amax",
     "cdist",

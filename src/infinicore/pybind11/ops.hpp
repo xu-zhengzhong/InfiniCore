@@ -12,6 +12,7 @@
 #include "ops/atanh.hpp"
 #include "ops/attention.hpp"
 #include "ops/avg_pool1d.hpp"
+#include "ops/axpy.hpp"
 #include "ops/baddbmm.hpp"
 #include "ops/bilinear.hpp"
 #include "ops/binary_cross_entropy_with_logits.hpp"
@@ -64,6 +65,7 @@ inline void bind(py::module &m) {
     bind_baddbmm(m);
     bind_bilinear(m);
     bind_blas_amax(m);
+    bind_axpy(m);
     bind_causal_softmax(m);
     bind_flash_attention(m);
     bind_kv_caching(m);

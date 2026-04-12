@@ -1,28 +1,29 @@
 #include "../../operator.h"
 #include "../../handle.h"
-#include "infiniop/ops/scal.h"
+#include "infiniop/ops/axpy.h"
 
 #ifdef ENABLE_CPU_API
-#include "cpu/scal_cpu.h"
+#include "cpu/axpy_cpu.h"
 #endif
 #ifdef ENABLE_METAX_API
-#include "metax/scal_metax.h"
+#include "metax/axpy_metax.h"
 #endif
 #ifdef ENABLE_CAMBRICON_API
-#include "bang/scal_bang.h"
+#include "bang/axpy_bang.h"
 #endif
 
-__INFINI_C infiniStatus_t infiniopCreateScalDescriptor(
+__INFINI_C infiniStatus_t infiniopCreateAxpyDescriptor(
     infiniopHandle_t handle,
-    infiniopScalDescriptor_t *desc_ptr,
-    infiniopTensorDescriptor_t x_desc) {
+    infiniopAxpyDescriptor_t *desc_ptr,
+    infiniopTensorDescriptor_t x_desc,
+    infiniopTensorDescriptor_t y_desc) {
 
 #define CREATE(CASE, NAMESPACE)                                             \
     case CASE:                                                              \
-        return op::scal::NAMESPACE::Descriptor::create(                     \
+        return op::axpy::NAMESPACE::Descriptor::create(                     \
             handle,                                                         \
-            reinterpret_cast<op::scal::NAMESPACE::Descriptor **>(desc_ptr), \
-            x_desc)
+            reinterpret_cast<op::axpy::NAMESPACE::Descriptor **>(desc_ptr), \
+            x_desc, y_desc)
 
     switch (handle->device) {
 
@@ -35,6 +36,7 @@ __INFINI_C infiniStatus_t infiniopCreateScalDescriptor(
 #ifdef ENABLE_CAMBRICON_API
         CREATE(INFINI_DEVICE_CAMBRICON, bang);
 #endif
+
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
     }
@@ -42,11 +44,11 @@ __INFINI_C infiniStatus_t infiniopCreateScalDescriptor(
 #undef CREATE
 }
 
-__INFINI_C infiniStatus_t infiniopGetScalWorkspaceSize(infiniopScalDescriptor_t desc, size_t *size) {
+__INFINI_C infiniStatus_t infiniopGetAxpyWorkspaceSize(infiniopAxpyDescriptor_t desc, size_t *size) {
 
 #define GET(CASE, NAMESPACE)                                                               \
     case CASE:                                                                             \
-        *size = reinterpret_cast<op::scal::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
+        *size = reinterpret_cast<op::axpy::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
@@ -66,18 +68,19 @@ __INFINI_C infiniStatus_t infiniopGetScalWorkspaceSize(infiniopScalDescriptor_t 
 #undef GET
 }
 
-__INFINI_C infiniStatus_t infiniopScal(
-    infiniopScalDescriptor_t desc,
+__INFINI_C infiniStatus_t infiniopAxpy(
+    infiniopAxpyDescriptor_t desc,
     void *workspace,
     size_t workspace_size,
-    void *x,
-    float alpha,
+    const void *alpha,
+    const void *x,
+    void *y,
     void *stream) {
 
 #define CALCULATE(CASE, NAMESPACE)                                             \
     case CASE:                                                                 \
-        return reinterpret_cast<const op::scal::NAMESPACE::Descriptor *>(desc) \
-            ->calculate(workspace, workspace_size, x, alpha, stream)
+        return reinterpret_cast<const op::axpy::NAMESPACE::Descriptor *>(desc) \
+            ->calculate(workspace, workspace_size, alpha, x, y, stream)
 
     switch (desc->device_type) {
 
@@ -98,11 +101,11 @@ __INFINI_C infiniStatus_t infiniopScal(
 #undef CALCULATE
 }
 
-__INFINI_C infiniStatus_t infiniopDestroyScalDescriptor(infiniopScalDescriptor_t desc) {
+__INFINI_C infiniStatus_t infiniopDestroyAxpyDescriptor(infiniopAxpyDescriptor_t desc) {
 
 #define DELETE(CASE, NAMESPACE)                                                 \
     case CASE:                                                                  \
-        delete reinterpret_cast<const op::scal::NAMESPACE::Descriptor *>(desc); \
+        delete reinterpret_cast<const op::axpy::NAMESPACE::Descriptor *>(desc); \
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
