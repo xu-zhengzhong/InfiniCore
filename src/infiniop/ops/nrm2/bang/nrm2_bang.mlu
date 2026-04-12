@@ -1,25 +1,26 @@
 #include "../../../devices/bang/common_bang.h"
-#include "axpy_bang.h"
-#include "axpy_bang_kernel.mlu"
+#include "nrm2_bang.h"
+#include "nrm2_bang_kernel.mlu"
 
-namespace op::axpy::bang {
+namespace op::nrm2::bang {
 
 Descriptor::~Descriptor() = default;
 
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
     Descriptor **desc_ptr,
-    infiniopTensorDescriptor_t x_desc,
-    infiniopTensorDescriptor_t y_desc) {
+    infiniopTensorDescriptor_t x_desc) {
 
     auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
-    auto info = AxpyInfo::createAxpyInfo(x_desc, y_desc);
+    auto info = Nrm2Info::createNrm2Info(x_desc);
     CHECK_RESULT(info);
+
+    size_t workspace_size = infiniSizeOf(x_desc->dtype());
 
     // Create descriptor
     *desc_ptr = new Descriptor(
         info.take(),
-        0,
+        workspace_size,
         nullptr,
         handle->device,
         handle->device_id);
@@ -28,12 +29,13 @@ infiniStatus_t Descriptor::create(
 }
 
 template <typename Tdata>
-infiniStatus_t calculateAxpy(
-    const AxpyInfo &info,
-    const void *alpha,
+infiniStatus_t calculateNrm2(
+    const Nrm2Info &info,
     const void *x,
-    void *y,
-    cnrtQueue_t queue) {
+    void *result,
+    cnrtQueue_t queue,
+    void *workspace,
+    size_t workspace_size) {
 
     cnrtDim3_t k_dim;
     cnrtFunctionType_t k_type;
@@ -43,53 +45,50 @@ infiniStatus_t calculateAxpy(
     k_dim.z = 1;
     k_type = cnrtFuncTypeUnion1;
 
+    Tdata *d_result = (Tdata *)workspace;
+
     if (info.getIncx() == 1) {
-        axpyKernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
+        Nrm2KernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
             info.getSize(), 
-            (*(const Tdata *)alpha),
             (const Tdata *)x,
-            (Tdata *)y);
+            d_result);
     } else {
-        axpyKernelStrided<Tdata><<<k_dim, k_type, queue>>>(
+        Nrm2KernelStrided<Tdata><<<k_dim, k_type, queue>>>(
             info.getSize(), 
-            (*(const Tdata *)alpha),
             (const Tdata *)x,
             info.getIncx(),
-            (Tdata *)y,
-            info.getIncy());
+            d_result);
     }
+
+    cnrtMemcpyAsync(result, d_result, workspace_size, queue, cnrtMemcpyDevToHost);
 
     cnrtQueueSync(queue);
 
     return INFINI_STATUS_SUCCESS;
 }
 
-#define CALCULATE_AXPY(TDATA) \
-    calculateAxpy<TDATA>(_info, alpha, x, y, (cnrtQueue_t)stream)
-
 infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
-    const void *alpha,
     const void *x,
-    void *y,
+    void *result,
     void *stream) const {
 
-    (void)workspace;
-    (void)workspace_size;
+#define CALCULATE_NRM2(TDATA)                          \
+    calculateNrm2<TDATA>(                              \
+        _info,                                         \
+        x, result,                                     \
+        (cnrtQueue_t)stream, workspace, workspace_size \
+    )
 
     switch (_info.getDtype()) {
-    case INFINI_DTYPE_F16:
-        return CALCULATE_AXPY(half);
-    case INFINI_DTYPE_BF16:
-        return CALCULATE_AXPY(bfloat16_t);
     case INFINI_DTYPE_F32:
-        return CALCULATE_AXPY(float);
+        return CALCULATE_NRM2(float);
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
 }
 
-#undef CALCULATE_AXPY
+#undef CALCULATE_NRM2
 
-} // namespace op::axpy::bang
+} // namespace op::nrm2::bang

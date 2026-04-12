@@ -1,25 +1,23 @@
 #include "../../../devices/bang/common_bang.h"
-#include "axpy_bang.h"
+#include "nrm2_bang.h"
 
 __nram__ char nram_buffer[NRAM_MAX_SIZE];
 
 template <typename Tdata>
-__mlu_global__ void axpyKernelContiguous(
+__mlu_global__ void Nrm2KernelContiguous(
     size_t n,
-    Tdata alpha,
     const Tdata *x,
-    Tdata *y) {
+    Tdata *result) {
+    __mlu_shared__ Tdata shared_partial_sum[4];
 
     Tdata *nram_x = (Tdata *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
 
     size_t nram_usable = NRAM_MAX_SIZE - ((char *)nram_x - nram_buffer);
-    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+    size_t max_chunk_elements = nram_usable / sizeof(Tdata);
 
     int align_elements = ALIGN_SIZE / sizeof(Tdata);
     if (align_elements == 0) align_elements = 1;
     max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
-
-    Tdata *nram_y = nram_x + max_chunk_elements;
 
     int elements_per_core = n / taskDim;
     int remain = n % taskDim;
@@ -33,49 +31,75 @@ __mlu_global__ void axpyKernelContiguous(
     int chunks = core_elements / max_chunk_elements;
     int chunk_rem = core_elements % max_chunk_elements;
 
+    Tdata partial_sum = static_cast<Tdata>(0);
+
     for (int c = 0; c < chunks; c++) {
         size_t current_offset = core_offset + c * max_chunk_elements;
         __memcpy(nram_x, x + current_offset, max_chunk_elements * sizeof(Tdata), GDRAM2NRAM);
-        __memcpy(nram_y, y + current_offset, max_chunk_elements * sizeof(Tdata), GDRAM2NRAM);
-
-        __bang_mul_scalar(nram_x, nram_x, alpha, max_chunk_elements);
-        __bang_add(nram_y, nram_y, nram_x, max_chunk_elements);
         
-        __memcpy(y + current_offset, nram_y, max_chunk_elements * sizeof(Tdata), NRAM2GDRAM);
+        __bang_square(nram_x, nram_x, max_chunk_elements);
+
+        partial_sum += __bang_sum(nram_x, max_chunk_elements);
     }
 
     if (chunk_rem > 0) {
         size_t current_offset = core_offset + chunks * max_chunk_elements;
-        int align_rem = ((chunk_rem + align_elements - 1) / align_elements) * align_elements;
         
         __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
-        __memcpy(nram_y, y + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+        
+        __bang_square(nram_x, nram_x, chunk_rem);
+        
+        partial_sum += __bang_sum(nram_x, chunk_rem);
+    }
+    
+    shared_partial_sum[coreId] = partial_sum;
 
-        __bang_mul_scalar(nram_x, nram_x, alpha, align_rem);
-        __bang_add(nram_y, nram_y, nram_x, align_rem);
+    __sync_cluster();
 
-        __memcpy(y + current_offset, nram_y, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
+    if (coreId == 0) {
+        Tdata cluster_sum = static_cast<Tdata>(0);
+
+        for (int i = 0; i < coreDim; i++) {
+            cluster_sum += shared_partial_sum[i];
+        }
+
+        result[0] = std::sqrt(cluster_sum);
     }
 }
 
 template <typename Tdata>
-__mlu_global__ void axpyKernelStrided(
+__mlu_global__ void Nrm2KernelStrided(
     size_t n,
-    Tdata alpha,
     const Tdata *x,
     size_t incx,
-    Tdata *y,
-    size_t incy) {
+    Tdata *result) {
+    __mlu_shared__ Tdata shared_partial_sum[4];
 
     int elements_per_core = n / taskDim;
     int remain = n % taskDim;
     int actual_tasks = elements_per_core + (taskId < remain ? 1 : 0);
     int start_idx = taskId < remain ? taskId * actual_tasks : taskId * elements_per_core + remain;
 
-    for (int i = start_idx; i < start_idx + actual_tasks; ++i) {
-        size_t idx_x = i * incx;
-        size_t idx_y = i * incy;
+    Tdata partial_sum = static_cast<Tdata>(0);
 
-        y[idx_y] += alpha * x[idx_x];
+    for (int i = start_idx; i < start_idx + actual_tasks; ++i) {
+        size_t offset = i * incx;
+        Tdata square_val = x[offset] * x[offset];
+
+        partial_sum += square_val;
+    }
+    
+    shared_partial_sum[coreId] = partial_sum;
+
+    __sync_cluster();
+
+    if (coreId == 0) {
+        Tdata cluster_sum = static_cast<Tdata>(0);
+
+        for (int i = 0; i < coreDim; i++) {
+            cluster_sum += shared_partial_sum[i];
+        }
+
+        result[0] = std::sqrt(cluster_sum);
     }
 }
