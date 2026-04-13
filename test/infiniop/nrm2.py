@@ -37,12 +37,9 @@ _TENSOR_DTYPES = [
     # InfiniDtype.F64,
 ]
 
-# nrm2 returns a floating-point sum, so we need actual tolerances.
-# PyTorch and the C library might accumulate floats in different orders,
-# so slight deviations are expected.
 _TOLERANCE_MAP = {
     InfiniDtype.F32: {"atol": 1e-5, "rtol": 1e-4},
-    InfiniDtype.F64: {"atol": 1e-5, "rtol": 1e-4},
+    InfiniDtype.F64: {"atol": 1e-7, "rtol": 1e-7},
 }
 
 DEBUG = False
