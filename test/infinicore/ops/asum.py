@@ -70,7 +70,7 @@ class OpTest(BaseOperatorTest):
         """Reference implementation using PyTorch"""
         x = args[0]
         # BLAS ASUM is equivalent to the L1 norm
-        return torch.sum(torch.abs(x))
+        return torch.norm(x, p=1)
 
     def infinicore_operator(self, *args, **kwargs):
         """InfiniCore implementation for BLAS asum."""

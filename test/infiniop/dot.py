@@ -1,7 +1,7 @@
 import torch
 import ctypes
 import math
-from ctypes import c_uint64, c_uint32, c_int32, c_float, c_double
+from ctypes import c_uint64, c_float, c_double
 from libinfiniop import (
     LIBINFINIOP,
     TestTensor,
@@ -22,19 +22,19 @@ from libinfiniop import (
 # ==============================================================================
 # Configuration
 # ==============================================================================
-# Format: (shape, x_stride)
+# Format: (shape, x_stride, y_stride)
 _TEST_CASES = [
-    ((13,), None),
-    ((13,), (10,)),
-    ((5632,), None),
-    ((5632,), (5,)),
-    ((16,), (4,)),
-    ((5632,), (32,)),
+    ((13,), None, None),
+    ((13,), (10,), (10,)),
+    ((5632,), None, None),
+    ((5632,), (5,), (5,)),
+    ((16,), (4,), (4,)),
+    ((5632,), (32,), (32,)),
 ]
 
 _TENSOR_DTYPES = [
     InfiniDtype.F32,
-    # InfiniDtype.F64,
+    InfiniDtype.F64,
 ]
 
 _TOLERANCE_MAP = {
@@ -47,94 +47,88 @@ PROFILE = False
 NUM_PRERUN = 10
 NUM_ITERATIONS = 1000
 
-def torch_asum(x):
-    # BLAS ASUM is equivalent to the L1 norm
-    return torch.norm(x, p=1)
+
+def torch_dot(x, y):
+    return torch.dot(x, y)
+
 
 def test(
     handle,
     device,
     shape,
     x_stride=None,
+    y_stride=None,
     dtype=torch.float16,
     sync=None,
 ):
     x = TestTensor(shape, x_stride, dtype, device)
-    
-    # asum returns a scalar float. We use c_float to capture the result.
+    y = TestTensor(shape, y_stride, dtype, device)
+
     if dtype is InfiniDtype.F32:
         result = c_float(0.0)
     else:
         result = c_double(0.0)
 
     print(
-        f"Testing Asum on {InfiniDeviceNames[device]} with shape:{shape} x_stride:{x_stride} "
-        f"dtype:{InfiniDtypeNames[dtype]}"
+        f"Testing Dot on {InfiniDeviceNames[device]} with shape:{shape} x_stride:{x_stride} "
+        f"y_stride:{y_stride} dtype:{InfiniDtypeNames[dtype]}"
     )
 
-    # Compute PyTorch reference
-    expected_val = torch_asum(x.torch_tensor()).item()
+    expected_val = torch_dot(x.torch_tensor(), y.torch_tensor()).item()
 
     if sync is not None:
         sync()
 
-    # Create Descriptor
     descriptor = infiniopOperatorDescriptor_t()
     check_error(
-        LIBINFINIOP.infiniopCreateAsumDescriptor(
+        LIBINFINIOP.infiniopCreateDotDescriptor(
             handle,
             ctypes.byref(descriptor),
             x.descriptor,
+            y.descriptor,
         )
     )
 
-    # Invalidate descriptor to ensure kernel uses passed-in pointers/logic
     x.destroy_desc()
+    y.destroy_desc()
 
-    # Allocate Workspace
     workspace_size = c_uint64(0)
     check_error(
-        LIBINFINIOP.infiniopGetAsumWorkspaceSize(
+        LIBINFINIOP.infiniopGetDotWorkspaceSize(
             descriptor, ctypes.byref(workspace_size)
         )
     )
     workspace = TestWorkspace(workspace_size.value, x.device)
-    
-    # Execute C library op
-    def lib_asum():
+
+    def lib_dot():
         check_error(
-            LIBINFINIOP.infiniopAsum(
+            LIBINFINIOP.infiniopDot(
                 descriptor,
                 workspace.data(),
                 workspace.size(),
                 x.data(),
+                y.data(),
                 ctypes.byref(result),
                 None,
             )
         )
 
-    lib_asum()
+    lib_dot()
 
-    # Compare results
     actual_val = result.value
-    
-    # Fetch tolerances dynamically based on dtype
     atol, rtol = get_tolerance(_TOLERANCE_MAP, dtype)
-    
+
     if DEBUG:
         print(f"Expected Sum: {expected_val:.6f}, Actual Sum: {actual_val:.6f}")
-    
+
     assert math.isclose(actual_val, expected_val, rel_tol=rtol, abs_tol=atol), \
         f"Value mismatch: actual={actual_val} != expected={expected_val} (atol={atol}, rtol={rtol})"
 
-    # Profiling workflow
     if PROFILE:
-        # fmt: off
-        profile_operation("PyTorch", lambda: torch_asum(x.torch_tensor()), device, NUM_PRERUN, NUM_ITERATIONS)
-        profile_operation("    lib", lambda: lib_asum(), device, NUM_PRERUN, NUM_ITERATIONS)
-        # fmt: on
-        
-    check_error(LIBINFINIOP.infiniopDestroyAsumDescriptor(descriptor))
+        profile_operation("PyTorch", lambda: torch_dot(x.torch_tensor(), y.torch_tensor()), device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("    lib", lambda: lib_dot(), device, NUM_PRERUN, NUM_ITERATIONS)
+
+    check_error(LIBINFINIOP.infiniopDestroyDotDescriptor(descriptor))
 
 
 if __name__ == "__main__":

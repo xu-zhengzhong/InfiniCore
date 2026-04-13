@@ -22,6 +22,7 @@
 #include "infiniop/ops/cross_entropy.h"
 #include "infiniop/ops/dequant/per_tensor_dequant_int8.h"
 #include "infiniop/ops/dequantize_awq.h"
+#include "infiniop/ops/dot.h"
 #include "infiniop/ops/embedding.h"
 #include "infiniop/ops/equal.h"
 #include "infiniop/ops/flash_attention.h"

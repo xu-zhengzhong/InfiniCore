@@ -75,6 +75,8 @@
 #define hcblasDasum mcblasDasum
 #define hcblasSaxpy mcblasSaxpy
 #define hcblasDaxpy mcblasDaxpy
+#define hcblasSdot mcblasSdot
+#define hcblasDdot mcblasDdot
 #define hcblasSnrm2 mcblasSnrm2
 #define hcblasDnrm2 mcblasDnrm2
 #define hcLaunchKernel mcLaunchKernel
