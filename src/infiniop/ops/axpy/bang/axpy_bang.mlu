@@ -79,10 +79,10 @@ infiniStatus_t Descriptor::calculate(
     (void)workspace_size;
 
     switch (_info.getDtype()) {
-    case INFINI_DTYPE_F16:
-        return CALCULATE_AXPY(half);
-    case INFINI_DTYPE_BF16:
-        return CALCULATE_AXPY(bfloat16_t);
+    // case INFINI_DTYPE_F16:
+    //     return CALCULATE_AXPY(half);
+    // case INFINI_DTYPE_BF16:
+    //     return CALCULATE_AXPY(bfloat16_t);
     case INFINI_DTYPE_F32:
         return CALCULATE_AXPY(float);
     default:
