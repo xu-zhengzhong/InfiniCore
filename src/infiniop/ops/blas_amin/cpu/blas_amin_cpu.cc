@@ -1,7 +1,7 @@
-#include "blas_amax_cpu.h"
+#include "blas_amin_cpu.h"
 #include "../../../devices/cpu/common_cpu.h"
 
-namespace op::blas_amax::cpu {
+namespace op::blas_amin::cpu {
 
 Descriptor::~Descriptor() = default;
 
@@ -11,10 +11,9 @@ infiniStatus_t Descriptor::create(
     infiniopTensorDescriptor_t x_desc) {
 
     auto handle = reinterpret_cast<device::cpu::Handle *>(handle_);
-    auto info = BlasAmaxInfo::createBlasAmaxInfo(x_desc);
+    auto info = BlasAminInfo::createBlasAminInfo(x_desc);
     CHECK_RESULT(info);
 
-    // Create descriptor
     *desc_ptr = new Descriptor(
         info.take(),
         0,
@@ -26,15 +25,21 @@ infiniStatus_t Descriptor::create(
 }
 
 template <typename Tdata>
-infiniStatus_t calculateBlasAmax(const BlasAmaxInfo &info, const void *x, int *result) {
+infiniStatus_t calculateBlasAmin(const BlasAminInfo &info, const void *x, int *result) {
     const Tdata *x_ptr = reinterpret_cast<const Tdata *>(x);
 
     const ptrdiff_t size = info.getSize();
 
-    int max_idx = 0;
-    float max_val = 0.0;
+    int min_idx = 0;
+    float min_val;
+    size_t first_idx = 0;
+    if constexpr (std::is_same_v<Tdata, fp16_t> || std::is_same_v<Tdata, bf16_t>) {
+        min_val = std::abs(utils::cast<float>(x_ptr[first_idx]));
+    } else {
+        min_val = std::abs(x_ptr[first_idx]);
+    }
 
-    for (ptrdiff_t i = 0; i < size; ++i) {
+    for (ptrdiff_t i = 1; i < size; ++i) {
         size_t idx = i * info.getIncx();
         float current_val;
         if constexpr (std::is_same_v<Tdata, fp16_t> || std::is_same_v<Tdata, bf16_t>) {
@@ -43,14 +48,13 @@ infiniStatus_t calculateBlasAmax(const BlasAmaxInfo &info, const void *x, int *r
             current_val = std::abs(x_ptr[idx]);
         }
 
-        if (current_val > max_val) {
-            max_val = current_val;
-            max_idx = static_cast<int>(i);
+        if (current_val < min_val) {
+            min_val = current_val;
+            min_idx = static_cast<int>(i);
         }
     }
 
-    result[0] = max_idx + 1; // Convert to 1-based index
-
+    result[0] = min_idx + 1;
     return INFINI_STATUS_SUCCESS;
 }
 
@@ -63,19 +67,20 @@ infiniStatus_t Descriptor::calculate(
 
     (void)workspace;
     (void)workspace_size;
+    (void)stream;
 
     switch (_info.getDtype()) {
-    case INFINI_DTYPE_F32:
-        return calculateBlasAmax<float>(_info, x, result);
-    case INFINI_DTYPE_F64:
-        return calculateBlasAmax<double>(_info, x, result);
     case INFINI_DTYPE_F16:
-        return calculateBlasAmax<fp16_t>(_info, x, result);
+        return calculateBlasAmin<fp16_t>(_info, x, result);
     case INFINI_DTYPE_BF16:
-        return calculateBlasAmax<bf16_t>(_info, x, result);
+        return calculateBlasAmin<bf16_t>(_info, x, result);
+    case INFINI_DTYPE_F32:
+        return calculateBlasAmin<float>(_info, x, result);
+    case INFINI_DTYPE_F64:
+        return calculateBlasAmin<double>(_info, x, result);
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
 }
 
-} // namespace op::blas_amax::cpu
+} // namespace op::blas_amin::cpu

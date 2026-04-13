@@ -1,8 +1,8 @@
-#include "blas_amax_metax.h"
+#include "blas_amin_metax.h"
 #include "../../../devices/metax/metax_common.h"
 #include "../../../devices/metax/metax_handle.h"
 
-namespace op::blas_amax::metax {
+namespace op::blas_amin::metax {
 
 struct Descriptor::Opaque {
     std::shared_ptr<device::metax::Handle::Internal> internal;
@@ -16,22 +16,21 @@ infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
     Descriptor **desc_ptr,
     infiniopTensorDescriptor_t x_desc) {
-    
+
     auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
     auto dtype = x_desc->dtype();
-
     CHECK_DTYPE(dtype, INFINI_DTYPE_F32, INFINI_DTYPE_F64);
 
-    auto result = BlasAmaxInfo::createBlasAmaxInfo(x_desc);
+    auto result = BlasAminInfo::createBlasAminInfo(x_desc);
     CHECK_RESULT(result);
 
     *desc_ptr = new Descriptor(
-        result.take(), 
+        result.take(),
         0,
         new Opaque{handle->internal()},
-        handle->device, 
+        handle->device,
         handle->device_id);
-        
+
     return INFINI_STATUS_SUCCESS;
 }
 
@@ -48,17 +47,21 @@ infiniStatus_t Descriptor::calculate(
     CHECK_STATUS(_opaque->internal->useMcblas(
         (hcStream_t)stream,
         [&](hcblasHandle_t handle) {
-            
-            if (_info.getDtype() == INFINI_DTYPE_F32) {
-                CHECK_MCBLAS(hcblasIsamax(handle, _info.getSize(), (const float *)x, _info.getIncx(), (int *)result));
-            } else {
-                CHECK_MCBLAS(hcblasIdamax(handle, _info.getSize(), (const double *)x, _info.getIncx(), (int *)result));
+            switch (_info.getDtype()) {
+            case INFINI_DTYPE_F32:
+                CHECK_MCBLAS(hcblasIsamin(handle, _info.getSize(), (const float *)x, _info.getIncx(), result));
+                break;
+            case INFINI_DTYPE_F64:
+                CHECK_MCBLAS(hcblasIdamin(handle, _info.getSize(), (const double *)x, _info.getIncx(), result));
+                break;
+            default:
+                return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
             }
-                    
+
             return INFINI_STATUS_SUCCESS;
         }));
-        
+
     return INFINI_STATUS_SUCCESS;
 }
 
-} // namespace op::blas_amax::metax
+} // namespace op::blas_amin::metax

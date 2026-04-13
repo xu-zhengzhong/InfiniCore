@@ -1,7 +1,6 @@
 import torch
 import ctypes
-import math
-from ctypes import c_uint64, c_float, c_double
+from ctypes import c_uint64
 from libinfiniop import (
     LIBINFINIOP,
     TestTensor,
@@ -19,10 +18,6 @@ from libinfiniop import (
     infiniopOperatorDescriptor_t,
 )
 
-# ==============================================================================
-# Configuration
-# ==============================================================================
-# Format: (shape, x_stride, y_stride)
 _TEST_CASES = [
     ((13,), None, None),
     ((13,), (10,), (10,)),
@@ -34,12 +29,13 @@ _TEST_CASES = [
 
 _TENSOR_DTYPES = [
     InfiniDtype.F32,
-    # InfiniDtype.F64,
 ]
 
 _TOLERANCE_MAP = {
-    InfiniDtype.F32: {"atol": 1e-5, "rtol": 1e-5},
-    InfiniDtype.F64: {"atol": 1e-7, "rtol": 1e-7},
+    InfiniDtype.F16: {"atol": 1e-3, "rtol": 1e-3},
+    InfiniDtype.F32: {"atol": 1e-7, "rtol": 1e-7},
+    InfiniDtype.BF16: {"atol": 1e-3, "rtol": 1e-3},
+    InfiniDtype.F64: {"atol": 1e-15, "rtol": 1e-15},
 }
 
 DEBUG = False
@@ -48,8 +44,10 @@ NUM_PRERUN = 10
 NUM_ITERATIONS = 1000
 
 
-def torch_dot(x, y):
-    return torch.dot(x, y)
+def torch_swap(x, y):
+    tmp = x.clone()
+    x.copy_(y)
+    y.copy_(tmp)
 
 
 def test(
@@ -64,24 +62,22 @@ def test(
     x = TestTensor(shape, x_stride, dtype, device)
     y = TestTensor(shape, y_stride, dtype, device)
 
-    if dtype is InfiniDtype.F32:
-        result = c_float(0.0)
-    else:
-        result = c_double(0.0)
+    if x.is_broadcast() or y.is_broadcast():
+        return
 
     print(
-        f"Testing Dot on {InfiniDeviceNames[device]} with shape:{shape} x_stride:{x_stride} "
+        f"Testing Swap on {InfiniDeviceNames[device]} with shape:{shape} x_stride:{x_stride} "
         f"y_stride:{y_stride} dtype:{InfiniDtypeNames[dtype]}"
     )
 
-    expected_val = torch_dot(x.torch_tensor(), y.torch_tensor()).item()
+    torch_swap(x.torch_tensor(), y.torch_tensor())
 
     if sync is not None:
         sync()
 
     descriptor = infiniopOperatorDescriptor_t()
     check_error(
-        LIBINFINIOP.infiniopCreateDotDescriptor(
+        LIBINFINIOP.infiniopCreateSwapDescriptor(
             handle,
             ctypes.byref(descriptor),
             x.descriptor,
@@ -94,41 +90,39 @@ def test(
 
     workspace_size = c_uint64(0)
     check_error(
-        LIBINFINIOP.infiniopGetDotWorkspaceSize(
+        LIBINFINIOP.infiniopGetSwapWorkspaceSize(
             descriptor, ctypes.byref(workspace_size)
         )
     )
     workspace = TestWorkspace(workspace_size.value, x.device)
 
-    def lib_dot():
+    def lib_swap():
         check_error(
-            LIBINFINIOP.infiniopDot(
+            LIBINFINIOP.infiniopSwap(
                 descriptor,
                 workspace.data(),
                 workspace.size(),
                 x.data(),
                 y.data(),
-                ctypes.byref(result),
                 None,
             )
         )
 
-    lib_dot()
+    lib_swap()
 
-    actual_val = result.value
     atol, rtol = get_tolerance(_TOLERANCE_MAP, dtype)
-
     if DEBUG:
-        print(f"Expected Sum: {expected_val:.6f}, Actual Sum: {actual_val:.6f}")
+        debug(x.actual_tensor(), x.torch_tensor(), atol=atol, rtol=rtol)
+        debug(y.actual_tensor(), y.torch_tensor(), atol=atol, rtol=rtol)
 
-    assert math.isclose(actual_val, expected_val, rel_tol=rtol, abs_tol=atol), \
-        f"Value mismatch: actual={actual_val} != expected={expected_val} (atol={atol}, rtol={rtol})"
+    assert torch.allclose(x.actual_tensor(), x.torch_tensor(), atol=atol, rtol=rtol)
+    assert torch.allclose(y.actual_tensor(), y.torch_tensor(), atol=atol, rtol=rtol)
 
     if PROFILE:
-        profile_operation("PyTorch", lambda: torch_dot(x.torch_tensor(), y.torch_tensor()), device, NUM_PRERUN, NUM_ITERATIONS)
-        profile_operation("    lib", lambda: lib_dot(), device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("PyTorch", lambda: torch_swap(x.torch_tensor(), y.torch_tensor()), device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("    lib", lambda: lib_swap(), device, NUM_PRERUN, NUM_ITERATIONS)
 
-    check_error(LIBINFINIOP.infiniopDestroyDotDescriptor(descriptor))
+    check_error(LIBINFINIOP.infiniopDestroySwapDescriptor(descriptor))
 
 
 if __name__ == "__main__":

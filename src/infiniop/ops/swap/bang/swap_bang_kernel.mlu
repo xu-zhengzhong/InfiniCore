@@ -1,0 +1,42 @@
+#include "../../../devices/bang/common_bang.h"
+#include "swap_bang.h"
+
+template <typename Tdata>
+__mlu_global__ void swapKernelContiguous(
+    size_t n,
+    Tdata *x,
+    Tdata *y) {
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int actual_tasks = elements_per_core + (taskId < remain ? 1 : 0);
+    int start_idx = taskId < remain ? taskId * actual_tasks : taskId * elements_per_core + remain;
+
+    for (int i = start_idx; i < start_idx + actual_tasks; ++i) {
+        Tdata temp = x[i];
+        x[i] = y[i];
+        y[i] = temp;
+    }
+}
+
+template <typename Tdata>
+__mlu_global__ void swapKernelStrided(
+    size_t n,
+    Tdata *x,
+    size_t incx,
+    Tdata *y,
+    size_t incy) {
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int actual_tasks = elements_per_core + (taskId < remain ? 1 : 0);
+    int start_idx = taskId < remain ? taskId * actual_tasks : taskId * elements_per_core + remain;
+
+    for (int i = start_idx; i < start_idx + actual_tasks; ++i) {
+        size_t x_idx = i * incx;
+        size_t y_idx = i * incy;
+        Tdata temp = x[x_idx];
+        x[x_idx] = y[y_idx];
+        y[y_idx] = temp;
+    }
+}
