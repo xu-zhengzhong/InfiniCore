@@ -15,7 +15,7 @@ thread_local common::OpCache<size_t, infiniopScalDescriptor_t> caches(
         }
     });
 
-void calculate(Tensor y, float alpha) {
+void calculate(Tensor y, void *alpha) {
     size_t seed = hash_combine(y);
 
     auto device_type = context::getDevice().getType();

@@ -37,25 +37,25 @@ infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
     void *x,
-    float alpha,
+    const void *alpha,
     void *stream) const {
 
     (void)workspace;
     (void)workspace_size;
 
     hpccDataType data_type, alpha_type, execution_type;
-    
-    void *alpha_ptr = &alpha;
+
+    void *alpha_ptr = const_cast<void *>(alpha);
 
     switch (_info.getDtype()) {
     case INFINI_DTYPE_F16:
         data_type = HPCC_R_16F;
-        alpha_type = HPCC_R_32F;
+        alpha_type = HPCC_R_16F;
         execution_type = HPCC_R_32F;
         break;
     case INFINI_DTYPE_BF16:
         data_type = HPCC_R_16BF;
-        alpha_type = HPCC_R_32F;
+        alpha_type = HPCC_R_16BF;
         execution_type = HPCC_R_32F;
         break;
     case INFINI_DTYPE_F32:

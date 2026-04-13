@@ -30,7 +30,8 @@ template <typename Tdata>
 infiniStatus_t calculateScal(
     const ScalInfo &info,
     void *x,
-    float alpha,
+    const void *alpha,
+    infiniDtype_t alpha_dtype,
     cnrtQueue_t queue) {
 
     cnrtDim3_t k_dim;
@@ -41,15 +42,30 @@ infiniStatus_t calculateScal(
     k_dim.z = 1;
     k_type = cnrtFuncTypeUnion1;
 
+    Tdata alpha_v;
+    switch (alpha_dtype) {
+    case INFINI_DTYPE_F16:
+        alpha_v = utils::cast<Tdata>(*reinterpret_cast<const fp16_t *>(alpha));
+        break;
+    case INFINI_DTYPE_BF16:
+        alpha_v = utils::cast<Tdata>(*reinterpret_cast<const bf16_t *>(alpha));
+        break;
+    case INFINI_DTYPE_F32:
+        alpha_v = utils::cast<Tdata>(*reinterpret_cast<const float *>(alpha));
+        break;
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
     if (info.getIncx() == 1) {
         scalKernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
             info.getSize(), 
-            static_cast<Tdata>(alpha),
+            alpha_v,
             (Tdata *)x);
     } else {
         scalKernelStrided<Tdata><<<k_dim, k_type, queue>>>(
             info.getSize(), 
-            static_cast<Tdata>(alpha),
+            alpha_v,
             (Tdata *)x,
             info.getIncx());
     }
@@ -60,13 +76,13 @@ infiniStatus_t calculateScal(
 }
 
 #define CALCULATE_SCAL(TDATA) \
-    calculateScal<TDATA>(_info, x, alpha, (cnrtQueue_t)stream)
+    calculateScal<TDATA>(_info, x, alpha, _info.getDtype(), (cnrtQueue_t)stream)
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
     void *x,
-    float alpha,
+    const void *alpha,
     void *stream) const {
 
     (void)workspace;

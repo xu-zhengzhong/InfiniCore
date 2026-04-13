@@ -48,7 +48,6 @@ def parse_test_cases():
             tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-3})
             x_spec = TensorSpec.from_tensor(shape, strides, dtype)
 
-            # Pass alpha as a kwarg for the operator
             kwargs = {"alpha": alpha}
 
             test_cases.append(
@@ -75,7 +74,6 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(self, *args, **kwargs):
-        # Extract alpha from kwargs to map to PyTorch's torch.mul(input, other)
         alpha = kwargs.pop("alpha", 1.0)
         return torch.mul(args[0], alpha, **kwargs)
 

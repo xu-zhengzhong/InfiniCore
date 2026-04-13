@@ -25,9 +25,10 @@ infiniStatus_t Descriptor::create(
     return INFINI_STATUS_SUCCESS;
 }
 
-template <typename Tdata>
-infiniStatus_t calculateScal(const ScalInfo &info, void *x, float alpha) {
+template <typename Tdata, typename Talpha>
+infiniStatus_t calculateScal(const ScalInfo &info, void *x, const void *alpha) {
     Tdata *x_ptr = reinterpret_cast<Tdata *>(x);
+    Talpha alpha_raw = *reinterpret_cast<const Talpha *>(alpha);
 
     const ptrdiff_t size = info.getSize();
 
@@ -36,9 +37,9 @@ infiniStatus_t calculateScal(const ScalInfo &info, void *x, float alpha) {
         size_t idx = i * info.getIncx();
 
         if constexpr (std::is_same_v<Tdata, fp16_t> || std::is_same_v<Tdata, bf16_t>) {
-            x_ptr[idx] = utils::cast<Tdata>(utils::cast<float>(x_ptr[idx]) * alpha);
+            x_ptr[idx] = utils::cast<Tdata>(utils::cast<float>(x_ptr[idx]) * utils::cast<float>(alpha_raw));
         } else {
-            x_ptr[idx] = x_ptr[idx] * alpha;
+            x_ptr[idx] = x_ptr[idx] * utils::cast<Tdata>(alpha_raw);
         }
     }
 
@@ -49,7 +50,7 @@ infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
     void *x,
-    float alpha,
+    const void *alpha,
     void *stream) const {
 
     (void)workspace;
@@ -57,13 +58,13 @@ infiniStatus_t Descriptor::calculate(
 
     switch (_info.getDtype()) {
     case INFINI_DTYPE_F32:
-        return calculateScal<float>(_info, x, alpha);
+        return calculateScal<float, float>(_info, x, alpha);
     case INFINI_DTYPE_F64:
-        return calculateScal<double>(_info, x, alpha);
+        return calculateScal<double, double>(_info, x, alpha);
     case INFINI_DTYPE_F16:
-        return calculateScal<fp16_t>(_info, x, alpha);
+        return calculateScal<fp16_t, fp16_t>(_info, x, alpha);
     case INFINI_DTYPE_BF16:
-        return calculateScal<bf16_t>(_info, x, alpha);
+        return calculateScal<bf16_t, bf16_t>(_info, x, alpha);
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }

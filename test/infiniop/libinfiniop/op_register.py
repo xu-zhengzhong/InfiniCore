@@ -965,7 +965,7 @@ def scal_(lib):
         c_void_p,                               # workspace
         c_size_t,                               # workspace_size
         c_void_p,                               # x
-        c_float,                                # alpha
+        c_void_p,                               # alpha
         c_void_p,                               # stream
     ]
 

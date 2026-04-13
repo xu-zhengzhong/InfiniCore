@@ -1,6 +1,6 @@
 import torch
 import ctypes
-from ctypes import c_uint64
+from ctypes import c_uint64, c_float, c_double, c_int16
 from libinfiniop import (
     LIBINFINIOP,
     TestTensor,
@@ -58,6 +58,23 @@ def scal(x, alpha):
     x.mul_(alpha)
 
 
+def _alpha_ptr(alpha, dtype):
+    if dtype == InfiniDtype.F32:
+        holder = c_float(alpha)
+    elif dtype == InfiniDtype.F64:
+        holder = c_double(alpha)
+    elif dtype == InfiniDtype.F16:
+        bits = torch.tensor(alpha, dtype=torch.float16).view(torch.int16).item()
+        holder = c_int16(bits)
+    elif dtype == InfiniDtype.BF16:
+        bits = torch.tensor(alpha, dtype=torch.bfloat16).view(torch.int16).item()
+        holder = c_int16(bits)
+    else:
+        raise ValueError(f"Unsupported dtype for alpha: {dtype}")
+
+    return holder, ctypes.byref(holder)
+
+
 def test(
     handle,
     device,
@@ -107,6 +124,8 @@ def test(
     workspace = TestWorkspace(workspace_size.value, x.device)
 
     # Execute C library op
+    alpha_holder, alpha_ptr = _alpha_ptr(alpha, dtype)
+
     def lib_scal():
         check_error(
             LIBINFINIOP.infiniopScal(
@@ -114,7 +133,7 @@ def test(
                 workspace.data(),
                 workspace.size(),
                 x.data(),
-                alpha,
+                alpha_ptr,
                 None,
             )
         )
