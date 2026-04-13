@@ -61,9 +61,12 @@ from infinicore.ops.bilinear import bilinear
 from infinicore.ops.binary_cross_entropy_with_logits import (
     binary_cross_entropy_with_logits,
 )
+from infinicore.ops.blas_amin import blas_amin
 from infinicore.ops.blas_amax import blas_amax
 from infinicore.ops.cdist import cdist
+from infinicore.ops.copy import copy
 from infinicore.ops.cross_entropy import cross_entropy
+from infinicore.ops.dot import dot
 from infinicore.ops.equal import equal
 from infinicore.ops.fmod import fmod
 from infinicore.ops.kv_caching import kv_caching
@@ -81,6 +84,7 @@ from infinicore.ops.reciprocal import reciprocal
 from infinicore.ops.scal import scal
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
+from infinicore.ops.swap import swap
 from infinicore.ops.topk import topk
 from infinicore.ops.unsqueeze import unsqueeze
 from infinicore.ops.var import var
@@ -147,8 +151,11 @@ __all__ = [
     "atanh",
     "axpy",
     "binary_cross_entropy_with_logits",
+    "blas_amin",
     "blas_amax",
     "cdist",
+    "copy",
+    "dot",
     "reciprocal",
     "add",
     "add_rms_norm",
@@ -184,6 +191,7 @@ __all__ = [
     "strided_from_blob",
     "zeros",
     "sum",
+    "swap",
     "var_mean",
     "var",
     "topk",

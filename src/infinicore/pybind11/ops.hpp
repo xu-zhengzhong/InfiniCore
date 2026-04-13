@@ -16,10 +16,13 @@
 #include "ops/baddbmm.hpp"
 #include "ops/bilinear.hpp"
 #include "ops/binary_cross_entropy_with_logits.hpp"
+#include "ops/blas_amin.hpp"
 #include "ops/blas_amax.hpp"
 #include "ops/causal_softmax.hpp"
+#include "ops/copy.hpp"
 #include "ops/cdist.hpp"
 #include "ops/cross_entropy.hpp"
+#include "ops/dot.hpp"
 #include "ops/embedding.hpp"
 #include "ops/equal.hpp"
 #include "ops/flash_attention.hpp"
@@ -45,6 +48,7 @@
 #include "ops/scal.hpp"
 #include "ops/silu.hpp"
 #include "ops/silu_and_mul.hpp"
+#include "ops/swap.hpp"
 #include "ops/sum.hpp"
 #include "ops/swiglu.hpp"
 #include "ops/topk.hpp"
@@ -64,6 +68,7 @@ inline void bind(py::module &m) {
     bind_asum(m);
     bind_baddbmm(m);
     bind_bilinear(m);
+    bind_blas_amin(m);
     bind_blas_amax(m);
     bind_axpy(m);
     bind_causal_softmax(m);
@@ -84,6 +89,8 @@ inline void bind(py::module &m) {
     bind_paged_caching(m);
     bind_random_sample(m);
     bind_cross_entropy(m);
+    bind_copy(m);
+    bind_dot(m);
     bind_rearrange(m);
     bind_rms_norm(m);
     bind_avg_pool1d(m);
@@ -94,6 +101,7 @@ inline void bind(py::module &m) {
     bind_embedding(m);
     bind_linear_w8a8i8(m);
     bind_silu_and_mul(m);
+    bind_swap(m);
     bind_sum(m);
     bind_var_mean(m);
     bind_var(m);

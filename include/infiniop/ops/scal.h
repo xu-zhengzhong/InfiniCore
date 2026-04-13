@@ -19,6 +19,7 @@ __INFINI_C __export infiniStatus_t infiniopScal(
     void *workspace,
     size_t workspace_size,
     void *x,
+    // TODO: support alpha of different types
     float alpha,
     void *stream);
 

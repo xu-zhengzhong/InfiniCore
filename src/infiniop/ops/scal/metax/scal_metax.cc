@@ -20,8 +20,6 @@ infiniStatus_t Descriptor::create(
     auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
     auto dtype = x_desc->dtype();
 
-    CHECK_DTYPE(dtype, INFINI_DTYPE_F16, INFINI_DTYPE_F32, INFINI_DTYPE_BF16);
-
     auto result = ScalInfo::createScalInfo(x_desc);
     CHECK_RESULT(result);
 
@@ -64,6 +62,11 @@ infiniStatus_t Descriptor::calculate(
         data_type = HPCC_R_32F;
         alpha_type = HPCC_R_32F;
         execution_type = HPCC_R_32F;
+        break;
+    case INFINI_DTYPE_F64:
+        data_type = HPCC_R_64F;
+        alpha_type = HPCC_R_64F;
+        execution_type = HPCC_R_64F;
         break;
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;

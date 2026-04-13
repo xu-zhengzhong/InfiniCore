@@ -1,20 +1,14 @@
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import infinicore
 import torch
-from framework import (
-    BaseOperatorTest,
-    TensorSpec,
-    TestCase,
-    GenericTestRunner,
-    is_broadcast,
-)
+from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 
 # Test cases format: (shape, x_stride)
-# BLAS amax computes the 1-based index of the maximum absolute value of a 1-D tensor.
+# BLAS amin computes the 1-based index of the minimum absolute value of a 1-D tensor.
 
 _TEST_CASES_DATA = [
     ((13,), None),
@@ -52,32 +46,30 @@ def parse_test_cases():
                     output_spec=None,
                     comparison_target=None,
                     tolerance=tol,
-                    description="BlasAmax - 1D Index",
+                    description="BlasAmin - 1D Index",
                 )
             )
     return test_cases
 
 
 class OpTest(BaseOperatorTest):
-    """BLAS Amax operator test (1-based index of max absolute value)"""
+    """BLAS Amin operator test (1-based index of min absolute value)"""
 
     def __init__(self):
-        super().__init__("BlasAmax")
+        super().__init__("BlasAmin")
 
     def get_test_cases(self):
         return parse_test_cases()
 
     def torch_operator(self, *args, **kwargs):
         x = args[0]
-        return torch.argmax(x.abs()) + 1
+        return torch.argmin(x.abs()) + 1
 
     def infinicore_operator(self, *args, **kwargs):
-        """InfiniCore implementation for BLAS amax."""
-        return infinicore.blas_amax(*args, **kwargs)
+        return infinicore.blas_amin(*args, **kwargs)
 
 
 def main():
-    """Main entry point"""
     runner = GenericTestRunner(OpTest)
     runner.run_and_exit()
 

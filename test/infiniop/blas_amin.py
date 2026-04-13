@@ -27,6 +27,7 @@ _TEST_CASES = [
 
 _TENSOR_DTYPES = [
     InfiniDtype.F32,
+    # InfiniDtype.F64,
 ]
 
 DEBUG = False

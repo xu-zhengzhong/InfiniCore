@@ -31,7 +31,7 @@ infiniStatus_t calculateScal(const ScalInfo &info, void *x, float alpha) {
 
     const ptrdiff_t size = info.getSize();
 
-#pragma omp parallel for if (size > 1024)
+// #pragma omp parallel for if (size > 1024)
     for (ptrdiff_t i = 0; i < size; ++i) {
         size_t idx = i * info.getIncx();
 
@@ -58,6 +58,8 @@ infiniStatus_t Descriptor::calculate(
     switch (_info.getDtype()) {
     case INFINI_DTYPE_F32:
         return calculateScal<float>(_info, x, alpha);
+    case INFINI_DTYPE_F64:
+        return calculateScal<double>(_info, x, alpha);
     case INFINI_DTYPE_F16:
         return calculateScal<fp16_t>(_info, x, alpha);
     case INFINI_DTYPE_BF16:

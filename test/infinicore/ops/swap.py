@@ -1,25 +1,21 @@
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import infinicore
 import torch
-from framework import BaseOperatorTest, TensorSpec, TestCase, GenericTestRunner
+from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 
-# Test cases format: (vec1_shape, vec2_shape, vec1_strides_or_None, vec2_strides_or_None)
-# infinicore.dot(a, b) — 1-D vectors; returns scalar
+# Test cases format: (shape, x_strides, y_strides)
 
 _TEST_CASES_DATA = [
-    ((3,), (3,), None, None),
-    ((8,), (8,), None, None),
-    ((1,), (1,), None, None),
-    ((16,), (16,), None, None),
-    ((5,), (5,), None, None),
-    ((32,), (32,), None, None),
-    ((8,), (8,), (2,), (2,)),
+    ((8,), None, None),
+    ((8,), (16,), (16,)),
+    ((24,), None, None),
+    ((5632,), None, None),
+    ((5632,), (5,), (5,)),
 ]
-
 
 _TOLERANCE_MAP = {
     infinicore.float32: {"atol": 1e-5, "rtol": 1e-4},
@@ -34,20 +30,21 @@ _TENSOR_DTYPES = [
 
 def parse_test_cases():
     test_cases = []
-    for s1, s2, st1, st2 in _TEST_CASES_DATA:
+    for shape, x_strides, y_strides in _TEST_CASES_DATA:
         for dtype in _TENSOR_DTYPES:
-            tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-4})
-            a = TensorSpec.from_tensor(s1, st1, dtype)
-            b = TensorSpec.from_tensor(s2, st2, dtype)
+            tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-3})
+            x_spec = TensorSpec.from_tensor(shape, x_strides, dtype)
+            y_spec = TensorSpec.from_tensor(shape, y_strides, dtype)
 
             test_cases.append(
                 TestCase(
-                    inputs=[a, b],
+                    inputs=[x_spec, y_spec],
                     kwargs={},
                     output_spec=None,
+                    output_count=2,
                     comparison_target=None,
                     tolerance=tol,
-                    description="dot - OUT_OF_PLACE",
+                    description="Swap - OUT_OF_PLACE",
                 )
             )
 
@@ -55,23 +52,28 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """dot operator test with simplified implementation"""
+    """Swap operator test (x <-> y)"""
 
     def __init__(self):
-        super().__init__("dot")
+        super().__init__("Swap")
 
     def get_test_cases(self):
         return parse_test_cases()
 
     def torch_operator(self, *args, **kwargs):
-        return torch.dot(*args, **kwargs)
+        x, y = args
+        out_x = x.clone()
+        out_y = y.clone()
+        tmp = out_x.clone()
+        out_x.copy_(out_y)
+        out_y.copy_(tmp)
+        return out_x, out_y
 
     def infinicore_operator(self, *args, **kwargs):
-        return infinicore.dot(*args, **kwargs)
+        return infinicore.swap(*args, **kwargs)
 
 
 def main():
-    """Main entry point"""
     runner = GenericTestRunner(OpTest)
     runner.run_and_exit()
 

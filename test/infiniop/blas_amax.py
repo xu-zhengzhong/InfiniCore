@@ -32,23 +32,15 @@ _TEST_CASES = [
 ]
 
 _TENSOR_DTYPES = [
-    # InfiniDtype.F16,
     InfiniDtype.F32,
-    # InfiniDtype.BF16,
+    # InfiniDtype.F64,
 ]
-
-# amax returns an index, so tolerance isn't used for the output comparison,
-# but we keep the map for consistency with the framework.
-_TOLERANCE_MAP = {
-    InfiniDtype.F16: {"atol": 0, "rtol": 0},
-    InfiniDtype.F32: {"atol": 0, "rtol": 0},
-    InfiniDtype.BF16: {"atol": 0, "rtol": 0},
-}
 
 DEBUG = False
 PROFILE = False
 NUM_PRERUN = 10
 NUM_ITERATIONS = 1000
+
 
 def torch_amax(x):
     return torch.argmax(x.abs())
