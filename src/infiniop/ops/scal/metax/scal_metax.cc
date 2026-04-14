@@ -18,7 +18,6 @@ infiniStatus_t Descriptor::create(
     infiniopTensorDescriptor_t x_desc) {
     
     auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
-    auto dtype = x_desc->dtype();
 
     auto result = ScalInfo::createScalInfo(x_desc);
     CHECK_RESULT(result);
