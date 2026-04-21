@@ -70,6 +70,9 @@
 #define HCBLAS_OP_T MCBLAS_OP_T
 #define HCBLAS_GEMM_DEFAULT_TENSOR_OP MCBLAS_GEMM_DEFAULT_TENSOR_OP
 #define hcblasGemmStridedBatchedEx mcblasGemmStridedBatchedEx
+#define HCBLAS_POINTER_MODE_HOST MCBLAS_POINTER_MODE_HOST
+#define HCBLAS_POINTER_MODE_DEVICE MCBLAS_POINTER_MODE_DEVICE
+#define hcblasSetPointerMode mcblasSetPointerMode
 #define hcblasIsamax mcblasIsamax
 #define hcblasIdamax mcblasIdamax
 #define hcblasIsamin mcblasIsamin
@@ -84,6 +87,14 @@
 #define hcblasDdot mcblasDdot
 #define hcblasSnrm2 mcblasSnrm2
 #define hcblasDnrm2 mcblasDnrm2
+#define hcblasSrot mcblasSrot
+#define hcblasDrot mcblasDrot
+#define hcblasSrotg mcblasSrotg
+#define hcblasDrotg mcblasDrotg
+#define hcblasSrotm mcblasSrotm
+#define hcblasDrotm mcblasDrotm
+#define hcblasSrotmg mcblasSrotmg
+#define hcblasDrotmg mcblasDrotmg
 #define hcblasScalEx mcblasScalEx
 #define hcblasSswap mcblasSswap
 #define hcblasDswap mcblasDswap

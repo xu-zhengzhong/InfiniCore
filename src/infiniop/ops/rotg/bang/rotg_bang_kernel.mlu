@@ -1,0 +1,54 @@
+#include "../../../devices/bang/common_bang.h"
+
+#include <limits>
+#include <type_traits>
+
+template <typename Tdata>
+__mlu_global__ void rotgKernel(
+    Tdata *a,
+    Tdata *b,
+    Tdata *c,
+    Tdata *s) {
+
+    const Tdata zero = static_cast<Tdata>(0.0f);
+    const Tdata one = static_cast<Tdata>(1.0f);
+    const Tdata safmin = static_cast<Tdata>(std::numeric_limits<float>::min());
+    const Tdata safmax = static_cast<Tdata>(std::numeric_limits<float>::max());
+
+    const Tdata a_val = *a;
+    const Tdata b_val = *b;
+
+    const Tdata anorm = std::fabs(a_val);
+    const Tdata bnorm = std::fabs(b_val);
+
+    if (bnorm == zero) {
+        *c = one;
+        *s = zero;
+        *b = zero;
+    } else if (anorm == zero) {
+        *c = zero;
+        *s = one;
+        *a = b_val;
+        *b = one;
+    } else {
+        const Tdata scl = std::min(safmax, std::max(safmin, std::max(anorm, bnorm)));
+        const Tdata sigma = anorm > bnorm ? std::copysign(one, a_val) : std::copysign(one, b_val);
+        const Tdata r = sigma * (scl * std::sqrt((a_val / scl) * (a_val / scl) + (b_val / scl) * (b_val / scl)));
+        const Tdata c_val = a_val / r;
+        const Tdata s_val = b_val / r;
+
+        Tdata z;
+        if (anorm > bnorm) {
+            z = s_val;
+        } else if (c_val != zero) {
+            z = one / c_val;
+        } else {
+            z = one;
+        }
+
+        *a = r;
+        *b = z;
+        *c = c_val;
+        *s = s_val;
+    }
+}
