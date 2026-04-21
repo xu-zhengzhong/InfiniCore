@@ -42,6 +42,10 @@
 #include "ops/paged_caching.hpp"
 #include "ops/random_sample.hpp"
 #include "ops/rearrange.hpp"
+#include "ops/rot.hpp"
+#include "ops/rotg.hpp"
+#include "ops/rotm.hpp"
+#include "ops/rotmg.hpp"
 #include "ops/reciprocal.hpp"
 #include "ops/rms_norm.hpp"
 #include "ops/rope.hpp"
@@ -92,6 +96,10 @@ inline void bind(py::module &m) {
     bind_copy(m);
     bind_dot(m);
     bind_rearrange(m);
+    bind_rot(m);
+    bind_rotg(m);
+    bind_rotm(m);
+    bind_rotmg(m);
     bind_rms_norm(m);
     bind_avg_pool1d(m);
     bind_scal(m);
