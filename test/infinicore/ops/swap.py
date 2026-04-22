@@ -42,9 +42,9 @@ def parse_test_cases():
                     kwargs={},
                     output_spec=None,
                     output_count=2,
-                    comparison_target=None,
+                    comparison_target=[0, 1],
                     tolerance=tol,
-                    description="Swap - OUT_OF_PLACE",
+                    description="Swap - INPLACE(x,y)",
                 )
             )
 
@@ -52,7 +52,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """Swap operator test (x <-> y)"""
+    """BLAS Level-1 swap operator test"""
 
     def __init__(self):
         super().__init__("Swap")
@@ -62,12 +62,10 @@ class OpTest(BaseOperatorTest):
 
     def torch_operator(self, *args, **kwargs):
         x, y = args
-        out_x = x.clone()
-        out_y = y.clone()
-        tmp = out_x.clone()
-        out_x.copy_(out_y)
-        out_y.copy_(tmp)
-        return out_x, out_y
+        tmp = x.clone()
+        x.copy_(y)
+        y.copy_(tmp)
+        return x, y
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.swap(*args, **kwargs)

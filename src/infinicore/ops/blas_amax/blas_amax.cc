@@ -16,18 +16,12 @@ void BlasAmax::execute(int *result, const Tensor &x) {
 
 Tensor blas_amax(const Tensor &x) {
     Shape result_shape = {1}; // BlasAmax returns a single index, so the shape is [1]
-    int result;
-    BlasAmax::execute(&result, x);
-    
+
     auto result_tensor = Tensor::empty(result_shape, DataType::I32, Device::Type::CPU);
-    std::memcpy(result_tensor->data(), &result, sizeof(int)); // Copy the result into the tensor
+    BlasAmax::execute(reinterpret_cast<int *>(result_tensor->data()), x);
     result_tensor = result_tensor->to(x->device());
 
     return result_tensor->squeeze(0);
 }
-
-// void blas_amax_(Tensor result, const Tensor &x) {
-//     BlasAmax::execute(result, x);
-// }
 
 } // namespace infinicore::op

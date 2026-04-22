@@ -15,12 +15,8 @@ void BlasAmin::execute(int *result, const Tensor &x) {
 
 Tensor blas_amin(const Tensor &x) {
     Shape result_shape = {1};
-    int result;
-    BlasAmin::execute(&result, x);
-
-    auto result_tensor =
-        Tensor::empty(result_shape, DataType::I32, Device::Type::CPU);
-    std::memcpy(result_tensor->data(), &result, sizeof(int));
+    auto result_tensor = Tensor::empty(result_shape, DataType::I32, Device::Type::CPU);
+    BlasAmin::execute(reinterpret_cast<int *>(result_tensor->data()), x);
     result_tensor = result_tensor->to(x->device());
 
     return result_tensor->squeeze(0);

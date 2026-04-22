@@ -9,18 +9,10 @@ namespace py = pybind11;
 namespace infinicore::ops {
 
 inline void bind_swap(py::module &m) {
-    m.def("swap",
-          &op::swap,
-          py::arg("x"),
-          py::arg("y"),
-          R"doc(BLAS Level1 swap function.)doc");
-
     m.def("swap_",
           &op::swap_,
           py::arg("x"),
           py::arg("y"),
-          py::arg("out_x"),
-          py::arg("out_y"),
           R"doc(BLAS Level1 in-place swap function.)doc");
 }
 

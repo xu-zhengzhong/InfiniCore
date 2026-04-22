@@ -32,7 +32,7 @@ _TENSOR_DTYPES = [
 ]
 
 
-def torch_rotmg(d1, d2, x1, y1):
+def torch_rotmg(d1, d2, x1, y1, param):
     zero = 0.0
     one = 1.0
     two = 2.0
@@ -40,7 +40,6 @@ def torch_rotmg(d1, d2, x1, y1):
     gamsq = 1.67772e7
     rgamsq = 5.96046e-8
 
-    sparam = [0.0] * 5
     sh11 = sh12 = sh21 = sh22 = 0.0
 
     if d1 < zero:
@@ -49,8 +48,8 @@ def torch_rotmg(d1, d2, x1, y1):
     else:
         sp2 = d2 * y1
         if sp2 == zero:
-            sparam[0] = -two
-            return d1, d2, x1, sparam
+            param[0] = -two
+            return d1, d2, x1, param
 
         sp1 = d1 * x1
         sq2 = sp2 * y1
@@ -124,46 +123,19 @@ def torch_rotmg(d1, d2, x1, y1):
                     sh22 = sh22 * gam
 
     if sflag < zero:
-        sparam[1] = sh11
-        sparam[2] = sh21
-        sparam[3] = sh12
-        sparam[4] = sh22
+        param[1] = sh11
+        param[2] = sh21
+        param[3] = sh12
+        param[4] = sh22
     elif sflag == zero:
-        sparam[2] = sh21
-        sparam[3] = sh12
+        param[2] = sh21
+        param[3] = sh12
     else:
-        sparam[1] = sh11
-        sparam[4] = sh22
+        param[1] = sh11
+        param[4] = sh22
 
-    sparam[0] = sflag
-    return d1, d2, x1, sparam
-
-
-def _mask_unused_sparam_torch(sparam: torch.Tensor) -> torch.Tensor:
-    # BLAS rotmg uses sflag to indicate which parameter entries are meaningful.
-    # Unused entries are implementation-defined and should not be compared.
-    masked = sparam.clone()
-    sflag = float(masked.reshape(-1)[0].item())
-
-    if sflag == 1.0:
-        masked[2] = 0
-        masked[3] = 0
-    elif sflag == 0.0:
-        masked[1] = 0
-        masked[4] = 0
-    elif sflag == -2.0:
-        masked[1] = 0
-        masked[2] = 0
-        masked[3] = 0
-        masked[4] = 0
-
-    return masked
-
-
-def _mask_unused_sparam_infinicore(sparam):
-    sparam_torch = convert_infinicore_to_torch(sparam)
-    masked_torch = _mask_unused_sparam_torch(sparam_torch)
-    sparam.copy_(infinicore_tensor_from_torch(masked_torch))
+    param[0] = sflag
+    return d1, d2, x1, param
 
 
 def parse_test_cases():
@@ -175,31 +147,16 @@ def parse_test_cases():
             d2_spec = TensorSpec.from_tensor((1,), None, dtype)
             x1_spec = TensorSpec.from_tensor((1,), None, dtype)
             y1_spec = TensorSpec.from_tensor((1,), None, dtype)
-            out_d1_spec = TensorSpec.from_tensor((1,), None, dtype)
-            out_d2_spec = TensorSpec.from_tensor((1,), None, dtype)
-            out_x1_spec = TensorSpec.from_tensor((1,), None, dtype)
-            out_param_spec = TensorSpec.from_tensor((5,), None, dtype)
+            param_spec = TensorSpec.from_tensor((5,), None, dtype)
 
             test_cases.append(
                 TestCase(
-                    inputs=[d1_spec, d2_spec, x1_spec, y1_spec],
+                    inputs=[d1_spec, d2_spec, x1_spec, y1_spec, param_spec],
                     kwargs={},
                     output_count=4,
-                    comparison_target=None,
+                    comparison_target=[0, 1, 2, 4],
                     tolerance=tol,
-                    description=f"Rotmg - OUT_OF_PLACE (d1={d1_0}, d2={d2_0}, x1={x1_0}, y1={y1_0})",
-                )
-            )
-
-            test_cases.append(
-                TestCase(
-                    inputs=[d1_spec, d2_spec, x1_spec, y1_spec],
-                    kwargs={},
-                    output_specs=[out_d1_spec, out_d2_spec, out_x1_spec, out_param_spec],
-                    comparison_target="out",
-                    tolerance=tol,
-                    output_count=4,
-                    description=f"Rotmg - INPLACE(out) (d1={d1_0}, d2={d2_0}, x1={x1_0}, y1={y1_0})",
+                    description=f"Rotmg - INPLACE (d1={d1_0}, d2={d2_0}, x1={x1_0}, y1={y1_0})",
                 )
             )
 
@@ -207,39 +164,19 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
+    """BLAS Level-1 rotmg operator test"""
+
     def __init__(self):
         super().__init__("Rotmg")
 
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, d1, d2, x1, y1, **kwargs):
-        out = kwargs.pop("out", None)
-        out_d1, out_d2, out_x1, out_param = torch_rotmg(
-            d1.clone().item(), d2.clone().item(), x1.clone().item(), y1.clone().item()
-        )
-        out_d1 = torch.tensor([out_d1], dtype=d1.dtype, device=d1.device)
-        out_d2 = torch.tensor([out_d2], dtype=d2.dtype, device=d2.device)
-        out_x1 = torch.tensor([out_x1], dtype=x1.dtype, device=x1.device)
-        out_param = torch.tensor(out_param, dtype=d1.dtype, device=d1.device)
-        if out is not None:
-            out[0].copy_(out_d1)
-            out[1].copy_(out_d2)
-            out[2].copy_(out_x1)
-            out[3].copy_(out_param)
-            return out
-        return out_d1, out_d2, out_x1, out_param
+    def torch_operator(self, *args, **kwargs):
+        return torch_rotmg(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
-        result = infinicore.rotmg(*args, **kwargs)
-
-        out = kwargs.get("out")
-        if out is not None:
-            _mask_unused_sparam_infinicore(out[3])
-        else:
-            _mask_unused_sparam_infinicore(result[3])
-
-        return result
+        return infinicore.rotmg(*args, **kwargs)
 
 
 def main():

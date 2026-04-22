@@ -34,31 +34,17 @@ def parse_test_cases():
             tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-3})
             a_spec = TensorSpec.from_tensor((1,), None, dtype)
             b_spec = TensorSpec.from_tensor((1,), None, dtype)
-            out_a_spec = TensorSpec.from_tensor((1,), None, dtype)
-            out_b_spec = TensorSpec.from_tensor((1,), None, dtype)
-            out_c_spec = TensorSpec.from_tensor((1,), None, dtype)
-            out_s_spec = TensorSpec.from_tensor((1,), None, dtype)
+            c_spec = TensorSpec.from_tensor((1,), None, dtype)
+            s_spec = TensorSpec.from_tensor((1,), None, dtype)
 
             test_cases.append(
                 TestCase(
-                    inputs=[a_spec, b_spec],
+                    inputs=[a_spec, b_spec, c_spec, s_spec],
                     kwargs={},
                     output_count=4,
-                    comparison_target=None,
+                    comparison_target=[0, 1, 2, 3],
                     tolerance=tol,
-                    description=f"Rotg - OUT_OF_PLACE (a={a0}, b={b0})",
-                )
-            )
-
-            test_cases.append(
-                TestCase(
-                    inputs=[a_spec, b_spec],
-                    kwargs={},
-                    output_specs=[out_a_spec, out_b_spec, out_c_spec, out_s_spec],
-                    comparison_target="out",
-                    tolerance=tol,
-                    output_count=4,
-                    description=f"Rotg - INPLACE(out) (a={a0}, b={b0})",
+                    description=f"Rotg - INPLACE(a, b, c, s) (a={a0}, b={b0})",
                 )
             )
 
@@ -106,22 +92,16 @@ def torch_rotg(a, b):
 
 
 class OpTest(BaseOperatorTest):
+    """BLAS Level-1 rotg operator test"""
+
     def __init__(self):
         super().__init__("Rotg")
 
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, a, b, **kwargs):
-        out = kwargs.pop("out", None)
-        out_a, out_b, out_c, out_s = torch_rotg(a, b)
-        if out is not None:
-            out[0].copy_(out_a)
-            out[1].copy_(out_b)
-            out[2].copy_(out_c)
-            out[3].copy_(out_s)
-            return out
-        return out_a, out_b, out_c, out_s
+    def torch_operator(self, *args, **kwargs):
+        return torch_rotg(args[0], args[1])
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.rotg(*args, **kwargs)

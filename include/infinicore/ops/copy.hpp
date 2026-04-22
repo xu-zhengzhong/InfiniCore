@@ -11,6 +11,5 @@ public:
     static common::OpDispatcher<schema> &dispatcher();
 };
 
-Tensor copy(Tensor x, Tensor y);
-void copy_(Tensor x, Tensor y, Tensor out);
+void copy_(Tensor x, Tensor y);
 } // namespace infinicore::op

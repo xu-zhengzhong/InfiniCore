@@ -41,9 +41,9 @@ def parse_test_cases():
                     inputs=[x_spec, y_spec],
                     kwargs={},
                     output_spec=None,
-                    comparison_target=None,
+                    comparison_target=0,
                     tolerance=tol,
-                    description="Copy - OUT_OF_PLACE",
+                    description="Copy - INPLACE(x)",
                 )
             )
 
@@ -51,7 +51,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """Copy operator test (x = y)"""
+    """BLAS Level-1 copy operator test"""
 
     def __init__(self):
         super().__init__("Copy")
@@ -61,9 +61,8 @@ class OpTest(BaseOperatorTest):
 
     def torch_operator(self, *args, **kwargs):
         x, y = args
-        out = x.clone()
-        out.copy_(y)
-        return out
+        x.copy_(y)
+        return x
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.copy(*args, **kwargs)

@@ -13,17 +13,8 @@ void Rotm::execute(Tensor x, Tensor y, Tensor param) {
     dispatcher().lookup(x->device().getType())(x, y, param);
 }
 
-std::tuple<Tensor, Tensor> rotm(Tensor x, Tensor y, Tensor param) {
-    auto out_x = Tensor::empty(x->shape(), x->dtype(), x->device());
-    auto out_y = Tensor::empty(y->shape(), y->dtype(), y->device());
-    rotm_(x, y, param, out_x, out_y);
-    return {out_x, out_y};
-}
-
-void rotm_(Tensor x, Tensor y, Tensor param, Tensor out_x, Tensor out_y) {
+void rotm_(Tensor x, Tensor y, Tensor param) {
     Rotm::execute(x, y, param);
-    out_x->copy_from(x);
-    out_y->copy_from(y);
 }
 
 } // namespace infinicore::op

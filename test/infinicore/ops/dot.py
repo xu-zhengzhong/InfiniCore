@@ -55,7 +55,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """dot operator test with simplified implementation"""
+    """BLAS Level-1 dot operator test"""
 
     def __init__(self):
         super().__init__("dot")

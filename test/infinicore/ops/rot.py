@@ -36,8 +36,6 @@ def parse_test_cases():
             tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-3})
             x_spec = TensorSpec.from_tensor(shape, x_strides, dtype)
             y_spec = TensorSpec.from_tensor(shape, y_strides, dtype)
-            out_x_spec = TensorSpec.from_tensor(shape, x_strides, dtype)
-            out_y_spec = TensorSpec.from_tensor(shape, y_strides, dtype)
 
             test_cases.append(
                 TestCase(
@@ -45,21 +43,9 @@ def parse_test_cases():
                     kwargs={"c": c, "s": s},
                     output_spec=None,
                     output_count=2,
-                    comparison_target=None,
+                    comparison_target=[0, 1],
                     tolerance=tol,
-                    description=f"Rot - OUT_OF_PLACE (c={c}, s={s})",
-                )
-            )
-
-            test_cases.append(
-                TestCase(
-                    inputs=[x_spec, y_spec],
-                    kwargs={"c": c, "s": s},
-                    output_specs=[out_x_spec, out_y_spec],
-                    comparison_target="out",
-                    tolerance=tol,
-                    description=f"Rot - INPLACE(out) (c={c}, s={s})",
-                    output_count=2,
+                    description=f"Rot - INPLACE(x,y) (c={c}, s={s})",
                 )
             )
 
@@ -67,7 +53,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """Rot operator test (x, y -> c*x+s*y, c*y-s*x)"""
+    """BLAS Level-1 rot operator test"""
 
     def __init__(self):
         super().__init__("Rot")
@@ -79,18 +65,11 @@ class OpTest(BaseOperatorTest):
         x, y = args
         c = kwargs.pop("c")
         s = kwargs.pop("s")
-        out = kwargs.pop("out", None)
-        out_x = x.clone()
-        out_y = y.clone()
-        x0 = out_x.clone()
-        y0 = out_y.clone()
-        out_x.copy_(c * x0 + s * y0)
-        out_y.copy_(c * y0 - s * x0)
-        if out is not None:
-            out[0].copy_(out_x)
-            out[1].copy_(out_y)
-            return out
-        return out_x, out_y
+        x0 = x.clone()
+        y0 = y.clone()
+        x.copy_(c * x0 + s * y0)
+        y.copy_(c * y0 - s * x0)
+        return x, y
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.rot(*args, **kwargs)

@@ -33,29 +33,15 @@ def parse_test_cases():
             x_spec = TensorSpec.from_tensor(shape, x_strides, dtype)
             y_spec = TensorSpec.from_tensor(shape, y_strides, dtype)
             param_spec = TensorSpec.from_tensor((5,), None, dtype)
-            out_x_spec = TensorSpec.from_tensor(shape, x_strides, dtype)
-            out_y_spec = TensorSpec.from_tensor(shape, y_strides, dtype)
 
             test_cases.append(
                 TestCase(
                     inputs=[x_spec, y_spec, param_spec],
                     kwargs={},
                     output_count=2,
-                    comparison_target=None,
+                    comparison_target=[0, 1],
                     tolerance=tol,
-                    description="Rotm - OUT_OF_PLACE",
-                )
-            )
-
-            test_cases.append(
-                TestCase(
-                    inputs=[x_spec, y_spec, param_spec],
-                    kwargs={},
-                    output_specs=[out_x_spec, out_y_spec],
-                    comparison_target="out",
-                    tolerance=tol,
-                    output_count=2,
-                    description="Rotm - INPLACE(out)",
+                    description="Rotm - INPLACE(x,y)",
                 )
             )
 
@@ -84,22 +70,18 @@ def torch_rotm(x, y, param):
 
 
 class OpTest(BaseOperatorTest):
+    """BLAS Level-1 rotm operator test"""
+
     def __init__(self):
         super().__init__("Rotm")
 
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, x, y, param, **kwargs):
-        out = kwargs.pop("out", None)
-        out_x = x.clone()
-        out_y = y.clone()
-        torch_rotm(out_x, out_y, param)
-        if out is not None:
-            out[0].copy_(out_x)
-            out[1].copy_(out_y)
-            return out
-        return out_x, out_y
+    def torch_operator(self, *args, **kwargs):
+        x, y, param = args
+        torch_rotm(x, y, param)
+        return x, y
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.rotm(*args, **kwargs)

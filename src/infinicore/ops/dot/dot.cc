@@ -23,15 +23,9 @@ Tensor dot(const Tensor &x, const Tensor &y) {
         throw std::runtime_error("dot only supports F32 and F64 data types.");
     }
 
-    size_t result_size = dsize(dtype);
-    void *result = malloc(result_size);
-
-    Dot::execute(result, x, y);
-
     Shape result_shape = {1};
     auto result_tensor = Tensor::empty(result_shape, dtype, Device::Type::CPU);
-    std::memcpy(result_tensor->data(), result, result_size);
-    free(result);
+    Dot::execute(result_tensor->data(), x, y);
     result_tensor = result_tensor->to(x->device());
 
     return result_tensor->squeeze(0);

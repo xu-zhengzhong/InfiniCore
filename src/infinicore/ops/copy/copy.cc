@@ -13,15 +13,8 @@ void Copy::execute(Tensor x, Tensor y) {
     dispatcher().lookup(x->device().getType())(x, y);
 }
 
-Tensor copy(Tensor x, Tensor y) {
-    auto out = Tensor::empty(x->shape(), x->dtype(), x->device());
-    copy_(x, y, out);
-    return out;
-}
-
-void copy_(Tensor x, Tensor y, Tensor out) {
+void copy_(Tensor x, Tensor y) {
     Copy::execute(x, y);
-    out->copy_from(x);
 }
 
 } // namespace infinicore::op

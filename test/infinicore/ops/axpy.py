@@ -48,11 +48,11 @@ def parse_test_cases():
             test_cases.append(
                 TestCase(
                     inputs=[y_spec, x_spec, alpha_spec],
-                    kwargs=None,
+                    kwargs={},
                     output_spec=None,
-                    comparison_target=None,
+                    comparison_target=0,
                     tolerance=tol,
-                    description=f"Axpy - OUT_OF_PLACE",
+                    description=f"Axpy - INPLACE(y)",
                 )
             )
 
@@ -60,7 +60,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """Axpy operator test (y = alpha * x + y)"""
+    """BLAS Level-1 axpy operator test"""
 
     def __init__(self):
         super().__init__("Axpy")
@@ -69,16 +69,13 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(self, *args, **kwargs):
-        """PyTorch axpy implementation"""
         y = args[0]
         x = args[1]
         alpha = args[2]
-        # return torch.add(torch.mul(x, alpha), y)
-        return torch.add(y, x, alpha=alpha.item())
-        # return torch.add(*args, **kwargs)
+        y.add_(x, alpha=alpha.item())
+        return y
 
     def infinicore_operator(self, *args, **kwargs):
-        """InfiniCore axpy implementation"""
         return infinicore.axpy(*args, **kwargs)
 
 

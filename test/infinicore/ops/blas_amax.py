@@ -59,7 +59,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """BLAS Amax operator test (1-based index of max absolute value)"""
+    """BLAS Level-1 amax operator test"""
 
     def __init__(self):
         super().__init__("BlasAmax")
@@ -72,7 +72,6 @@ class OpTest(BaseOperatorTest):
         return torch.argmax(x.abs()) + 1
 
     def infinicore_operator(self, *args, **kwargs):
-        """InfiniCore implementation for BLAS amax."""
         return infinicore.blas_amax(*args, **kwargs)
 
 

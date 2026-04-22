@@ -19,22 +19,12 @@ Tensor asum(const Tensor &x) {
     if (dtype != DataType::F32 && dtype != DataType::F64) {
         throw std::runtime_error("asum only supports F32 and F64 data types.");
     }
-    size_t result_size = dsize(dtype);
-    void *result = malloc(result_size);
-
-    Asum::execute(result, x);
-    
     Shape result_shape = {1}; // Asum returns a single index, so the shape is [1]
     auto result_tensor = Tensor::empty(result_shape, dtype, Device::Type::CPU);
-    std::memcpy(result_tensor->data(), result, result_size); // Copy the result into the tensor
-    free(result); // Free the temporary result memory
+    Asum::execute(result_tensor->data(), x);
     result_tensor = result_tensor->to(x->device());
 
     return result_tensor->squeeze(0);
 }
-
-// void asum_(Tensor result, const Tensor &x) {
-//     Asum::execute(result, x);
-// }
 
 } // namespace infinicore::op

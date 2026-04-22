@@ -48,16 +48,15 @@ def parse_test_cases():
             tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-3})
             x_spec = TensorSpec.from_tensor(shape, strides, dtype)
 
-            kwargs = {"alpha": alpha}
-
             test_cases.append(
                 TestCase(
                     inputs=[x_spec],
-                    kwargs=kwargs,
+                    kwargs={"alpha": alpha},
                     output_spec=None,
-                    comparison_target=None,
+                    output_count=1,
+                    comparison_target=[0],
                     tolerance=tol,
-                    description=f"Scal - OUT_OF_PLACE (alpha={alpha})",
+                    description=f"Scal - INPLACE(x) (alpha={alpha})",
                 )
             )
 
@@ -65,7 +64,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """Scal operator test (y = alpha * x)"""
+    """BLAS Level-1 scal operator test"""
 
     def __init__(self):
         super().__init__("Scal")

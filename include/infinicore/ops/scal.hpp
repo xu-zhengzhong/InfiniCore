@@ -11,6 +11,5 @@ public:
     static common::OpDispatcher<schema> &dispatcher();
 };
 
-Tensor scal(Tensor x, void *alpha);
-void scal_(Tensor y, Tensor x, void *alpha);
+void scal_(Tensor x, void *alpha);
 } // namespace infinicore::op

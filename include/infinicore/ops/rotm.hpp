@@ -3,8 +3,6 @@
 #include "../device.hpp"
 #include "common/op.hpp"
 
-#include <tuple>
-
 namespace infinicore::op {
 class Rotm {
 public:
@@ -13,6 +11,5 @@ public:
     static common::OpDispatcher<schema> &dispatcher();
 };
 
-std::tuple<Tensor, Tensor> rotm(Tensor x, Tensor y, Tensor param);
-void rotm_(Tensor x, Tensor y, Tensor param, Tensor out_x, Tensor out_y);
+void rotm_(Tensor x, Tensor y, Tensor param);
 } // namespace infinicore::op

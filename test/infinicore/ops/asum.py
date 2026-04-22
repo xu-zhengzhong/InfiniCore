@@ -58,7 +58,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """BLAS Asum operator test (Sum of absolute values)"""
+    """BLAS Level-1 asum operator test"""
 
     def __init__(self):
         super().__init__("Asum")
@@ -67,13 +67,10 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(self, *args, **kwargs):
-        """Reference implementation using PyTorch"""
         x = args[0]
-        # BLAS ASUM is equivalent to the L1 norm
         return torch.norm(x, p=1)
 
     def infinicore_operator(self, *args, **kwargs):
-        """InfiniCore implementation for BLAS asum."""
         return infinicore.asum(*args, **kwargs)
 
 

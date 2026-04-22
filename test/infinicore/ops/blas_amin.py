@@ -53,7 +53,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """BLAS Amin operator test (1-based index of min absolute value)"""
+    """BLAS Level-1 amin operator test"""
 
     def __init__(self):
         super().__init__("BlasAmin")

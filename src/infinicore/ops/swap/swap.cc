@@ -13,17 +13,8 @@ void Swap::execute(Tensor x, Tensor y) {
     dispatcher().lookup(x->device().getType())(x, y);
 }
 
-std::tuple<Tensor, Tensor> swap(Tensor x, Tensor y) {
-    auto out_x = Tensor::empty(x->shape(), x->dtype(), x->device());
-    auto out_y = Tensor::empty(y->shape(), y->dtype(), y->device());
-    swap_(x, y, out_x, out_y);
-    return {out_x, out_y};
-}
-
-void swap_(Tensor x, Tensor y, Tensor out_x, Tensor out_y) {
+void swap_(Tensor x, Tensor y) {
     Swap::execute(x, y);
-    out_x->copy_from(x);
-    out_y->copy_from(y);
 }
 
 } // namespace infinicore::op

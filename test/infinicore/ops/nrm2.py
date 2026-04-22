@@ -58,7 +58,7 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """BLAS Nrm2 operator test (Euclidean norm)"""
+    """BLAS Level-1 nrm2 operator test"""
 
     def __init__(self):
         super().__init__("Nrm2")
@@ -67,12 +67,10 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(self, *args, **kwargs):
-        """Reference implementation using PyTorch"""
         x = args[0]
         return torch.norm(x, p=2)
 
     def infinicore_operator(self, *args, **kwargs):
-        """InfiniCore implementation for BLAS nrm2."""
         return infinicore.nrm2(*args, **kwargs)
 
 
