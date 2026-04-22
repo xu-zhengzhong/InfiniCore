@@ -12,12 +12,12 @@ from framework import BaseOperatorTest, TensorSpec, TestCase, GenericTestRunner
 
 _TEST_CASES_DATA = [
     ((3,), (3,), None, None),
-    ((8,), (8,), None, None),
-    ((1,), (1,), None, None),
-    ((16,), (16,), None, None),
-    ((5,), (5,), None, None),
     ((32,), (32,), None, None),
+    ((32,), (32,), (4,), (4,)),
+    ((8,), (8,), None, None),
     ((8,), (8,), (2,), (2,)),
+    ((5632,), (5632,), None, None),
+    ((16384,), (16384,), None, None),
 ]
 
 

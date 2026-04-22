@@ -15,14 +15,16 @@ __mlu_global__ void rotKernelContiguous(
     size_t nram_usable = NRAM_MAX_SIZE - ((char *)nram_align - nram_buffer);
     size_t max_chunk_elements = nram_usable / (4 * sizeof(Tdata));
 
+    int align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
+
     Tdata *nram_x = nram_align;
     Tdata *nram_y = nram_align + max_chunk_elements;
     Tdata *nram_x_out = nram_align + 2 * max_chunk_elements;
     Tdata *nram_y_out = nram_align + 3 * max_chunk_elements;
-
-    int align_elements = ALIGN_SIZE / sizeof(Tdata);
-    if (align_elements == 0) align_elements = 1;
-    max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
 
     int elements_per_core = n / taskDim;
     int remain = n % taskDim;
@@ -44,7 +46,7 @@ __mlu_global__ void rotKernelContiguous(
         __bang_mul_scalar(nram_x_out, nram_x, c, max_chunk_elements);
         __bang_mul_scalar(nram_y_out, nram_y, s, max_chunk_elements);
         __bang_add(nram_x_out, nram_x_out, nram_y_out, max_chunk_elements);
-        
+
         __memcpy(x + current_offset, nram_x_out, max_chunk_elements * sizeof(Tdata), NRAM2GDRAM);
 
         __bang_mul_scalar(nram_y_out, nram_y, c, max_chunk_elements);
@@ -62,7 +64,7 @@ __mlu_global__ void rotKernelContiguous(
         __bang_mul_scalar(nram_x_out, nram_x, c, chunk_rem);
         __bang_mul_scalar(nram_y_out, nram_y, s, chunk_rem);
         __bang_add(nram_x_out, nram_x_out, nram_y_out, chunk_rem);
-        
+
         __memcpy(x + current_offset, nram_x_out, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
 
         __bang_mul_scalar(nram_y_out, nram_y, c, chunk_rem);

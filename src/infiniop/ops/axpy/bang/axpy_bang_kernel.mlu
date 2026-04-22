@@ -10,16 +10,19 @@ __mlu_global__ void axpyKernelContiguous(
     const Tdata *x,
     Tdata *y) {
 
-    Tdata *nram_x = (Tdata *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    Tdata *nram_align = (Tdata *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
 
-    size_t nram_usable = NRAM_MAX_SIZE - ((char *)nram_x - nram_buffer);
+    size_t nram_usable = NRAM_MAX_SIZE - ((char *)nram_align - nram_buffer);
     size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
 
     int align_elements = ALIGN_SIZE / sizeof(Tdata);
-    if (align_elements == 0) align_elements = 1;
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
     max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
 
-    Tdata *nram_y = nram_x + max_chunk_elements;
+    Tdata *nram_x = nram_align;
+    Tdata *nram_y = nram_align + max_chunk_elements;
 
     int elements_per_core = n / taskDim;
     int remain = n % taskDim;
@@ -40,14 +43,14 @@ __mlu_global__ void axpyKernelContiguous(
 
         __bang_mul_scalar(nram_x, nram_x, alpha, max_chunk_elements);
         __bang_add(nram_y, nram_y, nram_x, max_chunk_elements);
-        
+
         __memcpy(y + current_offset, nram_y, max_chunk_elements * sizeof(Tdata), NRAM2GDRAM);
     }
 
     if (chunk_rem > 0) {
         size_t current_offset = core_offset + chunks * max_chunk_elements;
         int align_rem = ((chunk_rem + align_elements - 1) / align_elements) * align_elements;
-        
+
         __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
         __memcpy(nram_y, y + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
 

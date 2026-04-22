@@ -37,14 +37,16 @@ __mlu_global__ void rotmKernelContiguous(
     size_t nram_usable = NRAM_MAX_SIZE - ((char *)nram_align - nram_buffer);
     size_t max_chunk_elements = nram_usable / (4 * sizeof(Tdata));
 
+    int align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
+
     Tdata *nram_x = nram_align;
     Tdata *nram_y = nram_align + max_chunk_elements;
     Tdata *nram_x_out = nram_align + 2 * max_chunk_elements;
     Tdata *nram_y_out = nram_align + 3 * max_chunk_elements;
-
-    int align_elements = ALIGN_SIZE / sizeof(Tdata);
-    if (align_elements == 0) align_elements = 1;
-    max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
 
     int elements_per_core = n / taskDim;
     int remain = n % taskDim;

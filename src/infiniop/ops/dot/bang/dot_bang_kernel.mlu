@@ -1,6 +1,8 @@
 #include "../../../devices/bang/common_bang.h"
 #include "dot_bang.h"
 
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
 template <typename Tdata>
 __mlu_global__ void dotKernelContiguous(
     size_t n,
@@ -9,15 +11,46 @@ __mlu_global__ void dotKernelContiguous(
     Tdata *result) {
     __mlu_shared__ Tdata shared_partial_sum[4];
 
-    size_t elements_per_core = n / taskDim;
-    size_t remain = n % taskDim;
-    size_t core_elements = elements_per_core + (taskId < remain ? 1 : 0);
-    size_t core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+    Tdata *nram_align = (Tdata *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - ((char *)nram_align - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+
+    int align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
+
+    Tdata *nram_x = nram_align;
+    Tdata *nram_y = nram_align + max_chunk_elements;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    int chunks = core_elements / max_chunk_elements;
+    int chunk_rem = core_elements % max_chunk_elements;
 
     Tdata partial_sum = static_cast<Tdata>(0);
 
-    for (size_t i = core_offset; i < core_offset + core_elements; ++i) {
-        partial_sum += x[i] * y[i];
+    for (int c = 0; c < chunks; c++) {
+        size_t current_offset = core_offset + c * max_chunk_elements;
+        __memcpy(nram_x, x + current_offset, max_chunk_elements * sizeof(Tdata), GDRAM2NRAM);
+        __memcpy(nram_y, y + current_offset, max_chunk_elements * sizeof(Tdata), GDRAM2NRAM);
+
+        __bang_mul(nram_x, nram_x, nram_y, max_chunk_elements);
+        partial_sum += __bang_sum(nram_x, max_chunk_elements);
+    }
+
+    if (chunk_rem > 0) {
+        size_t current_offset = core_offset + chunks * max_chunk_elements;
+        __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+        __memcpy(nram_y, y + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+
+        __bang_mul(nram_x, nram_x, nram_y, chunk_rem);
+        partial_sum += __bang_sum(nram_x, chunk_rem);
     }
 
     shared_partial_sum[coreId] = partial_sum;
@@ -26,9 +59,11 @@ __mlu_global__ void dotKernelContiguous(
 
     if (coreId == 0) {
         Tdata cluster_sum = static_cast<Tdata>(0);
-        for (int i = 0; i < coreDim; ++i) {
+
+        for (int i = 0; i < coreDim; i++) {
             cluster_sum += shared_partial_sum[i];
         }
+
         result[0] = cluster_sum;
     }
 }
