@@ -45,8 +45,8 @@ __INFINI_C infiniStatus_t infiniopCreateNrm2Descriptor(
 
 __INFINI_C infiniStatus_t infiniopGetNrm2WorkspaceSize(infiniopNrm2Descriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                               \
-    case CASE:                                                                             \
+#define GET(CASE, NAMESPACE)                                                                \
+    case CASE:                                                                              \
         *size = reinterpret_cast<op::nrm2::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 

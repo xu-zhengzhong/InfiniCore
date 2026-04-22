@@ -1,7 +1,7 @@
 #include "../../utils.hpp"
 #include "infinicore/common/hash.hpp"
-#include "infinicore/ops/nrm2.hpp"
 #include "infinicore/ops/common/cache.hpp"
+#include "infinicore/ops/nrm2.hpp"
 #include <infiniop.h>
 
 namespace infinicore::op::nrm2_impl::infiniop {

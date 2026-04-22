@@ -5,20 +5,20 @@
 #include "../../operator.h"
 #include "../../tensor.h"
 #include "infiniop/ops/nrm2.h"
-#include <vector>
 #include <cstring>
+#include <vector>
 
 #define DESCRIPTOR(NAMESPACE)                                    \
                                                                  \
-    namespace op::nrm2::NAMESPACE {                             \
+    namespace op::nrm2::NAMESPACE {                              \
     class Descriptor final : public InfiniopDescriptor {         \
         struct Opaque;                                           \
         Opaque *_opaque;                                         \
-        Nrm2Info _info;                                         \
+        Nrm2Info _info;                                          \
         size_t _workspace_size;                                  \
                                                                  \
         Descriptor(                                              \
-            Nrm2Info info,                                      \
+            Nrm2Info info,                                       \
             size_t workspace_size_,                              \
             Opaque *opaque,                                      \
             infiniDevice_t device_type,                          \

@@ -11,7 +11,7 @@ __INFINI_C __export infiniStatus_t infiniopCreateBlasAmaxDescriptor(
     infiniopTensorDescriptor_t x);
 
 __INFINI_C __export infiniStatus_t infiniopGetBlasAmaxWorkspaceSize(
-    infiniopBlasAmaxDescriptor_t desc, 
+    infiniopBlasAmaxDescriptor_t desc,
     size_t *size);
 
 __INFINI_C __export infiniStatus_t infiniopBlasAmax(

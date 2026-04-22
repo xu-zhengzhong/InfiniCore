@@ -1,8 +1,8 @@
-#include <cmath>
-#include <algorithm>
-#include <limits>
 #include "nrm2_cpu.h"
 #include "../../../devices/cpu/common_cpu.h"
+#include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace op::nrm2::cpu {
 
@@ -35,27 +35,39 @@ infiniStatus_t calculateNrm2(
     void *result) {
 
     const Tdata *x_ptr = reinterpret_cast<const Tdata *>(x);
-    Tdata *result_ptr  = reinterpret_cast<Tdata *>(result);
+    Tdata *result_ptr = reinterpret_cast<Tdata *>(result);
 
-    const ptrdiff_t n    = info.getSize();
+    const ptrdiff_t n = info.getSize();
     const ptrdiff_t incx = static_cast<ptrdiff_t>(info.getIncx());
 
     // Blue's scaling constants (float vs double)
     constexpr Tdata tsml = [] {
-        if constexpr (std::is_same_v<Tdata, float>)  return Tdata(0x1p-63f);   // 2^-63
-        else                                         return Tdata(0x1p-511);   // 2^-511
+        if constexpr (std::is_same_v<Tdata, float>) {
+            return Tdata(0x1p-63f); // 2^-63
+        } else {
+            return Tdata(0x1p-511); // 2^-511
+        }
     }();
     constexpr Tdata tbig = [] {
-        if constexpr (std::is_same_v<Tdata, float>)  return Tdata(0x1p52f);    // 2^52
-        else                                         return Tdata(0x1p486);    // 2^486
+        if constexpr (std::is_same_v<Tdata, float>) {
+            return Tdata(0x1p52f); // 2^52
+        } else {
+            return Tdata(0x1p486); // 2^486
+        }
     }();
     constexpr Tdata ssml = [] {
-        if constexpr (std::is_same_v<Tdata, float>)  return Tdata(0x1p75f);    // 2^75
-        else                                         return Tdata(0x1p600);    // 2^600
+        if constexpr (std::is_same_v<Tdata, float>) {
+            return Tdata(0x1p75f); // 2^75
+        } else {
+            return Tdata(0x1p600); // 2^600
+        }
     }();
     constexpr Tdata sbig = [] {
-        if constexpr (std::is_same_v<Tdata, float>)  return Tdata(0x1p-76f);   // 2^-76
-        else                                         return Tdata(0x1p-601);   // 2^-601
+        if constexpr (std::is_same_v<Tdata, float>) {
+            return Tdata(0x1p-76f); // 2^-76
+        } else {
+            return Tdata(0x1p-601); // 2^-601
+        }
     }();
 
     Tdata scl = Tdata(1);

@@ -1,5 +1,5 @@
-#include "../../handle.h"
 #include "../../operator.h"
+#include "../../handle.h"
 #include "infiniop/ops/rotm.h"
 
 #ifdef ENABLE_CPU_API
@@ -31,12 +31,12 @@ __INFINI_C infiniStatus_t infiniopCreateRotmDescriptor(
 #ifdef ENABLE_CPU_API
         CREATE(INFINI_DEVICE_CPU, cpu);
 #endif
-    #ifdef ENABLE_METAX_API
+#ifdef ENABLE_METAX_API
         CREATE(INFINI_DEVICE_METAX, metax);
-    #endif
-    #ifdef ENABLE_CAMBRICON_API
+#endif
+#ifdef ENABLE_CAMBRICON_API
         CREATE(INFINI_DEVICE_CAMBRICON, bang);
-    #endif
+#endif
 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
@@ -47,8 +47,8 @@ __INFINI_C infiniStatus_t infiniopCreateRotmDescriptor(
 
 __INFINI_C infiniStatus_t infiniopGetRotmWorkspaceSize(infiniopRotmDescriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                             \
-    case CASE:                                                                           \
+#define GET(CASE, NAMESPACE)                                                                \
+    case CASE:                                                                              \
         *size = reinterpret_cast<op::rotm::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 
@@ -56,12 +56,12 @@ __INFINI_C infiniStatus_t infiniopGetRotmWorkspaceSize(infiniopRotmDescriptor_t 
 #ifdef ENABLE_CPU_API
         GET(INFINI_DEVICE_CPU, cpu);
 #endif
-    #ifdef ENABLE_METAX_API
+#ifdef ENABLE_METAX_API
         GET(INFINI_DEVICE_METAX, metax);
-    #endif
-    #ifdef ENABLE_CAMBRICON_API
+#endif
+#ifdef ENABLE_CAMBRICON_API
         GET(INFINI_DEVICE_CAMBRICON, bang);
-    #endif
+#endif
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
     }
@@ -88,12 +88,12 @@ __INFINI_C infiniStatus_t infiniopRotm(
 #ifdef ENABLE_CPU_API
         CALCULATE(INFINI_DEVICE_CPU, cpu);
 #endif
-    #ifdef ENABLE_METAX_API
+#ifdef ENABLE_METAX_API
         CALCULATE(INFINI_DEVICE_METAX, metax);
-    #endif
-    #ifdef ENABLE_CAMBRICON_API
+#endif
+#ifdef ENABLE_CAMBRICON_API
         CALCULATE(INFINI_DEVICE_CAMBRICON, bang);
-    #endif
+#endif
 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
@@ -114,12 +114,12 @@ __INFINI_C infiniStatus_t infiniopDestroyRotmDescriptor(infiniopRotmDescriptor_t
 #ifdef ENABLE_CPU_API
         DELETE(INFINI_DEVICE_CPU, cpu);
 #endif
-    #ifdef ENABLE_METAX_API
+#ifdef ENABLE_METAX_API
         DELETE(INFINI_DEVICE_METAX, metax);
-    #endif
-    #ifdef ENABLE_CAMBRICON_API
+#endif
+#ifdef ENABLE_CAMBRICON_API
         DELETE(INFINI_DEVICE_CAMBRICON, bang);
-    #endif
+#endif
 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;

@@ -5,8 +5,8 @@
 #include "../../operator.h"
 #include "../../tensor.h"
 #include "infiniop/ops/blas_amax.h"
-#include <vector>
 #include <cstring>
+#include <vector>
 
 #define DESCRIPTOR(NAMESPACE)                                    \
                                                                  \
@@ -57,8 +57,8 @@ public:
     BlasAmaxInfo() = default;
 
     BlasAmaxInfo(size_t size,
-             size_t incx,
-             infiniDtype_t dtype)
+                 size_t incx,
+                 infiniDtype_t dtype)
         : _size(size), _incx(incx), _dtype(dtype) {}
 
     inline size_t getSize() const { return _size; }

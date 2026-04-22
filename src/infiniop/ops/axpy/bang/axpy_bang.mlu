@@ -37,7 +37,7 @@ infiniStatus_t calculateAxpy(
 
     cnrtDim3_t k_dim;
     cnrtFunctionType_t k_type;
-    
+
     k_dim.x = 4;
     k_dim.y = 1;
     k_dim.z = 1;
@@ -45,13 +45,13 @@ infiniStatus_t calculateAxpy(
 
     if (info.getIncx() == 1) {
         axpyKernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
-            info.getSize(), 
+            info.getSize(),
             (*(const Tdata *)alpha),
             (const Tdata *)x,
             (Tdata *)y);
     } else {
         axpyKernelStrided<Tdata><<<k_dim, k_type, queue>>>(
-            info.getSize(), 
+            info.getSize(),
             (*(const Tdata *)alpha),
             (const Tdata *)x,
             info.getIncx(),

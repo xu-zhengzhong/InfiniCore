@@ -46,8 +46,8 @@ __INFINI_C infiniStatus_t infiniopCreateAxpyDescriptor(
 
 __INFINI_C infiniStatus_t infiniopGetAxpyWorkspaceSize(infiniopAxpyDescriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                               \
-    case CASE:                                                                             \
+#define GET(CASE, NAMESPACE)                                                                \
+    case CASE:                                                                              \
         *size = reinterpret_cast<op::axpy::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 

@@ -36,7 +36,7 @@ infiniStatus_t calculateScal(
 
     cnrtDim3_t k_dim;
     cnrtFunctionType_t k_type;
-    
+
     k_dim.x = 4;
     k_dim.y = 1;
     k_dim.z = 1;
@@ -59,12 +59,12 @@ infiniStatus_t calculateScal(
 
     if (info.getIncx() == 1) {
         scalKernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
-            info.getSize(), 
+            info.getSize(),
             alpha_v,
             (Tdata *)x);
     } else {
         scalKernelStrided<Tdata><<<k_dim, k_type, queue>>>(
-            info.getSize(), 
+            info.getSize(),
             alpha_v,
             (Tdata *)x,
             info.getIncx());

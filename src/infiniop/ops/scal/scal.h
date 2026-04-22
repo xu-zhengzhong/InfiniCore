@@ -5,8 +5,8 @@
 #include "../../operator.h"
 #include "../../tensor.h"
 #include "infiniop/ops/scal.h"
-#include <vector>
 #include <cstring>
+#include <vector>
 
 #define DESCRIPTOR(NAMESPACE)                                    \
                                                                  \

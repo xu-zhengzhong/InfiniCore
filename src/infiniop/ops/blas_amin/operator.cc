@@ -1,5 +1,5 @@
-#include "../../handle.h"
 #include "../../operator.h"
+#include "../../handle.h"
 #include "infiniop/ops/blas_amin.h"
 
 #ifdef ENABLE_CPU_API
@@ -17,10 +17,10 @@ __INFINI_C infiniStatus_t infiniopCreateBlasAminDescriptor(
     infiniopBlasAminDescriptor_t *desc_ptr,
     infiniopTensorDescriptor_t x_desc) {
 
-#define CREATE(CASE, NAMESPACE)                                                 \
-    case CASE:                                                                  \
-        return op::blas_amin::NAMESPACE::Descriptor::create(                    \
-            handle,                                                             \
+#define CREATE(CASE, NAMESPACE)                                                  \
+    case CASE:                                                                   \
+        return op::blas_amin::NAMESPACE::Descriptor::create(                     \
+            handle,                                                              \
             reinterpret_cast<op::blas_amin::NAMESPACE::Descriptor **>(desc_ptr), \
             x_desc)
 
@@ -45,8 +45,8 @@ __INFINI_C infiniStatus_t infiniopCreateBlasAminDescriptor(
 
 __INFINI_C infiniStatus_t infiniopGetBlasAminWorkspaceSize(infiniopBlasAminDescriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                                  \
-    case CASE:                                                                                \
+#define GET(CASE, NAMESPACE)                                                                     \
+    case CASE:                                                                                   \
         *size = reinterpret_cast<op::blas_amin::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 

@@ -11,7 +11,7 @@ __INFINI_C __export infiniStatus_t infiniopCreateScalDescriptor(
     infiniopTensorDescriptor_t x);
 
 __INFINI_C __export infiniStatus_t infiniopGetScalWorkspaceSize(
-    infiniopScalDescriptor_t desc, 
+    infiniopScalDescriptor_t desc,
     size_t *size);
 
 __INFINI_C __export infiniStatus_t infiniopScal(

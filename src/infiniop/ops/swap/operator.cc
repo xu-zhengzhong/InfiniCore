@@ -1,5 +1,5 @@
-#include "../../handle.h"
 #include "../../operator.h"
+#include "../../handle.h"
 #include "infiniop/ops/swap.h"
 
 #ifdef ENABLE_CPU_API
@@ -46,8 +46,8 @@ __INFINI_C infiniStatus_t infiniopCreateSwapDescriptor(
 
 __INFINI_C infiniStatus_t infiniopGetSwapWorkspaceSize(infiniopSwapDescriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                             \
-    case CASE:                                                                           \
+#define GET(CASE, NAMESPACE)                                                                \
+    case CASE:                                                                              \
         *size = reinterpret_cast<op::swap::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 

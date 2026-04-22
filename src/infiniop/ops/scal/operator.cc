@@ -44,8 +44,8 @@ __INFINI_C infiniStatus_t infiniopCreateScalDescriptor(
 
 __INFINI_C infiniStatus_t infiniopGetScalWorkspaceSize(infiniopScalDescriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                               \
-    case CASE:                                                                             \
+#define GET(CASE, NAMESPACE)                                                                \
+    case CASE:                                                                              \
         *size = reinterpret_cast<op::scal::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 

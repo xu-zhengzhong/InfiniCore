@@ -52,7 +52,7 @@ infiniStatus_t Descriptor::calculate(
         (hcStream_t)stream,
         [&](hcblasHandle_t handle) {
             CHECK_MCBLAS(hcblasSetPointerMode(handle, HCBLAS_POINTER_MODE_DEVICE));
-            
+
             switch (_info.getDtype()) {
             case INFINI_DTYPE_F32:
                 CHECK_MCBLAS(hcblasSrotmg(handle, (float *)d1, (float *)d2, (float *)x1, (const float *)y1, (float *)param));

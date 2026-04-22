@@ -16,7 +16,7 @@ infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
     Descriptor **desc_ptr,
     infiniopTensorDescriptor_t x_desc) {
-    
+
     auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
     auto dtype = x_desc->dtype();
 
@@ -26,12 +26,12 @@ infiniStatus_t Descriptor::create(
     CHECK_RESULT(result);
 
     *desc_ptr = new Descriptor(
-        result.take(), 
+        result.take(),
         0,
         new Opaque{handle->internal()},
-        handle->device, 
+        handle->device,
         handle->device_id);
-        
+
     return INFINI_STATUS_SUCCESS;
 }
 
@@ -48,6 +48,8 @@ infiniStatus_t Descriptor::calculate(
     CHECK_STATUS(_opaque->internal->useMcblas(
         (hcStream_t)stream,
         [&](hcblasHandle_t handle) {
+            CHECK_MCBLAS(hcblasSetPointerMode(handle, HCBLAS_POINTER_MODE_HOST));
+
             switch (_info.getDtype()) {
             case INFINI_DTYPE_F32:
                 CHECK_MCBLAS(hcblasSnrm2(handle, _info.getSize(), (const float *)x, _info.getIncx(), (float *)result));
@@ -61,7 +63,7 @@ infiniStatus_t Descriptor::calculate(
 
             return INFINI_STATUS_SUCCESS;
         }));
-        
+
     return INFINI_STATUS_SUCCESS;
 }
 

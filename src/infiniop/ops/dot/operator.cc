@@ -18,12 +18,12 @@ __INFINI_C infiniStatus_t infiniopCreateDotDescriptor(
     infiniopTensorDescriptor_t x_desc,
     infiniopTensorDescriptor_t y_desc) {
 
-#define CREATE(CASE, NAMESPACE)                                             \
-    case CASE:                                                              \
+#define CREATE(CASE, NAMESPACE)                                            \
+    case CASE:                                                             \
         return op::dot::NAMESPACE::Descriptor::create(                     \
-            handle,                                                         \
+            handle,                                                        \
             reinterpret_cast<op::dot::NAMESPACE::Descriptor **>(desc_ptr), \
-            x_desc,                                                         \
+            x_desc,                                                        \
             y_desc)
 
     switch (handle->device) {
@@ -78,8 +78,8 @@ __INFINI_C infiniStatus_t infiniopDot(
     void *result,
     void *stream) {
 
-#define CALCULATE(CASE, NAMESPACE)                                             \
-    case CASE:                                                                 \
+#define CALCULATE(CASE, NAMESPACE)                                            \
+    case CASE:                                                                \
         return reinterpret_cast<const op::dot::NAMESPACE::Descriptor *>(desc) \
             ->calculate(workspace, workspace_size, x, y, result, stream)
 
@@ -104,8 +104,8 @@ __INFINI_C infiniStatus_t infiniopDot(
 
 __INFINI_C infiniStatus_t infiniopDestroyDotDescriptor(infiniopDotDescriptor_t desc) {
 
-#define DELETE(CASE, NAMESPACE)                                                 \
-    case CASE:                                                                  \
+#define DELETE(CASE, NAMESPACE)                                                \
+    case CASE:                                                                 \
         delete reinterpret_cast<const op::dot::NAMESPACE::Descriptor *>(desc); \
         return INFINI_STATUS_SUCCESS
 

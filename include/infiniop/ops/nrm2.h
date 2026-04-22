@@ -11,7 +11,7 @@ __INFINI_C __export infiniStatus_t infiniopCreateNrm2Descriptor(
     infiniopTensorDescriptor_t x);
 
 __INFINI_C __export infiniStatus_t infiniopGetNrm2WorkspaceSize(
-    infiniopNrm2Descriptor_t desc, 
+    infiniopNrm2Descriptor_t desc,
     size_t *size);
 
 __INFINI_C __export infiniStatus_t infiniopNrm2(

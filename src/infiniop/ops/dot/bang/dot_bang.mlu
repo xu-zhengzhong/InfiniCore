@@ -87,14 +87,14 @@ infiniStatus_t Descriptor::calculate(
     void *result,
     void *stream) const {
 
-#define CALCULATE_DOT(TDATA)                              \
-    calculateDot<TDATA>(                                  \
-        _info,                                            \
-        x,                                                \
-        y,                                                \
-        result,                                           \
-        (cnrtQueue_t)stream,                              \
-        workspace,                                        \
+#define CALCULATE_DOT(TDATA) \
+    calculateDot<TDATA>(     \
+        _info,               \
+        x,                   \
+        y,                   \
+        result,              \
+        (cnrtQueue_t)stream, \
+        workspace,           \
         workspace_size)
 
     switch (_info.getDtype()) {

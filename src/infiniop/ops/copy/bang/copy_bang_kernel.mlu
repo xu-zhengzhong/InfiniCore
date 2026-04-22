@@ -15,7 +15,9 @@ __mlu_global__ void copyKernelContiguous(
     size_t max_chunk_elements = nram_usable / sizeof(Tdata);
 
     int align_elements = ALIGN_SIZE / sizeof(Tdata);
-    if (align_elements == 0) align_elements = 1;
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
     max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
 
     int elements_per_core = n / taskDim;

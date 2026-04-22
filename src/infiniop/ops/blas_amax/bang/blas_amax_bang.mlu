@@ -39,7 +39,7 @@ infiniStatus_t calculateBlasAmax(
 
     cnrtDim3_t k_dim;
     cnrtFunctionType_t k_type;
-    
+
     k_dim.x = 4;
     k_dim.y = 1;
     k_dim.z = 1;
@@ -49,12 +49,12 @@ infiniStatus_t calculateBlasAmax(
 
     if (info.getIncx() == 1) {
         blasAmaxKernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
-            info.getSize(), 
+            info.getSize(),
             (const Tdata *)x,
             d_result);
     } else {
         blasAmaxKernelStrided<Tdata><<<k_dim, k_type, queue>>>(
-            info.getSize(), 
+            info.getSize(),
             (const Tdata *)x,
             info.getIncx(),
             d_result);
@@ -74,12 +74,11 @@ infiniStatus_t Descriptor::calculate(
     int *result,
     void *stream) const {
 
-#define CALCULATE_SCAL(TDATA)                          \
-    calculateBlasAmax<TDATA>(                          \
-        _info,                                         \
-        x, result,                                     \
-        (cnrtQueue_t)stream, workspace, workspace_size \
-    )
+#define CALCULATE_SCAL(TDATA) \
+    calculateBlasAmax<TDATA>( \
+        _info,                \
+        x, result,            \
+        (cnrtQueue_t)stream, workspace, workspace_size)
 
     switch (_info.getDtype()) {
     case INFINI_DTYPE_F16:

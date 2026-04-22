@@ -17,7 +17,9 @@ __mlu_global__ void blasAmaxKernelContiguous(
     size_t max_chunk_elements = nram_usable / sizeof(Tdata);
 
     int align_elements = ALIGN_SIZE / sizeof(Tdata);
-    if (align_elements == 0) align_elements = 1;
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
     max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
 
     int elements_per_core = n / taskDim;
@@ -38,7 +40,7 @@ __mlu_global__ void blasAmaxKernelContiguous(
     for (int c = 0; c < chunks; c++) {
         size_t current_offset = core_offset + c * max_chunk_elements;
         __memcpy(nram_x, x + current_offset, max_chunk_elements * sizeof(Tdata), GDRAM2NRAM);
-        
+
         __bang_abs(nram_x, nram_x, max_chunk_elements);
 
         for (int i = 0; i < max_chunk_elements; i++) {
@@ -52,11 +54,11 @@ __mlu_global__ void blasAmaxKernelContiguous(
 
     if (chunk_rem > 0) {
         size_t current_offset = core_offset + chunks * max_chunk_elements;
-        
+
         __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
-        
+
         __bang_abs(nram_x, nram_x, chunk_rem);
-        
+
         for (int i = 0; i < chunk_rem; i++) {
             Tdata abs_val = nram_x[i];
             if (abs_val > max_value) {
@@ -65,7 +67,7 @@ __mlu_global__ void blasAmaxKernelContiguous(
             }
         }
     }
-    
+
     shared_max_index[coreId] = max_index;
     shared_max_value[coreId] = max_value;
 
@@ -112,7 +114,7 @@ __mlu_global__ void blasAmaxKernelStrided(
             max_index = i;
         }
     }
-    
+
     shared_max_index[coreId] = max_index;
     shared_max_value[coreId] = max_value;
 

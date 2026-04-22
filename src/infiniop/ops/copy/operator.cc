@@ -1,5 +1,5 @@
-#include "../../handle.h"
 #include "../../operator.h"
+#include "../../handle.h"
 #include "infiniop/ops/copy.h"
 
 #ifdef ENABLE_CPU_API
@@ -46,8 +46,8 @@ __INFINI_C infiniStatus_t infiniopCreateCopyDescriptor(
 
 __INFINI_C infiniStatus_t infiniopGetCopyWorkspaceSize(infiniopCopyDescriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                             \
-    case CASE:                                                                           \
+#define GET(CASE, NAMESPACE)                                                                \
+    case CASE:                                                                              \
         *size = reinterpret_cast<op::copy::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 

@@ -12,7 +12,7 @@ __INFINI_C __export infiniStatus_t infiniopCreateAxpyDescriptor(
     infiniopTensorDescriptor_t y);
 
 __INFINI_C __export infiniStatus_t infiniopGetAxpyWorkspaceSize(
-    infiniopAxpyDescriptor_t desc, 
+    infiniopAxpyDescriptor_t desc,
     size_t *size);
 
 __INFINI_C __export infiniStatus_t infiniopAxpy(

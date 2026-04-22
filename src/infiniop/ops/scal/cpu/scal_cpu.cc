@@ -32,7 +32,7 @@ infiniStatus_t calculateScal(const ScalInfo &info, void *x, const void *alpha) {
 
     const ptrdiff_t size = info.getSize();
 
-// #pragma omp parallel for if (size > 1024)
+    // #pragma omp parallel for if (size > 1024)
     for (ptrdiff_t i = 0; i < size; ++i) {
         size_t idx = i * info.getIncx();
 

@@ -17,10 +17,10 @@ __INFINI_C infiniStatus_t infiniopCreateBlasAmaxDescriptor(
     infiniopBlasAmaxDescriptor_t *desc_ptr,
     infiniopTensorDescriptor_t x_desc) {
 
-#define CREATE(CASE, NAMESPACE)                                             \
-    case CASE:                                                              \
+#define CREATE(CASE, NAMESPACE)                                                  \
+    case CASE:                                                                   \
         return op::blas_amax::NAMESPACE::Descriptor::create(                     \
-            handle,                                                         \
+            handle,                                                              \
             reinterpret_cast<op::blas_amax::NAMESPACE::Descriptor **>(desc_ptr), \
             x_desc)
 
@@ -45,8 +45,8 @@ __INFINI_C infiniStatus_t infiniopCreateBlasAmaxDescriptor(
 
 __INFINI_C infiniStatus_t infiniopGetBlasAmaxWorkspaceSize(infiniopBlasAmaxDescriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                               \
-    case CASE:                                                                             \
+#define GET(CASE, NAMESPACE)                                                                     \
+    case CASE:                                                                                   \
         *size = reinterpret_cast<op::blas_amax::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 
@@ -75,8 +75,8 @@ __INFINI_C infiniStatus_t infiniopBlasAmax(
     int *result,
     void *stream) {
 
-#define CALCULATE(CASE, NAMESPACE)                                             \
-    case CASE:                                                                 \
+#define CALCULATE(CASE, NAMESPACE)                                                  \
+    case CASE:                                                                      \
         return reinterpret_cast<const op::blas_amax::NAMESPACE::Descriptor *>(desc) \
             ->calculate(workspace, workspace_size, x, result, stream)
 
@@ -101,8 +101,8 @@ __INFINI_C infiniStatus_t infiniopBlasAmax(
 
 __INFINI_C infiniStatus_t infiniopDestroyBlasAmaxDescriptor(infiniopBlasAmaxDescriptor_t desc) {
 
-#define DELETE(CASE, NAMESPACE)                                                 \
-    case CASE:                                                                  \
+#define DELETE(CASE, NAMESPACE)                                                      \
+    case CASE:                                                                       \
         delete reinterpret_cast<const op::blas_amax::NAMESPACE::Descriptor *>(desc); \
         return INFINI_STATUS_SUCCESS
 

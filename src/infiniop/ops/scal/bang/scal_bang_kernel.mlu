@@ -15,7 +15,9 @@ __mlu_global__ void scalKernelContiguous(
     size_t max_chunk_elements = nram_usable / sizeof(Tdata);
 
     int align_elements = ALIGN_SIZE / sizeof(Tdata);
-    if (align_elements == 0) align_elements = 1;
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
     max_chunk_elements = (max_chunk_elements / align_elements) * align_elements;
 
     int elements_per_core = n / taskDim;
@@ -33,20 +35,20 @@ __mlu_global__ void scalKernelContiguous(
     for (int c = 0; c < chunks; c++) {
         size_t current_offset = core_offset + c * max_chunk_elements;
         __memcpy(nram_x, x + current_offset, max_chunk_elements * sizeof(Tdata), GDRAM2NRAM);
-        
+
         __bang_mul_scalar(nram_x, nram_x, alpha, max_chunk_elements);
-        
+
         __memcpy(x + current_offset, nram_x, max_chunk_elements * sizeof(Tdata), NRAM2GDRAM);
     }
 
     if (chunk_rem > 0) {
         size_t current_offset = core_offset + chunks * max_chunk_elements;
         int align_rem = ((chunk_rem + align_elements - 1) / align_elements) * align_elements;
-        
+
         __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
-        
+
         __bang_mul_scalar(nram_x, nram_x, alpha, align_rem);
-        
+
         __memcpy(x + current_offset, nram_x, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
     }
 }

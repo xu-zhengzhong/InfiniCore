@@ -65,12 +65,11 @@ infiniStatus_t calculateBlasAmin(
     return INFINI_STATUS_SUCCESS;
 }
 
-#define CALCULATE_AMIN(TDATA)                          \
-    calculateBlasAmin<TDATA>(                          \
-        _info,                                         \
-        x, result,                                     \
-        (cnrtQueue_t)stream, workspace, workspace_size \
-    )
+#define CALCULATE_AMIN(TDATA) \
+    calculateBlasAmin<TDATA>( \
+        _info,                \
+        x, result,            \
+        (cnrtQueue_t)stream, workspace, workspace_size)
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
