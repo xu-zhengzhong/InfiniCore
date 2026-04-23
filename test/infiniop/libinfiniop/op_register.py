@@ -610,6 +610,38 @@ def dot_(lib):
 
 
 @OpRegister.operator
+def asum_(lib):
+    lib.infiniopCreateAsumDescriptor.restype = c_int32
+    lib.infiniopCreateAsumDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetAsumWorkspaceSize.restype = c_int32
+    lib.infiniopGetAsumWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopAsum.restype = c_int32
+    lib.infiniopAsum.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyAsumDescriptor.restype = c_int32
+    lib.infiniopDestroyAsumDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def avg_pool3d_(lib):
     lib.infiniopCreateAvgPool3dDescriptor.restype = c_int32
     lib.infiniopCreateAvgPool3dDescriptor.argtypes = [
