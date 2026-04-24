@@ -1,0 +1,90 @@
+#include "../../../../utils.h"
+#include "../../../devices/moore/moore_common.h"
+#include "../../../devices/moore/moore_kernel_common.h"
+
+#include "../cuda/kernel.cuh"
+#include "axpy_moore.h"
+
+namespace op::axpy::moore {
+
+Descriptor::~Descriptor() = default;
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopTensorDescriptor_t alpha_desc,
+    infiniopTensorDescriptor_t x_desc,
+    infiniopTensorDescriptor_t y_desc) {
+
+    auto handle = reinterpret_cast<device::moore::Handle *>(handle_);
+    auto info = AxpyInfo::createAxpyInfo(alpha_desc, x_desc, y_desc);
+    CHECK_RESULT(info);
+
+    *desc_ptr = new Descriptor(
+        info.take(),
+        0,
+        nullptr,
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+template <typename Tdata, typename Tcompute>
+infiniStatus_t calculateAxpy(
+    const AxpyInfo &info,
+    const Tdata *alpha,
+    const Tdata *x,
+    Tdata *y,
+    musaStream_t stream) {
+
+    const size_t size = info.getSize();
+    const ptrdiff_t incx = info.getIncx();
+    const ptrdiff_t incy = info.getIncy();
+
+    cuda::axpy_kernel<256, Tdata, Tcompute>
+        <<<1, 256, 0, stream>>>(
+            size,
+            alpha,
+            x,
+            incx,
+            y,
+            incy);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+#define CALCULATE_AXPY(TDATA, TCOMPUTE)               \
+    calculateAxpy<TDATA, TCOMPUTE>(_info,             \
+                                   (const TDATA *)alpha, \
+                                   (const TDATA *)x,  \
+                                   (TDATA *)y,        \
+                                   (musaStream_t)stream)
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *alpha,
+    const void *x,
+    void *y,
+    void *stream) const {
+
+    switch (_info.getDtype()) {
+    case INFINI_DTYPE_F16:
+        return CALCULATE_AXPY(half, float);
+    case INFINI_DTYPE_BF16:
+        return CALCULATE_AXPY(cuda_bfloat16, float);
+    case INFINI_DTYPE_F32:
+        return CALCULATE_AXPY(float, float);
+    case INFINI_DTYPE_F64:
+        return CALCULATE_AXPY(double, double);
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+#undef CALCULATE_AXPY
+
+} // namespace op::axpy::moore
