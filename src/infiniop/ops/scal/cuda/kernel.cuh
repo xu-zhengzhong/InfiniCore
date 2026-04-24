@@ -10,7 +10,7 @@ __global__ void scal_kernel(
     size_t n,
     const Tdata *alpha,
     Tdata *x,
-    ptrdiff_t incx, ) {
+    ptrdiff_t incx) {
 
     const Tcompute alpha_v = static_cast<Tcompute>(alpha[0]);
 
