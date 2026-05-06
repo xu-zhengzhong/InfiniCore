@@ -60,10 +60,12 @@ from infinicore.ops.asinh import asinh
 from infinicore.ops.asum import asum
 from infinicore.ops.atanh import atanh
 from infinicore.ops.attention import attention
+from infinicore.ops.axpy import axpy
 from infinicore.ops.baddbmm import baddbmm
 from infinicore.ops.bilinear import bilinear
 from infinicore.ops.blas_amax import blas_amax
 from infinicore.ops.blas_amin import blas_amin
+from infinicore.ops.blas_copy import blas_copy
 from infinicore.ops.blas_dot import blas_dot
 from infinicore.ops.binary_cross_entropy_with_logits import (
     binary_cross_entropy_with_logits,
@@ -111,8 +113,10 @@ from infinicore.ops.paged_attention_prefill import paged_attention_prefill
 from infinicore.ops.paged_caching import paged_caching
 from infinicore.ops.rearrange import rearrange
 from infinicore.ops.reciprocal import reciprocal
+from infinicore.ops.scal import scal
 from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
+from infinicore.ops.swap import swap
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
 from infinicore.ops.take import take
@@ -190,8 +194,10 @@ __all__ = [
     "argwhere",
     "asin",
     "asum",
+    "axpy",
     "blas_amax",
     "blas_amin",
+    "blas_copy",
     "blas_dot",
     "acos",
     "addbmm",
@@ -240,6 +246,7 @@ __all__ = [
     "float_power",
     "flipud",
     "scatter",
+    "scal",
     "logcumsumexp",
     "logical_not",
     "logical_and",
@@ -252,6 +259,7 @@ __all__ = [
     "index_add",
     "take",
     "sinh",
+    "swap",
     "ones",
     "broadcast_to",
     "strided_empty",
