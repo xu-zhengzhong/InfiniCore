@@ -1,0 +1,109 @@
+#include "../../../devices/bang/common_bang.h"
+#include "ger_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata>
+__mlu_global__ void gerKernel(
+    int m, int n,
+    const Tdata *alpha,
+    const Tdata *x, int incx,
+    const Tdata *y, int incy,
+    Tdata *A, int lda) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_A = (Tdata *)nram_aligned;
+    Tdata *nram_x = nram_A + chunk_size;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    int chunks = m / chunk_size;
+    int chunk_rem = m % chunk_size;
+
+    if (incx == 1) {
+        for (int j = core_offset; j < core_offset + core_elements; j++) {
+            Tdata y_val = y[j * incy];
+            if (y_val != (Tdata)0) {
+                Tdata alpha_y = (*alpha) * y_val;
+
+                for (int c = 0; c < chunks; c++) {
+                    int current_offset = c * chunk_size;
+
+                    __memcpy(nram_A, A + current_offset + j * lda, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                    __memcpy(nram_x, x + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+
+                    __bang_mul_scalar(nram_x, nram_x, alpha_y, chunk_size);
+                    __bang_add(nram_A, nram_A, nram_x, chunk_size);
+
+                    __memcpy(A + current_offset + j * lda, nram_A, chunk_size * sizeof(Tdata), NRAM2GDRAM);
+                }
+
+                if (chunk_rem > 0) {
+                    int current_offset = chunks * chunk_size;
+                    int align_rem = ((chunk_rem + align_elements - 1) / align_elements) * align_elements;
+
+                    __memcpy(nram_A, A + current_offset + j * lda, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                    __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+
+                    __bang_mul_scalar(nram_x, nram_x, alpha_y, align_rem);
+                    __bang_add(nram_A, nram_A, nram_x, align_rem);
+
+                    __memcpy(A + current_offset + j * lda, nram_A, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
+                }
+            }
+        }
+    } else {
+        for (int j = core_offset; j < core_offset + core_elements; j++) {
+            Tdata y_val = y[j * incy];
+            if (y_val != (Tdata)0) {
+                Tdata alpha_y = (*alpha) * y_val;
+
+                for (int c = 0; c < chunks; c++) {
+                    int current_offset = c * chunk_size;
+
+                    __memcpy(nram_A, A + current_offset + j * lda, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                    for (int i = 0; i < chunk_size; i++) {
+                        nram_x[i] = x[(current_offset + i) * incx];
+                    }
+
+                    __bang_mul_scalar(nram_x, nram_x, alpha_y, chunk_size);
+                    __bang_add(nram_A, nram_A, nram_x, chunk_size);
+
+                    __memcpy(A + current_offset + j * lda, nram_A, chunk_size * sizeof(Tdata), NRAM2GDRAM);
+                }
+
+                if (chunk_rem > 0) {
+                    int current_offset = chunks * chunk_size;
+                    int align_rem = ((chunk_rem + align_elements - 1) / align_elements) * align_elements;
+
+                    __memcpy(nram_A, A + current_offset + j * lda, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                    for (int i = 0; i < chunk_rem; i++) {
+                        nram_x[i] = x[(current_offset + i) * incx];
+                    }
+
+                    __bang_mul_scalar(nram_x, nram_x, alpha_y, align_rem);
+                    __bang_add(nram_A, nram_A, nram_x, align_rem);
+
+                    __memcpy(A + current_offset + j * lda, nram_A, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
+                }
+            }
+        }
+    }
+}
