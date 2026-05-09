@@ -65,9 +65,8 @@ __INFINI_C infiniStatus_t infiniopGetAxpyWorkspaceSize(infiniopAxpyDescriptor_t 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
     }
-#undef GET
 
-    return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+#undef GET
 }
 
 __INFINI_C infiniStatus_t infiniopAxpy(
