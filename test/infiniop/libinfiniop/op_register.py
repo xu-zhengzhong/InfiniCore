@@ -2596,3 +2596,39 @@ def swap_(lib):
     lib.infiniopDestroySwapDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+
+@OpRegister.operator
+def ger_(lib):
+    lib.infiniopCreateGerDescriptor.restype = c_int32
+    lib.infiniopCreateGerDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetGerWorkspaceSize.restype = c_int32
+    lib.infiniopGetGerWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopGer.restype = c_int32
+    lib.infiniopGer.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyGerDescriptor.restype = c_int32
+    lib.infiniopDestroyGerDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
