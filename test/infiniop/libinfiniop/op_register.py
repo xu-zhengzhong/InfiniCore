@@ -2632,3 +2632,42 @@ def ger_(lib):
     lib.infiniopDestroyGerDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+
+@OpRegister.operator
+def gemv_(lib):
+    lib.infiniopCreateGemvDescriptor.restype = c_int32
+    lib.infiniopCreateGemvDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetGemvWorkspaceSize.restype = c_int32
+    lib.infiniopGetGemvWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopGemv.restype = c_int32
+    lib.infiniopGemv.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyGemvDescriptor.restype = c_int32
+    lib.infiniopDestroyGemvDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
