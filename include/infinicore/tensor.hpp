@@ -75,6 +75,22 @@ public:
                                     const DataType &dtype,
                                     const Device &device);
 
+    void reset() noexcept {
+        impl_.reset();
+    }
+
+    void reset(std::shared_ptr<TensorImpl> new_impl) noexcept {
+        impl_ = std::move(new_impl);
+    }
+
+    bool empty() const noexcept {
+        return impl_ == nullptr;
+    }
+
+    size_t use_count() const noexcept {
+        return impl_ ? impl_.use_count() : 0;
+    }
+
     Tensor() = default;
     Tensor(const Tensor &) = default;
     Tensor(Tensor &&) = default;
@@ -90,6 +106,7 @@ protected:
     Tensor(std::shared_ptr<TensorImpl> impl) : impl_(std::move(impl)) {}
     std::shared_ptr<TensorImpl> impl_;
     friend class TensorImpl;
+    friend std::ostream &operator<<(std::ostream &out, const Tensor &tensor);
 };
 
 class TensorImpl : public std::enable_shared_from_this<TensorImpl> {

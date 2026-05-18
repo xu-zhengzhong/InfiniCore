@@ -28,6 +28,8 @@ public:
     size_t out_features() const { return out_features_; }
     bool has_bias() const { return has_bias_; }
     DataType dtype() const { return dtype_; }
+    float alpha() const { return alpha_; }
+    void set_alpha(float alpha) { alpha_ = alpha; }
 
     // Accessors for parameters
     Tensor weight() const { return weight_; }
@@ -37,6 +39,7 @@ public:
     Tensor gidx() const { return gidx_; }
 
     std::shared_ptr<infinicore::quantization::BaseQuantization> get_quantization() const { return quantization_; }
+    void process_weights_after_loading();
 
 protected:
     // Parameters
@@ -56,6 +59,7 @@ protected:
     size_t out_features_;
     bool has_bias_;
     DataType dtype_;
+    float alpha_ = 1.0f;
     std::shared_ptr<infinicore::quantization::BaseQuantization> quantization_ = std::make_shared<infinicore::quantization::NoneQuantization>(nullptr);
 };
 

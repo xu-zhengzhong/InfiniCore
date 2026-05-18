@@ -7,6 +7,7 @@ with contextlib.suppress(ImportError):
 
 import infinicore.context as context
 import infinicore.nn as nn
+from infinicore._tensor_str import printoptions, set_printoptions
 
 # Import context functions
 from infinicore.context import (
@@ -57,14 +58,20 @@ from infinicore.ops.all import all
 from infinicore.ops.argwhere import argwhere
 from infinicore.ops.asin import asin
 from infinicore.ops.asinh import asinh
+from infinicore.ops.asum import asum
 from infinicore.ops.atanh import atanh
 from infinicore.ops.attention import attention
+from infinicore.ops.axpy import axpy
 from infinicore.ops.baddbmm import baddbmm
 from infinicore.ops.bilinear import bilinear
 from infinicore.ops.binary_cross_entropy_with_logits import (
     binary_cross_entropy_with_logits,
 )
 from infinicore.ops.bitwise_right_shift import bitwise_right_shift
+from infinicore.ops.blas_amax import blas_amax
+from infinicore.ops.blas_amin import blas_amin
+from infinicore.ops.blas_copy import blas_copy
+from infinicore.ops.blas_dot import blas_dot
 from infinicore.ops.block_diag import block_diag
 from infinicore.ops.broadcast_to import broadcast_to
 from infinicore.ops.cat import cat
@@ -101,16 +108,23 @@ from infinicore.ops.mha_kvcache import mha_kvcache
 from infinicore.ops.mha_varlen import mha_varlen
 from infinicore.ops.mul import mul
 from infinicore.ops.narrow import narrow
+from infinicore.ops.nrm2 import nrm2
 from infinicore.ops.paged_attention import paged_attention
 from infinicore.ops.paged_attention_prefill import paged_attention_prefill
 from infinicore.ops.paged_caching import paged_caching
 from infinicore.ops.rearrange import rearrange
 from infinicore.ops.reciprocal import reciprocal
+from infinicore.ops.rot import rot
+from infinicore.ops.rotg import rotg
+from infinicore.ops.rotm import rotm
+from infinicore.ops.rotmg import rotmg
+from infinicore.ops.scal import scal
 from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
 from infinicore.ops.spmm import spmm
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
+from infinicore.ops.swap import swap
 from infinicore.ops.take import take
 from infinicore.ops.tan import tan
 from infinicore.ops.topk import topk
@@ -187,6 +201,12 @@ __all__ = [
     "add_rms_norm",
     "argwhere",
     "asin",
+    "asum",
+    "axpy",
+    "blas_amax",
+    "blas_amin",
+    "blas_copy",
+    "blas_dot",
     "acos",
     "addbmm",
     "floor",
@@ -213,6 +233,7 @@ __all__ = [
     "dist",
     "logdet",
     "narrow",
+    "nrm2",
     "ldexp",
     "lerp",
     "kthvalue",
@@ -235,6 +256,11 @@ __all__ = [
     "float_power",
     "flipud",
     "scatter",
+    "rot",
+    "rotg",
+    "rotm",
+    "rotmg",
+    "scal",
     "logcumsumexp",
     "logical_not",
     "logical_and",
@@ -247,6 +273,7 @@ __all__ = [
     "index_add",
     "take",
     "sinh",
+    "swap",
     "ones",
     "broadcast_to",
     "strided_empty",
@@ -257,6 +284,8 @@ __all__ = [
     "var",
     "topk",
     "all",
+    "set_printoptions",
+    "printoptions",
 ]
 
 use_ntops = False
