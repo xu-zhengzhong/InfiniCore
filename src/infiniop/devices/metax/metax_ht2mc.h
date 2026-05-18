@@ -142,6 +142,8 @@
 #define hcblasScalEx mcblasScalEx
 #define hcblasSswap mcblasSswap
 #define hcblasDswap mcblasDswap
+#define hcblasSgbmv mcblasSgbmv
+#define hcblasDgbmv mcblasDgbmv
 #define hcblasSger mcblasSger
 #define hcblasDger mcblasDger
 #define hcblasSgemv mcblasSgemv

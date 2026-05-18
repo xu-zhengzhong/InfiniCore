@@ -2671,3 +2671,44 @@ def gemv_(lib):
     lib.infiniopDestroyGemvDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+
+@OpRegister.operator
+def gbmv_(lib):
+    lib.infiniopCreateGbmvDescriptor.restype = c_int32
+    lib.infiniopCreateGbmvDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        c_size_t,
+        c_size_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetGbmvWorkspaceSize.restype = c_int32
+    lib.infiniopGetGbmvWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopGbmv.restype = c_int32
+    lib.infiniopGbmv.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyGbmvDescriptor.restype = c_int32
+    lib.infiniopDestroyGbmvDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
