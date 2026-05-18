@@ -1,4 +1,4 @@
-from infinicore import _infinicore
+from infinicore.lib import _infinicore
 from infinicore.spmat import SpMat
 from infinicore.tensor import Tensor
 

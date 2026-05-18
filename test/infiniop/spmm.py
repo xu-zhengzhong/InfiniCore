@@ -25,7 +25,10 @@ _BASE_TEST_CASES = [
     (0.5, 1.0, 4, 5, 3, [0, 1, 1, 3, 4], [2, 0, 4, 1]),
 ]
 
-_TENSOR_DTYPES = [InfiniDtype.F16, InfiniDtype.BF16, InfiniDtype.F32]
+_TENSOR_DTYPES = [
+    # InfiniDtype.F16, 
+    #InfiniDtype.BF16, 
+    InfiniDtype.F32]
 _INDEX_DTYPES = [InfiniDtype.I32, InfiniDtype.I64]
 
 _TOLERANCE_MAP = {

@@ -3,7 +3,22 @@
 
 namespace infinicore::op::spmm_impl::infiniop {
 
-INFINIOP_CACHABLE_DESCRIPTOR(Descriptor, SpMM, 100);
+struct Descriptor {
+    infiniopSpMMDescriptor_t desc = nullptr;
+    SpMat a;
+
+    Descriptor(infiniopSpMMDescriptor_t desc, SpMat a)
+        : desc(desc), a(std::move(a)) {}
+
+    Descriptor(const Descriptor &) = delete;
+    Descriptor &operator=(const Descriptor &) = delete;
+
+    ~Descriptor() {
+        if (desc != nullptr) {
+            infiniopDestroySpMMDescriptor(desc);
+        }
+    }
+};
 
 struct PlannedMeta {
     std::shared_ptr<Descriptor> descriptor;
@@ -13,11 +28,14 @@ struct PlannedMeta {
 };
 
 void *plan(Tensor c, const SpMat &a, const Tensor &b, float alpha, float beta) {
-    size_t seed = hash_combine(c, a->values(), a->crow_indices(), a->col_indices(), a->rows(), a->cols(), b);
-
-    INFINIOP_CACHABLE_DESCRIPTOR_GET_OR_CREATE(
-        Descriptor, descriptor, SpMM,
-        seed, c->desc(), a->desc(), b->desc());
+    infiniopSpMMDescriptor_t raw_descriptor = nullptr;
+    INFINICORE_CHECK_ERROR(infiniopCreateSpMMDescriptor(
+        context::getInfiniopHandle(context::getDevice()),
+        &raw_descriptor,
+        c->desc(),
+        a->desc(),
+        b->desc()));
+    auto descriptor = std::make_shared<Descriptor>(raw_descriptor, a);
 
     INFINIOP_WORKSPACE_TENSOR(workspace, SpMM, descriptor);
 

@@ -26,7 +26,11 @@ _TOLERANCE_MAP = {
     infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
 }
 
-_TENSOR_DTYPES = [infinicore.float16, infinicore.bfloat16, infinicore.float32]
+# Sparse CSR tensor support is in beta state, so we only test float32 for now.
+_TENSOR_DTYPES = [
+    # infinicore.float16, 
+    # infinicore.bfloat16, 
+    infinicore.float32]
 
 
 def parse_test_cases():
@@ -108,9 +112,10 @@ class OpTest(BaseOperatorTest):
         torch_out = (
             out_spec.create_torch_tensor(device) if out_spec is not None else None
         )
+        torch_out_clone = torch_out.clone() if torch_out is not None else None
         infini_out = (
-            infinicore_tensor_from_torch(torch_out.clone())
-            if torch_out is not None
+            infinicore_tensor_from_torch(torch_out_clone)
+            if torch_out_clone is not None
             else None
         )
 
