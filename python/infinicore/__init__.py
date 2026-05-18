@@ -96,7 +96,6 @@ from infinicore.ops.logdet import logdet
 from infinicore.ops.logical_and import logical_and
 from infinicore.ops.logical_not import logical_not
 from infinicore.ops.masked_select import masked_select
-from infinicore.ops.gemm import gemm
 from infinicore.ops.matmul import matmul
 from infinicore.ops.mha_kvcache import mha_kvcache
 from infinicore.ops.mha_varlen import mha_varlen
@@ -109,6 +108,7 @@ from infinicore.ops.rearrange import rearrange
 from infinicore.ops.reciprocal import reciprocal
 from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
+from infinicore.ops.spmm import spmm
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
 from infinicore.ops.take import take
@@ -205,7 +205,7 @@ __all__ = [
     "logaddexp",
     "logaddexp2",
     "matmul",
-    "gemm",
+    "spmm",
     "equal",
     "mul",
     "diff",

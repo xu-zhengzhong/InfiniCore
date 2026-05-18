@@ -93,6 +93,9 @@ infiniStatus_t Descriptor::calculate(
     float alpha,
     float beta,
     void *stream) const {
+    if (workspace_size < _workspace_size) {
+        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+    }
     switch (_dtype) {
     case INFINI_DTYPE_F16:
         return calculateByIndex<fp16_t>(_index_dtype, _info, _a_desc, c, b, alpha, beta);

@@ -45,4 +45,5 @@
 #include "ops/silu.hpp"
 #include "ops/silu_and_mul.hpp"
 #include "ops/softmax.hpp"
+#include "ops/spmm.hpp"
 #include "ops/swiglu.hpp"

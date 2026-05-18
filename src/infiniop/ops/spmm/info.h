@@ -42,6 +42,7 @@ public:
         infiniopSpMatDescriptor_t a_desc,
         infiniopTensorDescriptor_t b_desc) {
 
+        CHECK_OR_RETURN(a_desc != nullptr, INFINI_STATUS_NULL_POINTER);
         CHECK_OR_RETURN(a_desc->format() == INFINIOP_SPMAT_FORMAT_CSR, INFINI_STATUS_BAD_PARAM);
 
         auto b_matrix = DenseMatrix::create(b_desc);

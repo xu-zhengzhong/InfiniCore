@@ -72,7 +72,9 @@ def test(
         size=(rows, cols),
         device=values.torch_tensor().device,
     )
-    ans.update_torch_tensor(alpha * torch.matmul(sparse, b.torch_tensor()) + beta * c.torch_tensor())
+    ans.set_tensor(
+        alpha * torch.matmul(sparse, b.torch_tensor()) + beta * c.torch_tensor()
+    )
 
     if sync is not None:
         sync()

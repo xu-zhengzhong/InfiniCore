@@ -27,6 +27,9 @@ SpMatImpl::SpMatImpl(Tensor crow_indices, Tensor col_indices, Tensor values, Siz
       cols_(cols),
       desc_(nullptr) {
     INFINICORE_ASSERT_TENSORS_SAME_DEVICE(crow_indices_, col_indices_, values_);
+    INFINICORE_ASSERT(crow_indices_->is_contiguous());
+    INFINICORE_ASSERT(col_indices_->is_contiguous());
+    INFINICORE_ASSERT(values_->is_contiguous());
     INFINICORE_CHECK_ERROR(infiniopCreateCsrSpMatDescriptor(
         &desc_,
         rows_,

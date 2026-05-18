@@ -5,6 +5,9 @@
 #ifdef ENABLE_CPU_API
 #include "cpu/spmm_cpu.h"
 #endif
+#ifdef ENABLE_NVIDIA_API
+#include "nvidia/spmm_nvidia.cuh"
+#endif
 
 __INFINI_C infiniStatus_t infiniopCreateSpMMDescriptor(
     infiniopHandle_t handle,
@@ -26,6 +29,9 @@ __INFINI_C infiniStatus_t infiniopCreateSpMMDescriptor(
 #ifdef ENABLE_CPU_API
         CREATE(INFINI_DEVICE_CPU, cpu);
 #endif
+#ifdef ENABLE_NVIDIA_API
+        CREATE(INFINI_DEVICE_NVIDIA, nvidia);
+#endif
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
     }
@@ -43,6 +49,9 @@ __INFINI_C infiniStatus_t infiniopGetSpMMWorkspaceSize(infiniopSpMMDescriptor_t 
     switch (desc->device_type) {
 #ifdef ENABLE_CPU_API
         GET(INFINI_DEVICE_CPU, cpu);
+#endif
+#ifdef ENABLE_NVIDIA_API
+        GET(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
@@ -70,6 +79,9 @@ __INFINI_C infiniStatus_t infiniopSpMM(
 #ifdef ENABLE_CPU_API
         CALCULATE(INFINI_DEVICE_CPU, cpu);
 #endif
+#ifdef ENABLE_NVIDIA_API
+        CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
+#endif
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
     }
@@ -87,6 +99,9 @@ __INFINI_C infiniStatus_t infiniopDestroySpMMDescriptor(infiniopSpMMDescriptor_t
     switch (desc->device_type) {
 #ifdef ENABLE_CPU_API
         DELETE(INFINI_DEVICE_CPU, cpu);
+#endif
+#ifdef ENABLE_NVIDIA_API
+        DELETE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;

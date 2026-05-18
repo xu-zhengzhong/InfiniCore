@@ -1,5 +1,5 @@
 #include "../infiniop_impl.hpp"
-#include "infinicore/ops/gemm.hpp"
+#include "infinicore/ops/spmm.hpp"
 
 namespace infinicore::op::spmm_impl::infiniop {
 
@@ -13,7 +13,7 @@ struct PlannedMeta {
 };
 
 void *plan(Tensor c, const SpMat &a, const Tensor &b, float alpha, float beta) {
-    size_t seed = hash_combine(c, a->values(), a->crow_indices(), a->col_indices(), b);
+    size_t seed = hash_combine(c, a->values(), a->crow_indices(), a->col_indices(), a->rows(), a->cols(), b);
 
     INFINIOP_CACHABLE_DESCRIPTOR_GET_OR_CREATE(
         Descriptor, descriptor, SpMM,
@@ -27,7 +27,8 @@ void *plan(Tensor c, const SpMat &a, const Tensor &b, float alpha, float beta) {
         graph::GraphTensor(c),
         graph::GraphTensor(b),
         a,
-        alpha, beta};
+        alpha,
+        beta};
 
     return planned;
 }
@@ -36,14 +37,8 @@ void run(void *planned_meta) {
     auto planned = reinterpret_cast<PlannedMeta *>(planned_meta);
 
     INFINICORE_CHECK_ERROR(infiniopSpMM(
-        planned->descriptor->desc,
-        planned->workspace->data(),
-        planned->workspace->numel(),
-        planned->c->data(),
-        planned->b->data(),
-        planned->alpha,
-        planned->beta,
-        context::getStream()));
+        planned->descriptor->desc, planned->workspace->data(), planned->workspace->numel(),
+        planned->c->data(), planned->b->data(), planned->alpha, planned->beta, context::getStream()));
 }
 
 void cleanup(void **planned_meta_ptr) {

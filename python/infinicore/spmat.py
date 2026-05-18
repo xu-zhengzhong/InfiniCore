@@ -51,9 +51,9 @@ class SpMat:
         return Tensor(self._underlying.values)
 
     def __matmul__(self, other):
-        from infinicore.ops.gemm import gemm
+        from infinicore.ops.spmm import spmm
 
-        return gemm(self, other)
+        return spmm(self, other)
 
 
 def csr_spmat(crow_indices, col_indices, values, size):
