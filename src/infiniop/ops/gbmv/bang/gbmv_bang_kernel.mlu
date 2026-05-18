@@ -1,0 +1,264 @@
+#include "../../../devices/bang/common_bang.h"
+#include "gbmv_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata, bool X_CONTIGUOUS>
+__mlu_func__ void loadGbmvXChunk(
+    Tdata *nram_x,
+    const Tdata *x,
+    int offset,
+    int incx,
+    int chunk_elements) {
+
+    if constexpr (X_CONTIGUOUS) {
+        __memcpy(nram_x, x + offset, chunk_elements * sizeof(Tdata), GDRAM2NRAM);
+    } else {
+        for (int k = 0; k < chunk_elements; ++k) {
+            nram_x[k] = x[(offset + k) * incx];
+        }
+    }
+}
+
+template <typename Tdata, bool TRANS>
+__mlu_func__ void loadGbmvAChunk(
+    Tdata *nram_A,
+    const Tdata *A,
+    int lda,
+    int ku,
+    int output_index,
+    int input_offset,
+    int chunk_elements) {
+
+    if constexpr (TRANS) {
+        __memcpy(
+            nram_A,
+            A + ku + input_offset - output_index + output_index * lda,
+            chunk_elements * sizeof(Tdata),
+            GDRAM2NRAM);
+    } else {
+        constexpr int strided_copy_threshold = 16;
+        if (chunk_elements >= strided_copy_threshold && lda > 1) {
+            __memcpy(
+                nram_A,
+                A + ku + output_index - input_offset + input_offset * lda,
+                sizeof(Tdata),
+                GDRAM2NRAM,
+                sizeof(Tdata),
+                (lda - 1) * sizeof(Tdata),
+                chunk_elements - 1);
+        } else {
+            for (int k = 0; k < chunk_elements; ++k) {
+                int input_index = input_offset + k;
+                int band_row = ku + output_index - input_index;
+                nram_A[k] = A[band_row + input_index * lda];
+            }
+        }
+    }
+}
+
+template <typename Tdata, bool TRANS, bool X_CONTIGUOUS>
+__mlu_func__ Tdata computeGbmvChunk(
+    Tdata *nram_A,
+    Tdata *nram_x,
+    const Tdata *A,
+    int lda,
+    int ku,
+    const Tdata *x,
+    int incx,
+    int output_index,
+    int input_offset,
+    int chunk_elements) {
+
+    loadGbmvAChunk<Tdata, TRANS>(nram_A, A, lda, ku, output_index, input_offset, chunk_elements);
+    loadGbmvXChunk<Tdata, X_CONTIGUOUS>(nram_x, x, input_offset, incx, chunk_elements);
+
+    __bang_mul(nram_A, nram_A, nram_x, chunk_elements);
+    return __bang_sum(nram_A, chunk_elements);
+}
+
+template <typename Tdata>
+__mlu_func__ void scaleGbmvY(
+    Tdata *y,
+    int output_index,
+    int incy,
+    Tdata beta_v) {
+
+    int y_offset = output_index * incy;
+    if (beta_v == (Tdata)0) {
+        y[y_offset] = (Tdata)0;
+    } else if (beta_v != (Tdata)1) {
+        y[y_offset] = beta_v * y[y_offset];
+    }
+}
+
+template <typename Tdata>
+__mlu_func__ void storeGbmvY(
+    Tdata *y,
+    int output_index,
+    int incy,
+    Tdata alpha_v,
+    Tdata beta_v,
+    Tdata sum) {
+
+    int y_offset = output_index * incy;
+    Tdata value = alpha_v * sum;
+    if (beta_v == (Tdata)0) {
+        y[y_offset] = value;
+    } else if (beta_v == (Tdata)1) {
+        y[y_offset] += value;
+    } else {
+        y[y_offset] = value + beta_v * y[y_offset];
+    }
+}
+
+template <typename Tdata, bool TRANS, bool X_CONTIGUOUS>
+__mlu_func__ void gbmvKernelImpl(
+    int m, int n,
+    int kl, int ku,
+    const Tdata *alpha,
+    const Tdata *A, int lda,
+    const Tdata *x, int incx,
+    const Tdata *beta,
+    Tdata *y, int incy) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_A = (Tdata *)nram_aligned;
+    Tdata *nram_x = nram_A + chunk_size;
+
+    int y_len = TRANS ? n : m;
+    int elements_per_core = y_len / taskDim;
+    int remain = y_len % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    Tdata alpha_v = *alpha;
+    Tdata beta_v = *beta;
+
+    if (alpha_v == (Tdata)0) {
+        for (int i = core_offset; i < core_offset + core_elements; ++i) {
+            scaleGbmvY(y, i, incy, beta_v);
+        }
+        return;
+    }
+
+    if constexpr (!TRANS) {
+        for (int i = core_offset; i < core_offset + core_elements; i++) {
+            Tdata sum = 0;
+            int j_begin = i > kl ? i - kl : 0;
+            int j_end = i + ku + 1 < n ? i + ku + 1 : n;
+            int band_elements = j_end - j_begin;
+            int chunks = band_elements / chunk_size;
+            int chunk_rem = band_elements % chunk_size;
+
+            for (int c = 0; c < chunks; c++) {
+                int current_offset = c * chunk_size;
+                sum += computeGbmvChunk<Tdata, false, X_CONTIGUOUS>(
+                    nram_A,
+                    nram_x,
+                    A, lda, ku,
+                    x, incx,
+                    i,
+                    j_begin + current_offset,
+                    chunk_size);
+            }
+
+            if (chunk_rem > 0) {
+                int current_offset = chunks * chunk_size;
+                sum += computeGbmvChunk<Tdata, false, X_CONTIGUOUS>(
+                    nram_A,
+                    nram_x,
+                    A, lda, ku,
+                    x, incx,
+                    i,
+                    j_begin + current_offset,
+                    chunk_rem);
+            }
+
+            storeGbmvY(y, i, incy, alpha_v, beta_v, sum);
+        }
+    } else {
+        for (int j = core_offset; j < core_offset + core_elements; j++) {
+            Tdata sum = 0;
+            int i_begin = j > ku ? j - ku : 0;
+            int i_end = j + kl + 1 < m ? j + kl + 1 : m;
+            int band_elements = i_end - i_begin;
+            int chunks = band_elements / chunk_size;
+            int chunk_rem = band_elements % chunk_size;
+
+            for (int c = 0; c < chunks; c++) {
+                int current_offset = c * chunk_size;
+                sum += computeGbmvChunk<Tdata, true, X_CONTIGUOUS>(
+                    nram_A,
+                    nram_x,
+                    A, lda, ku,
+                    x, incx,
+                    j,
+                    i_begin + current_offset,
+                    chunk_size);
+            }
+
+            if (chunk_rem > 0) {
+                int current_offset = chunks * chunk_size;
+                sum += computeGbmvChunk<Tdata, true, X_CONTIGUOUS>(
+                    nram_A,
+                    nram_x,
+                    A, lda, ku,
+                    x, incx,
+                    j,
+                    i_begin + current_offset,
+                    chunk_rem);
+            }
+
+            storeGbmvY(y, j, incy, alpha_v, beta_v, sum);
+        }
+    }
+}
+
+#define DISPATCH_GBMV(TRANS, CONTIG) \
+    gbmvKernelImpl<Tdata, TRANS, CONTIG>(m, n, kl, ku, alpha, A, lda, x, incx, beta, y, incy)
+
+template <typename Tdata>
+__mlu_global__ void gbmvKernel(
+    infiniopBlasOperation_t trans,
+    int m, int n,
+    int kl, int ku,
+    const Tdata *alpha,
+    const Tdata *A, int lda,
+    const Tdata *x, int incx,
+    const Tdata *beta,
+    Tdata *y, int incy) {
+
+    const bool transposed = trans == INFINIOP_BLAS_OP_T;
+    const bool x_contiguous = incx == 1;
+
+    if (transposed) {
+        if (x_contiguous) {
+            DISPATCH_GBMV(true, true);
+        } else {
+            DISPATCH_GBMV(true, false);
+        }
+    } else {
+        if (x_contiguous) {
+            DISPATCH_GBMV(false, true);
+        } else {
+            DISPATCH_GBMV(false, false);
+        }
+    }
+
+#undef DISPATCH_GBMV
+}

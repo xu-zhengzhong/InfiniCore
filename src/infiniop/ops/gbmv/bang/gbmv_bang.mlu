@@ -1,0 +1,110 @@
+#include "../../../devices/bang/common_bang.h"
+#include "gbmv_bang.h"
+#include "gbmv_bang_kernel.mlu"
+
+namespace op::gbmv::bang {
+
+Descriptor::~Descriptor() = default;
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopBlasOperation_t trans,
+    size_t kl,
+    size_t ku,
+    infiniopTensorDescriptor_t alpha_desc,
+    infiniopTensorDescriptor_t A_desc,
+    infiniopTensorDescriptor_t x_desc,
+    infiniopTensorDescriptor_t beta_desc,
+    infiniopTensorDescriptor_t y_desc) {
+
+    auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
+    auto result = GbmvInfo::createGbmvInfo(trans, kl, ku, alpha_desc, A_desc, x_desc, beta_desc, y_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        0,
+        nullptr,
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+template <typename Tdata>
+infiniStatus_t calculateGbmv(
+    const GbmvInfo &info,
+    const Tdata *alpha,
+    const Tdata *A,
+    const Tdata *x,
+    const Tdata *beta,
+    Tdata *y,
+    cnrtQueue_t queue) {
+
+    int m = utils::cast<int>(info.m);
+    int n = utils::cast<int>(info.n);
+    const int kl = utils::cast<int>(info.kl);
+    const int ku = utils::cast<int>(info.ku);
+    const int incx = utils::cast<int>(info.incx);
+    const int incy = utils::cast<int>(info.incy);
+
+    auto trans = info.trans;
+    auto lda = utils::cast<int>(info.A_col_stride);
+
+    cnrtDim3_t k_dim;
+    cnrtFunctionType_t k_type;
+
+    k_dim.x = 4;
+    k_dim.y = 1;
+    k_dim.z = 1;
+    k_type = cnrtFuncTypeUnion1;
+
+    gbmvKernel<Tdata><<<k_dim, k_type, queue>>>(
+        trans,
+        m, n,
+        kl, ku,
+        alpha,
+        A, lda,
+        x, incx,
+        beta,
+        y, incy);
+
+    cnrtQueueSync(queue);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+#define CALCULATE_GBMV(TDATA)           \
+    calculateGbmv(_info,                \
+                  (const TDATA *)alpha, \
+                  (const TDATA *)A,     \
+                  (const TDATA *)x,     \
+                  (const TDATA *)beta,  \
+                  (TDATA *)y,           \
+                  (cnrtQueue_t)stream)
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *alpha,
+    const void *A,
+    const void *x,
+    const void *beta,
+    void *y,
+    void *stream) const {
+
+    (void)workspace;
+    (void)workspace_size;
+
+    switch (_info.data_type) {
+    case INFINI_DTYPE_F32:
+        return CALCULATE_GBMV(float);
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+#undef CALCULATE_GBMV
+
+} // namespace op::gbmv::bang

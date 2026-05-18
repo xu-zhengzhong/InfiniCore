@@ -52,6 +52,7 @@
 #include "infiniop/ops/floor_divide.h"
 #include "infiniop/ops/fmin.h"
 #include "infiniop/ops/fmod.h"
+#include "infiniop/ops/gbmv.h"
 #include "infiniop/ops/gelu.h"
 #include "infiniop/ops/gelutanh.h"
 #include "infiniop/ops/gemm.h"
