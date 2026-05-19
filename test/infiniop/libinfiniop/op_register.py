@@ -2751,3 +2751,38 @@ def symv_(lib):
     lib.infiniopDestroySymvDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+
+@OpRegister.operator
+def trmv_(lib):
+    lib.infiniopCreateTrmvDescriptor.restype = c_int32
+    lib.infiniopCreateTrmvDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        c_int32,
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetTrmvWorkspaceSize.restype = c_int32
+    lib.infiniopGetTrmvWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopTrmv.restype = c_int32
+    lib.infiniopTrmv.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyTrmvDescriptor.restype = c_int32
+    lib.infiniopDestroyTrmvDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]

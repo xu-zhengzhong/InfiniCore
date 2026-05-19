@@ -132,6 +132,7 @@
 #include "infiniop/ops/topksoftmax.h"
 #include "infiniop/ops/triplet_margin_loss.h"
 #include "infiniop/ops/triplet_margin_with_distance_loss.h"
+#include "infiniop/ops/trmv.h"
 #include "infiniop/ops/unfold.h"
 #include "infiniop/ops/upsample_bilinear.h"
 #include "infiniop/ops/upsample_nearest.h"
