@@ -1,0 +1,231 @@
+#include "../../../devices/bang/common_bang.h"
+#include "trmv_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata, bool X_CONTIGUOUS>
+__mlu_func__ void trmvCopyKernelImpl(
+    int n,
+    const Tdata *x, int incx,
+    Tdata *x_copy) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / sizeof(Tdata);
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_x = (Tdata *)nram_aligned;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    int chunks = core_elements / chunk_size;
+    int chunk_rem = core_elements % chunk_size;
+
+    for (int c = 0; c < chunks; c++) {
+        int current_offset = core_offset + c * chunk_size;
+
+        if constexpr (X_CONTIGUOUS) {
+            __memcpy(nram_x, x + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+        } else {
+            for (int i = 0; i < chunk_size; ++i) {
+                nram_x[i] = x[(current_offset + i) * incx];
+            }
+        }
+        __memcpy(x_copy + current_offset, nram_x, chunk_size * sizeof(Tdata), NRAM2GDRAM);
+    }
+
+    if (chunk_rem > 0) {
+        int current_offset = core_offset + chunks * chunk_size;
+
+        if constexpr (X_CONTIGUOUS) {
+            __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+        } else {
+            for (int i = 0; i < chunk_rem; ++i) {
+                nram_x[i] = x[(current_offset + i) * incx];
+            }
+        }
+        __memcpy(x_copy + current_offset, nram_x, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
+    }
+}
+
+#define DISPATCH_TRMV_COPY(CONTIG) \
+    trmvCopyKernelImpl<Tdata, CONTIG>(n, x, incx, x_copy)
+
+template <typename Tdata>
+__mlu_global__ void trmvCopyKernel(
+    int n,
+    const Tdata *x, int incx,
+    Tdata *x_copy) {
+
+    const bool x_contiguous = incx == 1;
+
+    if (x_contiguous) {
+        DISPATCH_TRMV_COPY(true);
+    } else {
+        DISPATCH_TRMV_COPY(false);
+    }
+
+#undef DISPATCH_TRMV_COPY
+}
+
+template <typename Tdata, bool TRANS>
+__mlu_func__ void loadTrmvAChunk(
+    Tdata *nram_A,
+    const Tdata *A, int lda,
+    int row,
+    int chunk_offset,
+    int chunk_elements) {
+
+    if constexpr (TRANS) {
+        __memcpy(nram_A, A + chunk_offset + row * lda, chunk_elements * sizeof(Tdata), GDRAM2NRAM);
+    } else {
+        for (int k = 0; k < chunk_elements; ++k) {
+            int j = chunk_offset + k;
+            nram_A[k] = A[row + j * lda];
+        }
+    }
+}
+
+template <typename Tdata, bool UPPER, bool TRANS, bool UNIT_DIAG>
+__mlu_func__ void trmvKernelImpl(
+    int n,
+    const Tdata *A, int lda,
+    const Tdata *x_copy,
+    Tdata *x, int incx) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_A = (Tdata *)nram_aligned;
+    Tdata *nram_x = nram_A + chunk_size;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    for (int i = core_offset; i < core_offset + core_elements; ++i) {
+        int begin;
+        int end;
+        if constexpr (TRANS) {
+            begin = UPPER ? 0 : i;
+            end = UPPER ? i + 1 : n;
+        } else {
+            begin = UPPER ? i : 0;
+            end = UPPER ? n : i + 1;
+        }
+
+        Tdata sum;
+        if constexpr (UNIT_DIAG) {
+            sum = x_copy[i];
+            if constexpr ((!TRANS && UPPER) || (TRANS && !UPPER)) {
+                begin++;
+            } else {
+                end--;
+            }
+        } else {
+            sum = 0;
+        }
+
+        int elements = end - begin;
+        int chunks = elements / chunk_size;
+        int chunk_rem = elements % chunk_size;
+
+        for (int c = 0; c < chunks; ++c) {
+            int current_offset = begin + c * chunk_size;
+
+            loadTrmvAChunk<Tdata, TRANS>(nram_A, A, lda, i, current_offset, chunk_size);
+            __memcpy(nram_x, x_copy + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+
+            __bang_mul(nram_A, nram_A, nram_x, chunk_size);
+            sum += __bang_sum(nram_A, chunk_size);
+        }
+
+        if (chunk_rem > 0) {
+            int current_offset = begin + chunks * chunk_size;
+
+            loadTrmvAChunk<Tdata, TRANS>(nram_A, A, lda, i, current_offset, chunk_rem);
+            __memcpy(nram_x, x_copy + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+
+            __bang_mul(nram_A, nram_A, nram_x, chunk_rem);
+            sum += __bang_sum(nram_A, chunk_rem);
+        }
+
+        x[i * incx] = sum;
+    }
+}
+
+#define DISPATCH_TRMV(UPPER, TRANS, UNIT) \
+    trmvKernelImpl<Tdata, UPPER, TRANS, UNIT>(n, A, lda, x_copy, x, incx)
+
+template <typename Tdata>
+__mlu_global__ void trmvKernel(
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    infiniopBlasDiagType_t diag,
+    int n,
+    const Tdata *A, int lda,
+    const Tdata *x_copy,
+    Tdata *x, int incx) {
+
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+    const bool transposed = trans == INFINIOP_BLAS_OP_T;
+    const bool unit_diag = diag == INFINIOP_BLAS_DIAG_UNIT;
+
+    if (transposed) {
+        if (unit_diag) {
+            if (upper) {
+                DISPATCH_TRMV(true, true, true);
+            } else {
+                DISPATCH_TRMV(false, true, true);
+            }
+        } else {
+            if (upper) {
+                DISPATCH_TRMV(true, true, false);
+            } else {
+                DISPATCH_TRMV(false, true, false);
+            }
+        }
+    } else {
+        if (unit_diag) {
+            if (upper) {
+                DISPATCH_TRMV(true, false, true);
+            } else {
+                DISPATCH_TRMV(false, false, true);
+            }
+        } else {
+            if (upper) {
+                DISPATCH_TRMV(true, false, false);
+            } else {
+                DISPATCH_TRMV(false, false, false);
+            }
+        }
+    }
+
+#undef DISPATCH_TRMV
+}
