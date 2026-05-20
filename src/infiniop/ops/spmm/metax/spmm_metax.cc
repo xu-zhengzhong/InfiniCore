@@ -1,60 +1,57 @@
-#include "../../../devices/nvidia/nvidia_handle.cuh"
-#include "spmm_nvidia.cuh"
+#include "spmm_metax.h"
+#include "../../../devices/metax/metax_common.h"
+#include "../../../devices/metax/metax_handle.h"
 
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
-#include <cusparse.h>
-
-namespace op::spmm::nvidia {
+namespace op::spmm::metax {
 
 struct Descriptor::Opaque {
-    std::shared_ptr<device::nvidia::Handle::Internal> internal;
-    cusparseSpMatDescr_t mat_a = nullptr;
-    cusparseDnMatDescr_t mat_b = nullptr;
-    cusparseDnMatDescr_t mat_c = nullptr;
-    cusparseOperation_t op_a = CUSPARSE_OPERATION_NON_TRANSPOSE;
-    cusparseOperation_t op_b = CUSPARSE_OPERATION_NON_TRANSPOSE;
-    cusparseSpMMAlg_t alg = CUSPARSE_SPMM_ALG_DEFAULT;
-    cudaDataType data_type = CUDA_R_32F;
-    cusparseIndexType_t index_type = CUSPARSE_INDEX_64I;
+    std::shared_ptr<device::metax::Handle::Internal> internal;
+    hcsparseSpMatDescr_t mat_a = nullptr;
+    hcsparseDnMatDescr_t mat_b = nullptr;
+    hcsparseDnMatDescr_t mat_c = nullptr;
+    hcsparseOperation_t op_a = HCSPARSE_OPERATION_NON_TRANSPOSE;
+    hcsparseOperation_t op_b = HCSPARSE_OPERATION_NON_TRANSPOSE;
+    hcsparseSpMMAlg_t alg = HCSPARSE_SPMM_ALG_DEFAULT;
+    hpccDataType data_type = HPCC_R_32F;
+    hcsparseIndexType_t index_type = HCSPARSE_INDEX_64I;
 
-    explicit Opaque(std::shared_ptr<device::nvidia::Handle::Internal> internal)
+    explicit Opaque(std::shared_ptr<device::metax::Handle::Internal> internal)
         : internal(std::move(internal)) {}
 
     ~Opaque() {
         if (mat_a != nullptr) {
-            cusparseDestroySpMat(mat_a);
+            hcsparseDestroySpMat(mat_a);
         }
         if (mat_b != nullptr) {
-            cusparseDestroyDnMat(mat_b);
+            hcsparseDestroyDnMat(mat_b);
         }
         if (mat_c != nullptr) {
-            cusparseDestroyDnMat(mat_c);
+            hcsparseDestroyDnMat(mat_c);
         }
     }
 };
 
-static cudaDataType cudaDataTypeOf(infiniDtype_t dtype) {
+static hpccDataType dataTypeOf(infiniDtype_t dtype) {
     switch (dtype) {
     case INFINI_DTYPE_F16:
-        return CUDA_R_16F;
+        return HPCC_R_16F;
     case INFINI_DTYPE_BF16:
-        return CUDA_R_16BF;
+        return HPCC_R_16BF;
     case INFINI_DTYPE_F32:
-        return CUDA_R_32F;
+        return HPCC_R_32F;
     default:
-        return CUDA_R_32F;
+        return HPCC_R_32F;
     }
 }
 
-static cusparseIndexType_t indexTypeOf(infiniDtype_t dtype) {
+static hcsparseIndexType_t indexTypeOf(infiniDtype_t dtype) {
     switch (dtype) {
     case INFINI_DTYPE_I32:
-        return CUSPARSE_INDEX_32I;
+        return HCSPARSE_INDEX_32I;
     case INFINI_DTYPE_I64:
-        return CUSPARSE_INDEX_64I;
+        return HCSPARSE_INDEX_64I;
     default:
-        return CUSPARSE_INDEX_64I;
+        return HCSPARSE_INDEX_64I;
     }
 }
 
@@ -62,7 +59,7 @@ struct DenseLayout {
     int64_t rows;
     int64_t cols;
     int64_t ld;
-    cusparseOrder_t order;
+    hcsparseOrder_t order;
 };
 
 static utils::Result<DenseLayout> denseLayoutOf(const DenseMatrix &matrix) {
@@ -72,7 +69,7 @@ static utils::Result<DenseLayout> denseLayoutOf(const DenseMatrix &matrix) {
             static_cast<int64_t>(matrix.rows),
             static_cast<int64_t>(matrix.cols),
             static_cast<int64_t>(matrix.row_stride),
-            CUSPARSE_ORDER_ROW});
+            HCSPARSE_ORDER_ROW});
     }
 
     if (matrix.row_stride == 1) {
@@ -81,7 +78,7 @@ static utils::Result<DenseLayout> denseLayoutOf(const DenseMatrix &matrix) {
             static_cast<int64_t>(matrix.rows),
             static_cast<int64_t>(matrix.cols),
             static_cast<int64_t>(matrix.col_stride),
-            CUSPARSE_ORDER_COL});
+            HCSPARSE_ORDER_COL});
     }
 
     return INFINI_STATUS_BAD_TENSOR_STRIDES;
@@ -97,7 +94,7 @@ infiniStatus_t Descriptor::create(
     infiniopTensorDescriptor_t c_desc,
     infiniopSpMatDescriptor_t a_desc,
     infiniopTensorDescriptor_t b_desc) {
-    auto handle = reinterpret_cast<device::nvidia::Handle *>(handle_);
+    auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
     auto dtype = c_desc->dtype();
     auto index_dtype = a_desc->crowIndicesDesc()->dtype();
 
@@ -113,10 +110,10 @@ infiniStatus_t Descriptor::create(
     CHECK_RESULT(c_layout);
 
     auto opaque = new Opaque(handle->internal());
-    opaque->data_type = cudaDataTypeOf(dtype);
+    opaque->data_type = dataTypeOf(dtype);
     opaque->index_type = indexTypeOf(index_dtype);
 
-    auto status = cusparseCreateCsr(
+    auto status = hcsparseCreateCsr(
         &opaque->mat_a,
         static_cast<int64_t>(info.m),
         static_cast<int64_t>(info.k),
@@ -126,14 +123,14 @@ infiniStatus_t Descriptor::create(
         const_cast<void *>(a_desc->values()),
         opaque->index_type,
         opaque->index_type,
-        CUSPARSE_INDEX_BASE_ZERO,
+        HCSPARSE_INDEX_BASE_ZERO,
         opaque->data_type);
-    CHECK_API_OR(status, CUSPARSE_STATUS_SUCCESS, {
+    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
         delete opaque;
         return INFINI_STATUS_INTERNAL_ERROR;
     });
 
-    status = cusparseCreateDnMat(
+    status = hcsparseCreateDnMat(
         &opaque->mat_b,
         b_layout->rows,
         b_layout->cols,
@@ -141,12 +138,12 @@ infiniStatus_t Descriptor::create(
         const_cast<void *>(a_desc->values()),
         opaque->data_type,
         b_layout->order);
-    CHECK_API_OR(status, CUSPARSE_STATUS_SUCCESS, {
+    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
         delete opaque;
         return INFINI_STATUS_INTERNAL_ERROR;
     });
 
-    status = cusparseCreateDnMat(
+    status = hcsparseCreateDnMat(
         &opaque->mat_c,
         c_layout->rows,
         c_layout->cols,
@@ -154,7 +151,7 @@ infiniStatus_t Descriptor::create(
         const_cast<void *>(a_desc->values()),
         opaque->data_type,
         c_layout->order);
-    CHECK_API_OR(status, CUSPARSE_STATUS_SUCCESS, {
+    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
         delete opaque;
         return INFINI_STATUS_INTERNAL_ERROR;
     });
@@ -162,8 +159,8 @@ infiniStatus_t Descriptor::create(
     size_t workspace_size = 0;
     float alpha_one = 1.0f;
     float beta_zero = 0.0f;
-    auto buffer_status = opaque->internal->useCusparse(nullptr, [&](cusparseHandle_t sparse_handle) {
-        CHECK_CUSPARSE(cusparseSpMM_bufferSize(
+    auto buffer_status = opaque->internal->useMcsparse(nullptr, [&](hcsparseHandle_t sparse_handle) {
+        CHECK_MCSPARSE(hcsparseSpMM_bufferSize(
             sparse_handle,
             opaque->op_a,
             opaque->op_b,
@@ -172,7 +169,7 @@ infiniStatus_t Descriptor::create(
             opaque->mat_b,
             &beta_zero,
             opaque->mat_c,
-            CUDA_R_32F,
+            HPCC_R_32F,
             opaque->alg,
             &workspace_size));
         return INFINI_STATUS_SUCCESS;
@@ -206,13 +203,13 @@ infiniStatus_t Descriptor::calculate(
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
 
-    CHECK_CUSPARSE(cusparseDnMatSetValues(_opaque->mat_b, const_cast<void *>(b)));
-    CHECK_CUSPARSE(cusparseDnMatSetValues(_opaque->mat_c, c));
+    CHECK_MCSPARSE(hcsparseDnMatSetValues(_opaque->mat_b, const_cast<void *>(b)));
+    CHECK_MCSPARSE(hcsparseDnMatSetValues(_opaque->mat_c, c));
 
-    CHECK_STATUS(_opaque->internal->useCusparse(
-        reinterpret_cast<cudaStream_t>(stream),
-        [&](cusparseHandle_t sparse_handle) {
-            CHECK_CUSPARSE(cusparseSpMM(
+    CHECK_STATUS(_opaque->internal->useMcsparse(
+        reinterpret_cast<hcStream_t>(stream),
+        [&](hcsparseHandle_t sparse_handle) {
+            CHECK_MCSPARSE(hcsparseSpMM(
                 sparse_handle,
                 _opaque->op_a,
                 _opaque->op_b,
@@ -221,7 +218,7 @@ infiniStatus_t Descriptor::calculate(
                 _opaque->mat_b,
                 &beta,
                 _opaque->mat_c,
-                CUDA_R_32F,
+                HPCC_R_32F,
                 _opaque->alg,
                 workspace));
             return INFINI_STATUS_SUCCESS;
@@ -230,4 +227,4 @@ infiniStatus_t Descriptor::calculate(
     return INFINI_STATUS_SUCCESS;
 }
 
-} // namespace op::spmm::nvidia
+} // namespace op::spmm::metax
