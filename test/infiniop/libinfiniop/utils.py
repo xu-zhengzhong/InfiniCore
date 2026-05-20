@@ -242,6 +242,10 @@ def to_torch_dtype(dt: InfiniDtype, compatability_mode=False):
         return torch.float32
     elif dt == InfiniDtype.F64:
         return torch.float64
+    elif dt == InfiniDtype.C64:
+        return torch.complex64
+    elif dt == InfiniDtype.C128:
+        return torch.complex128
     # TODO: These following types may not be supported by older
     # versions of PyTorch. Use compatability mode to convert them.
     elif dt == InfiniDtype.U16:
@@ -283,6 +287,10 @@ def to_numpy_dtype(dt: InfiniDtype, compatability_mode=False):
         return np.float32
     elif dt == InfiniDtype.F64:
         return np.float64
+    elif dt == InfiniDtype.C64:
+        return np.complex64
+    elif dt == InfiniDtype.C128:
+        return np.complex128
     else:
         raise ValueError("Unsupported data type")
 
@@ -366,6 +374,8 @@ def rearrange_tensor(tensor, new_strides):
         torch.bfloat16,
         torch.float32,
         torch.float64,
+        torch.complex64,
+        torch.complex128,
     ]:
         new_tensor.view(-1).index_add_(0, new_positions, tensor.contiguous().view(-1))
     elif tensor.dtype in [torch.uint16, torch.uint32, torch.uint64]:
