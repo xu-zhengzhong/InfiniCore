@@ -1,0 +1,288 @@
+#include "../../../devices/bang/common_bang.h"
+#include "sbmv_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata, bool X_CONTIGUOUS>
+__mlu_func__ void loadSbmvXChunk(
+    Tdata *nram_x,
+    const Tdata *x,
+    int offset,
+    int incx,
+    int chunk_elements) {
+
+    if constexpr (X_CONTIGUOUS) {
+        __memcpy(nram_x, x + offset, chunk_elements * sizeof(Tdata), GDRAM2NRAM);
+    } else {
+        for (int k = 0; k < chunk_elements; ++k) {
+            nram_x[k] = x[(offset + k) * incx];
+        }
+    }
+}
+
+template <typename Tdata>
+__mlu_func__ void loadSbmvStridedAChunk(
+    Tdata *nram_A,
+    const Tdata *A,
+    int lda,
+    int chunk_elements) {
+
+    constexpr int strided_copy_threshold = 16;
+    if (chunk_elements >= strided_copy_threshold && lda > 1) {
+        __memcpy(
+            nram_A,
+            A,
+            sizeof(Tdata),
+            GDRAM2NRAM,
+            sizeof(Tdata),
+            (lda - 1) * sizeof(Tdata),
+            chunk_elements - 1);
+    } else {
+        for (int k = 0; k < chunk_elements; ++k) {
+            nram_A[k] = A[k * (lda - 1)];
+        }
+    }
+}
+
+template <typename Tdata>
+__mlu_func__ void loadSbmvUpperAChunk(
+    Tdata *nram_A,
+    const Tdata *A,
+    int lda,
+    int bandwidth,
+    int row,
+    int chunk_offset,
+    int chunk_elements) {
+
+    int contiguous_elements = 0;
+    if (chunk_offset <= row) {
+        int contiguous_end = row + 1;
+        int chunk_end = chunk_offset + chunk_elements;
+        if (contiguous_end > chunk_end) {
+            contiguous_end = chunk_end;
+        }
+        contiguous_elements = contiguous_end - chunk_offset;
+        __memcpy(
+            nram_A,
+            A + bandwidth + chunk_offset - row + row * lda,
+            contiguous_elements * sizeof(Tdata),
+            GDRAM2NRAM);
+    }
+
+    int strided_elements = chunk_elements - contiguous_elements;
+    if (strided_elements > 0) {
+        int strided_offset = chunk_offset + contiguous_elements;
+        loadSbmvStridedAChunk(
+            nram_A + contiguous_elements,
+            A + bandwidth + row - strided_offset + strided_offset * lda,
+            lda,
+            strided_elements);
+    }
+}
+
+template <typename Tdata>
+__mlu_func__ void loadSbmvLowerAChunk(
+    Tdata *nram_A,
+    const Tdata *A,
+    int lda,
+    int row,
+    int chunk_offset,
+    int chunk_elements) {
+
+    int strided_elements = 0;
+    if (chunk_offset < row) {
+        int strided_end = row;
+        int chunk_end = chunk_offset + chunk_elements;
+        if (strided_end > chunk_end) {
+            strided_end = chunk_end;
+        }
+        strided_elements = strided_end - chunk_offset;
+    }
+
+    if (strided_elements > 0) {
+        loadSbmvStridedAChunk(
+            nram_A,
+            A + row - chunk_offset + chunk_offset * lda,
+            lda,
+            strided_elements);
+    }
+
+    int contiguous_elements = chunk_elements - strided_elements;
+    if (contiguous_elements > 0) {
+        __memcpy(
+            nram_A + strided_elements,
+            A + chunk_offset + strided_elements - row + row * lda,
+            contiguous_elements * sizeof(Tdata),
+            GDRAM2NRAM);
+    }
+}
+
+template <typename Tdata, bool UPPER, bool X_CONTIGUOUS>
+__mlu_func__ Tdata computeSbmvChunk(
+    Tdata *nram_A,
+    Tdata *nram_x,
+    const Tdata *A,
+    int lda,
+    int bandwidth,
+    const Tdata *x,
+    int incx,
+    int row,
+    int input_offset,
+    int chunk_elements) {
+
+    if constexpr (UPPER) {
+        loadSbmvUpperAChunk(nram_A, A, lda, bandwidth, row, input_offset, chunk_elements);
+    } else {
+        loadSbmvLowerAChunk(nram_A, A, lda, row, input_offset, chunk_elements);
+    }
+    loadSbmvXChunk<Tdata, X_CONTIGUOUS>(nram_x, x, input_offset, incx, chunk_elements);
+
+    __bang_mul(nram_A, nram_A, nram_x, chunk_elements);
+    return __bang_sum(nram_A, chunk_elements);
+}
+
+template <typename Tdata>
+__mlu_func__ void scaleSbmvY(
+    Tdata *y,
+    int output_index,
+    int incy,
+    Tdata beta_v) {
+
+    int y_offset = output_index * incy;
+    if (beta_v == (Tdata)0) {
+        y[y_offset] = (Tdata)0;
+    } else if (beta_v != (Tdata)1) {
+        y[y_offset] = beta_v * y[y_offset];
+    }
+}
+
+template <typename Tdata>
+__mlu_func__ void storeSbmvY(
+    Tdata *y,
+    int output_index,
+    int incy,
+    Tdata alpha_v,
+    Tdata beta_v,
+    Tdata sum) {
+
+    int y_offset = output_index * incy;
+    Tdata value = alpha_v * sum;
+    if (beta_v == (Tdata)0) {
+        y[y_offset] = value;
+    } else if (beta_v == (Tdata)1) {
+        y[y_offset] += value;
+    } else {
+        y[y_offset] = value + beta_v * y[y_offset];
+    }
+}
+
+template <typename Tdata, bool UPPER, bool X_CONTIGUOUS>
+__mlu_func__ void sbmvKernelImpl(
+    int n, int k,
+    const Tdata *alpha,
+    const Tdata *A, int lda,
+    const Tdata *x, int incx,
+    const Tdata *beta,
+    Tdata *y, int incy) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_A = (Tdata *)nram_aligned;
+    Tdata *nram_x = nram_A + chunk_size;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    Tdata alpha_v = *alpha;
+    Tdata beta_v = *beta;
+
+    if (alpha_v == (Tdata)0) {
+        for (int i = core_offset; i < core_offset + core_elements; ++i) {
+            scaleSbmvY(y, i, incy, beta_v);
+        }
+        return;
+    }
+
+    for (int i = core_offset; i < core_offset + core_elements; i++) {
+        Tdata sum = 0;
+        int j_begin = i > k ? i - k : 0;
+        int j_end = i + k + 1 < n ? i + k + 1 : n;
+        int band_elements = j_end - j_begin;
+        int chunks = band_elements / chunk_size;
+        int chunk_rem = band_elements % chunk_size;
+
+        for (int c = 0; c < chunks; c++) {
+            int current_offset = c * chunk_size;
+            sum += computeSbmvChunk<Tdata, UPPER, X_CONTIGUOUS>(
+                nram_A,
+                nram_x,
+                A, lda, k,
+                x, incx,
+                i,
+                j_begin + current_offset,
+                chunk_size);
+        }
+
+        if (chunk_rem > 0) {
+            int current_offset = chunks * chunk_size;
+            sum += computeSbmvChunk<Tdata, UPPER, X_CONTIGUOUS>(
+                nram_A,
+                nram_x,
+                A, lda, k,
+                x, incx,
+                i,
+                j_begin + current_offset,
+                chunk_rem);
+        }
+
+        storeSbmvY(y, i, incy, alpha_v, beta_v, sum);
+    }
+}
+
+#define DISPATCH_SBMV(UPPER, CONTIG) \
+    sbmvKernelImpl<Tdata, UPPER, CONTIG>(n, k, alpha, A, lda, x, incx, beta, y, incy)
+
+template <typename Tdata>
+__mlu_global__ void sbmvKernel(
+    infiniopBlasFillMode_t uplo,
+    int n, int k,
+    const Tdata *alpha,
+    const Tdata *A, int lda,
+    const Tdata *x, int incx,
+    const Tdata *beta,
+    Tdata *y, int incy) {
+
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+    const bool x_contiguous = incx == 1;
+
+    if (upper) {
+        if (x_contiguous) {
+            DISPATCH_SBMV(true, true);
+        } else {
+            DISPATCH_SBMV(true, false);
+        }
+    } else {
+        if (x_contiguous) {
+            DISPATCH_SBMV(false, true);
+        } else {
+            DISPATCH_SBMV(false, false);
+        }
+    }
+
+#undef DISPATCH_SBMV
+}
