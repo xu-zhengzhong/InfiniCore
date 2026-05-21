@@ -2715,6 +2715,46 @@ def gbmv_(lib):
 
 
 @OpRegister.operator
+def sbmv_(lib):
+    lib.infiniopCreateSbmvDescriptor.restype = c_int32
+    lib.infiniopCreateSbmvDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        c_size_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSbmvWorkspaceSize.restype = c_int32
+    lib.infiniopGetSbmvWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSbmv.restype = c_int32
+    lib.infiniopSbmv.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySbmvDescriptor.restype = c_int32
+    lib.infiniopDestroySbmvDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def symv_(lib):
     lib.infiniopCreateSymvDescriptor.restype = c_int32
     lib.infiniopCreateSymvDescriptor.argtypes = [

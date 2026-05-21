@@ -147,6 +147,8 @@
 #define hcblasDswap mcblasDswap
 #define hcblasSgbmv mcblasSgbmv
 #define hcblasDgbmv mcblasDgbmv
+#define hcblasSsbmv mcblasSsbmv
+#define hcblasDsbmv mcblasDsbmv
 #define hcblasSger mcblasSger
 #define hcblasDger mcblasDger
 #define hcblasSgemv mcblasSgemv
