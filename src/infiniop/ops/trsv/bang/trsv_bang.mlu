@@ -1,0 +1,100 @@
+#include "../../../devices/bang/common_bang.h"
+#include "trsv_bang.h"
+#include "trsv_bang_kernel.mlu"
+
+namespace op::trsv::bang {
+
+Descriptor::~Descriptor() = default;
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    infiniopBlasDiagType_t diag,
+    infiniopTensorDescriptor_t A_desc,
+    infiniopTensorDescriptor_t x_desc) {
+
+    auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
+    auto result = TrsvInfo::createTrsvInfo(uplo, trans, diag, A_desc, x_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        0,
+        nullptr,
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+template <typename Tdata>
+infiniStatus_t calculateTrsv(
+    const TrsvInfo &info,
+    const Tdata *A,
+    Tdata *x,
+    cnrtQueue_t queue) {
+
+    int n = utils::cast<int>(info.n);
+    const int incx = utils::cast<int>(info.incx);
+
+    auto uplo = info.uplo;
+    auto trans = info.trans;
+    auto lda = utils::cast<int>(info.A_col_stride);
+
+    // Row-major tensors are interpreted as column-major transposed matrices.
+    if (info.A_col_stride == 1) {
+        uplo = info.uplo == INFINIOP_BLAS_FILL_MODE_UPPER ? INFINIOP_BLAS_FILL_MODE_LOWER : INFINIOP_BLAS_FILL_MODE_UPPER;
+        trans = info.trans == INFINIOP_BLAS_OP_N ? INFINIOP_BLAS_OP_T : INFINIOP_BLAS_OP_N;
+        lda = utils::cast<int>(info.A_row_stride);
+    }
+
+    cnrtDim3_t k_dim;
+    cnrtFunctionType_t k_type;
+
+    k_dim.x = 1;
+    k_dim.y = 1;
+    k_dim.z = 1;
+    k_type = cnrtFuncTypeBlock;
+
+    trsvKernel<Tdata><<<k_dim, k_type, queue>>>(
+        uplo,
+        trans,
+        info.diag,
+        n,
+        A, lda,
+        x, incx);
+
+    cnrtQueueSync(queue);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+#define CALCULATE_TRSV(TDATA)       \
+    calculateTrsv(_info,            \
+                  (const TDATA *)A, \
+                  (TDATA *)x,       \
+                  (cnrtQueue_t)stream)
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *A,
+    void *x,
+    void *stream) const {
+
+    (void)workspace;
+    (void)workspace_size;
+
+    switch (_info.data_type) {
+    case INFINI_DTYPE_F32:
+        return CALCULATE_TRSV(float);
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+#undef CALCULATE_TRSV
+
+} // namespace op::trsv::bang
