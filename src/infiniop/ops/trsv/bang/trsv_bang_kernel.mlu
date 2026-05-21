@@ -1,0 +1,218 @@
+#include "../../../devices/bang/common_bang.h"
+#include "trsv_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata, bool UPPER, bool UNIT_DIAG, bool X_CONTIGUOUS>
+__mlu_func__ void trsvKernelImpl(
+    bool transposed,
+    int n,
+    const Tdata *A, int lda,
+    Tdata *x, int incx) {
+
+    if (n <= 0 || taskId != 0) {
+        return;
+    }
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_A = (Tdata *)nram_aligned;
+    Tdata *nram_x = nram_A + chunk_size;
+
+    int chunks, chunk_rem;
+
+    int i_start, i_end, i_step;
+    if ((!transposed && UPPER) || (transposed && !UPPER)) {
+        i_start = n - 1;
+        i_end = -1;
+        i_step = -1;
+    } else {
+        i_start = 0;
+        i_end = n;
+        i_step = 1;
+    }
+
+    if (!transposed) {
+        int row_offset;
+
+        for (int i = i_start; i != i_end; i += i_step) {
+            Tdata value = x[i * incx];
+            if constexpr (!UNIT_DIAG) {
+                value /= A[i + i * lda];
+                x[i * incx] = value;
+            }
+
+            if constexpr (UPPER) {
+                row_offset = 0;
+                chunks = i / chunk_size;
+                chunk_rem = i % chunk_size;
+            } else {
+                row_offset = i + 1;
+                chunks = (n - 1 - i) / chunk_size;
+                chunk_rem = (n - 1 - i) % chunk_size;
+            }
+
+            for (int c = 0; c < chunks; ++c) {
+                int current_offset = c * chunk_size + row_offset;
+
+                __memcpy(nram_A, A + i * lda + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_size; ++k) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul_scalar(nram_A, nram_A, value, chunk_size);
+                __bang_sub(nram_x, nram_x, nram_A, chunk_size);
+
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(x + current_offset, nram_x, chunk_size * sizeof(Tdata), NRAM2GDRAM);
+                } else {
+                    for (int k = 0; k < chunk_size; ++k) {
+                        x[(current_offset + k) * incx] = nram_x[k];
+                    }
+                }
+            }
+
+            if (chunk_rem > 0) {
+                int current_offset = chunks * chunk_size + row_offset;
+
+                __memcpy(nram_A, A + i * lda + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_rem; ++k) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul_scalar(nram_A, nram_A, value, chunk_rem);
+                __bang_sub(nram_x, nram_x, nram_A, chunk_rem);
+
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(x + current_offset, nram_x, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
+                } else {
+                    for (int k = 0; k < chunk_rem; ++k) {
+                        x[(current_offset + k) * incx] = nram_x[k];
+                    }
+                }
+            }
+        }
+    } else {
+        int column_offset;
+
+        for (int i = i_start; i != i_end; i += i_step) {
+            Tdata value = x[i * incx];
+
+            if constexpr (!UPPER) {
+                column_offset = i + 1;
+                chunks = (n - 1 - i) / chunk_size;
+                chunk_rem = (n - 1 - i) % chunk_size;
+            } else {
+                column_offset = 0;
+                chunks = i / chunk_size;
+                chunk_rem = i % chunk_size;
+            }
+
+            for (int c = 0; c < chunks; ++c) {
+                int current_offset = c * chunk_size + column_offset;
+
+                __memcpy(nram_A, A + i * lda + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_size; ++k) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul(nram_x, nram_x, nram_A, chunk_size);
+
+                value -= __bang_sum(nram_x, chunk_size);
+            }
+
+            if (chunk_rem > 0) {
+                int current_offset = chunks * chunk_size + column_offset;
+
+                __memcpy(nram_A, A + i * lda + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_rem; ++k) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul(nram_x, nram_x, nram_A, chunk_rem);
+
+                value -= __bang_sum(nram_x, chunk_rem);
+            }
+
+            if constexpr (!UNIT_DIAG) {
+                value /= A[i + i * lda];
+            }
+            x[i * incx] = value;
+        }
+    }
+}
+
+#define DISPATCH_TRSV(UPPER, UNIT, CONTIG) \
+    trsvKernelImpl<Tdata, UPPER, UNIT, CONTIG>(transposed, n, A, lda, x, incx)
+
+template <typename Tdata>
+__mlu_global__ void trsvKernel(
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    infiniopBlasDiagType_t diag,
+    int n,
+    const Tdata *A, int lda,
+    Tdata *x, int incx) {
+
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+    const bool transposed = trans == INFINIOP_BLAS_OP_T;
+    const bool unit_diag = diag == INFINIOP_BLAS_DIAG_UNIT;
+    const bool x_contiguous = incx == 1;
+
+    if (upper) {
+        if (unit_diag) {
+            if (x_contiguous) {
+                DISPATCH_TRSV(true, true, true);
+            } else {
+                DISPATCH_TRSV(true, true, false);
+            }
+        } else {
+            if (x_contiguous) {
+                DISPATCH_TRSV(true, false, true);
+            } else {
+                DISPATCH_TRSV(true, false, false);
+            }
+        }
+    } else {
+        if (unit_diag) {
+            if (x_contiguous) {
+                DISPATCH_TRSV(false, true, true);
+            } else {
+                DISPATCH_TRSV(false, true, false);
+            }
+        } else {
+            if (x_contiguous) {
+                DISPATCH_TRSV(false, false, true);
+            } else {
+                DISPATCH_TRSV(false, false, false);
+            }
+        }
+    }
+
+#undef DISPATCH_TRSV
+}
