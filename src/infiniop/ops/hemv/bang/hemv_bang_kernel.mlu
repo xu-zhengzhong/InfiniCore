@@ -1,0 +1,158 @@
+#include "../../../devices/bang/bang_complex.h"
+#include "../../../devices/bang/common_bang.h"
+#include "hemv_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+__mlu_func__ void loadAChunk(
+    infiniopBlasFillMode_t uplo,
+    int row,
+    int offset,
+    int len,
+    const device::bang::Complex *A,
+    int lda,
+    float *A_real,
+    float *A_imag) {
+
+    for (int k = 0; k < len; k++) {
+        int col = offset + k;
+        device::bang::Complex value;
+        if (row == col) {
+            const int A_idx = row + row * lda;
+            value = device::bang::makeFloatComplex(A[A_idx].x, 0.0f);
+        } else if (uplo == INFINIOP_BLAS_FILL_MODE_UPPER) {
+            if (row < col) {
+                const int A_idx = row + col * lda;
+                value = A[A_idx];
+            } else {
+                const int A_idx = col + row * lda;
+                value = device::bang::cConj(A[A_idx]);
+            }
+        } else {
+            if (row > col) {
+                const int A_idx = row + col * lda;
+                value = A[A_idx];
+            } else {
+                const int A_idx = col + row * lda;
+                value = device::bang::cConj(A[A_idx]);
+            }
+        }
+        A_real[k] = device::bang::cReal(value);
+        A_imag[k] = device::bang::cImag(value);
+    }
+}
+
+__mlu_func__ void loadXChunk(
+    int offset,
+    int len,
+    const device::bang::Complex *x,
+    int incx,
+    float *x_real,
+    float *x_imag) {
+
+    for (int k = 0; k < len; k++) {
+        const auto value = x[(offset + k) * incx];
+        x_real[k] = device::bang::cReal(value);
+        x_imag[k] = device::bang::cImag(value);
+    }
+}
+
+__mlu_global__ void hemvKernel(
+    infiniopBlasFillMode_t uplo,
+    int n,
+    const device::bang::Complex *alpha,
+    const device::bang::Complex *A, int lda,
+    const device::bang::Complex *x,
+    int incx,
+    const device::bang::Complex *beta,
+    device::bang::Complex *y,
+    int incy) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (5 * sizeof(float));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(float);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    float *nram_A_real = (float *)nram_aligned;
+    float *nram_A_imag = nram_A_real + chunk_size;
+    float *nram_x_real = nram_A_imag + chunk_size;
+    float *nram_x_imag = nram_x_real + chunk_size;
+    float *nram_prod = nram_x_imag + chunk_size;
+
+    const auto alpha_v = alpha[0];
+    const auto beta_v = beta[0];
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    int chunks = n / chunk_size;
+    int chunk_rem = n % chunk_size;
+
+    for (int i = core_offset; i < core_offset + core_elements; i++) {
+        float sum_real = 0;
+        float sum_imag = 0;
+
+        for (int c = 0; c < chunks; c++) {
+            int current_offset = c * chunk_size;
+
+            loadAChunk(uplo, i, current_offset, chunk_size,
+                       A, lda,
+                       nram_A_real, nram_A_imag);
+            loadXChunk(current_offset, chunk_size, x, incx, nram_x_real, nram_x_imag);
+
+            __bang_mul(nram_prod, nram_A_real, nram_x_real, chunk_size);
+            sum_real += __bang_sum(nram_prod, chunk_size);
+            __bang_mul(nram_prod, nram_A_imag, nram_x_imag, chunk_size);
+            sum_real -= __bang_sum(nram_prod, chunk_size);
+
+            __bang_mul(nram_prod, nram_A_real, nram_x_imag, chunk_size);
+            sum_imag += __bang_sum(nram_prod, chunk_size);
+            __bang_mul(nram_prod, nram_A_imag, nram_x_real, chunk_size);
+            sum_imag += __bang_sum(nram_prod, chunk_size);
+        }
+
+        if (chunk_rem > 0) {
+            int current_offset = chunks * chunk_size;
+
+            loadAChunk(uplo, i, current_offset, chunk_rem,
+                       A, lda,
+                       nram_A_real, nram_A_imag);
+            loadXChunk(current_offset, chunk_rem, x, incx, nram_x_real, nram_x_imag);
+
+            __bang_mul(nram_prod, nram_A_real, nram_x_real, chunk_rem);
+            sum_real += __bang_sum(nram_prod, chunk_rem);
+            __bang_mul(nram_prod, nram_A_imag, nram_x_imag, chunk_rem);
+            sum_real -= __bang_sum(nram_prod, chunk_rem);
+
+            __bang_mul(nram_prod, nram_A_real, nram_x_imag, chunk_rem);
+            sum_imag += __bang_sum(nram_prod, chunk_rem);
+            __bang_mul(nram_prod, nram_A_imag, nram_x_real, chunk_rem);
+            sum_imag += __bang_sum(nram_prod, chunk_rem);
+        }
+
+        const auto y_v = y[i * incy];
+        const auto sum_v = device::bang::makeFloatComplex(sum_real, sum_imag);
+        const auto alpha_sum = device::bang::cMul(alpha_v, sum_v);
+        if (device::bang::cIsZero(beta_v)) {
+            y[i * incy] = alpha_sum;
+        } else if (device::bang::cIsOne(beta_v)) {
+            y[i * incy] = device::bang::cAdd(alpha_sum, y_v);
+        } else {
+            y[i * incy] = device::bang::cAdd(
+                alpha_sum,
+                device::bang::cMul(beta_v, y_v));
+        }
+    }
+}
