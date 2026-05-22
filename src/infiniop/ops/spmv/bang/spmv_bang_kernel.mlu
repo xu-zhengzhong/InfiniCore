@@ -1,0 +1,213 @@
+#include "../../../devices/bang/common_bang.h"
+#include "spmv_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata>
+__mlu_func__ void loadSpmvUpperAPChunk(
+    Tdata *nram_AP,
+    const Tdata *AP,
+    int row,
+    int chunk_offset,
+    int chunk_elements) {
+
+    int contiguous_elements = 0;
+    if (chunk_offset < row) {
+        int contiguous_end = row;
+        int chunk_end = chunk_offset + chunk_elements;
+        if (contiguous_end > chunk_end) {
+            contiguous_end = chunk_end;
+        }
+        contiguous_elements = contiguous_end - chunk_offset;
+
+        int AP_offset = row * (row + 1) / 2 + chunk_offset;
+        __memcpy(nram_AP, AP + AP_offset, contiguous_elements * sizeof(Tdata), GDRAM2NRAM);
+    }
+
+    for (int k = contiguous_elements; k < chunk_elements; k++) {
+        int j = chunk_offset + k;
+        int AP_idx = j * (j + 1) / 2 + row;
+        nram_AP[k] = AP[AP_idx];
+    }
+}
+
+template <typename Tdata>
+__mlu_func__ void loadSpmvLowerAPChunk(
+    Tdata *nram_AP,
+    const Tdata *AP,
+    int row,
+    int n,
+    int chunk_offset,
+    int chunk_elements) {
+
+    int strided_elements = 0;
+    if (chunk_offset < row) {
+        int strided_end = row;
+        int chunk_end = chunk_offset + chunk_elements;
+        if (strided_end > chunk_end) {
+            strided_end = chunk_end;
+        }
+        strided_elements = strided_end - chunk_offset;
+    }
+
+    for (int k = 0; k < strided_elements; k++) {
+        int j = chunk_offset + k;
+        int AP_idx = j * n - j * (j - 1) / 2 + (row - j);
+        nram_AP[k] = AP[AP_idx];
+    }
+
+    int contiguous_elements = chunk_elements - strided_elements;
+    if (contiguous_elements > 0) {
+        int j = chunk_offset + strided_elements;
+        int AP_offset = row * n - row * (row - 1) / 2 + (j - row);
+
+        __memcpy(
+            nram_AP + strided_elements,
+            AP + AP_offset,
+            contiguous_elements * sizeof(Tdata),
+            GDRAM2NRAM);
+    }
+}
+
+template <typename Tdata, bool CONTIGUOUS>
+__mlu_device__ void spmvKernelImpl(
+    bool upper,
+    int n,
+    const Tdata *alpha,
+    const Tdata *AP,
+    const Tdata *x, int incx,
+    const Tdata *beta,
+    Tdata *y, int incy) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_AP = (Tdata *)nram_aligned;
+    Tdata *nram_x = nram_AP + chunk_size;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    if (upper) {
+        for (int i = core_offset; i < core_offset + core_elements; i++) {
+            Tdata sum = 0;
+            int elements = n;
+            int chunks = elements / chunk_size;
+            int chunk_rem = elements % chunk_size;
+
+            for (int c = 0; c < chunks; c++) {
+                int current_offset = c * chunk_size;
+
+                loadSpmvUpperAPChunk(nram_AP, AP, i, current_offset, chunk_size);
+                if constexpr (CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_size; k++) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul(nram_AP, nram_AP, nram_x, chunk_size);
+                sum += __bang_sum(nram_AP, chunk_size);
+            }
+
+            if (chunk_rem > 0) {
+                int current_offset = chunks * chunk_size;
+
+                loadSpmvUpperAPChunk(nram_AP, AP, i, current_offset, chunk_rem);
+                if constexpr (CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_rem; k++) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul(nram_AP, nram_AP, nram_x, chunk_rem);
+                sum += __bang_sum(nram_AP, chunk_rem);
+            }
+
+            y[i * incy] = (*alpha) * sum + (*beta) * y[i * incy];
+        }
+    } else {
+        for (int i = core_offset; i < core_offset + core_elements; i++) {
+            Tdata sum = 0;
+            int elements = n;
+            int chunks = elements / chunk_size;
+            int chunk_rem = elements % chunk_size;
+
+            for (int c = 0; c < chunks; c++) {
+                int current_offset = c * chunk_size;
+
+                loadSpmvLowerAPChunk(nram_AP, AP, i, n, current_offset, chunk_size);
+                if constexpr (CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_size; k++) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul(nram_AP, nram_AP, nram_x, chunk_size);
+                sum += __bang_sum(nram_AP, chunk_size);
+            }
+
+            if (chunk_rem > 0) {
+                int current_offset = chunks * chunk_size;
+
+                loadSpmvLowerAPChunk(nram_AP, AP, i, n, current_offset, chunk_rem);
+                if constexpr (CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_rem; k++) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul(nram_AP, nram_AP, nram_x, chunk_rem);
+                sum += __bang_sum(nram_AP, chunk_rem);
+            }
+
+            y[i * incy] = (*alpha) * sum + (*beta) * y[i * incy];
+        }
+    }
+}
+
+#define DISPATCH_SPMV(CONTIG) \
+    spmvKernelImpl<Tdata, CONTIG>(upper, n, alpha, AP, x, incx, beta, y, incy)
+
+template <typename Tdata>
+__mlu_global__ void spmvKernel(
+    infiniopBlasFillMode_t uplo,
+    int n,
+    const Tdata *alpha,
+    const Tdata *AP,
+    const Tdata *x, int incx,
+    const Tdata *beta,
+    Tdata *y, int incy) {
+
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+    const bool x_contiguous = incx == 1;
+
+    if (x_contiguous) {
+        DISPATCH_SPMV(true);
+    } else {
+        DISPATCH_SPMV(false);
+    }
+
+#undef DISPATCH_SPMV
+}
