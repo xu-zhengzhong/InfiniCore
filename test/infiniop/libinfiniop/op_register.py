@@ -2794,6 +2794,45 @@ def symv_(lib):
 
 
 @OpRegister.operator
+def spmv_(lib):
+    lib.infiniopCreateSpmvDescriptor.restype = c_int32
+    lib.infiniopCreateSpmvDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSpmvWorkspaceSize.restype = c_int32
+    lib.infiniopGetSpmvWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSpmv.restype = c_int32
+    lib.infiniopSpmv.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySpmvDescriptor.restype = c_int32
+    lib.infiniopDestroySpmvDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def hemv_(lib):
     lib.infiniopCreateHemvDescriptor.restype = c_int32
     lib.infiniopCreateHemvDescriptor.argtypes = [
