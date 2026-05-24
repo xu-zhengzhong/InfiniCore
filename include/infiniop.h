@@ -130,6 +130,7 @@
 #include "infiniop/ops/tan.h"
 #include "infiniop/ops/tanh.h"
 #include "infiniop/ops/tanhshrink.h"
+#include "infiniop/ops/tbmv.h"
 #include "infiniop/ops/topk.h"
 #include "infiniop/ops/topkrouter.h"
 #include "infiniop/ops/topksoftmax.h"

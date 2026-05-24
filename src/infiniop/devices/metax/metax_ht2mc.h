@@ -159,6 +159,8 @@
 #define hcblasDsymv mcblasDsymv
 #define hcblasChemv mcblasChemv
 #define hcblasZhemv mcblasZhemv
+#define hcblasStbmv mcblasStbmv
+#define hcblasDtbmv mcblasDtbmv
 #define hcblasStrmv mcblasStrmv
 #define hcblasDtrmv mcblasDtrmv
 #define hcblasStrsv mcblasStrsv
