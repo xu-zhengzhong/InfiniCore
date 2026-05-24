@@ -133,6 +133,7 @@
 #include "infiniop/ops/sum.h"
 #include "infiniop/ops/swap.h"
 #include "infiniop/ops/swiglu.h"
+#include "infiniop/ops/symm.h"
 #include "infiniop/ops/symv.h"
 #include "infiniop/ops/syr.h"
 #include "infiniop/ops/syr2.h"
