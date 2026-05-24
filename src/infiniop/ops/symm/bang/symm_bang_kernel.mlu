@@ -1,0 +1,256 @@
+#include "../../../devices/bang/common_bang.h"
+#include "symm_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata>
+__mlu_func__ void loadSymmAChunk(
+    Tdata *nram_A,
+    infiniopBlasFillMode_t uplo,
+    const Tdata *A,
+    int lda,
+    int row,
+    int chunk_offset,
+    int chunk_elements) {
+
+    if (uplo == INFINIOP_BLAS_FILL_MODE_UPPER) {
+        int contiguous_elements = 0;
+        if (chunk_offset < row) {
+            int contiguous_end = row;
+            const int chunk_end = chunk_offset + chunk_elements;
+            if (contiguous_end > chunk_end) {
+                contiguous_end = chunk_end;
+            }
+            contiguous_elements = contiguous_end - chunk_offset;
+            __memcpy(nram_A, A + chunk_offset + row * lda, contiguous_elements * sizeof(Tdata), GDRAM2NRAM);
+        }
+
+        for (int k = contiguous_elements; k < chunk_elements; ++k) {
+            const int col = chunk_offset + k;
+            nram_A[k] = A[row + col * lda];
+        }
+    } else {
+        int strided_elements = 0;
+        if (chunk_offset < row) {
+            int strided_end = row;
+            const int chunk_end = chunk_offset + chunk_elements;
+            if (strided_end > chunk_end) {
+                strided_end = chunk_end;
+            }
+            strided_elements = strided_end - chunk_offset;
+        }
+
+        for (int k = 0; k < strided_elements; ++k) {
+            const int col = chunk_offset + k;
+            nram_A[k] = A[row + col * lda];
+        }
+
+        const int contiguous_elements = chunk_elements - strided_elements;
+        if (contiguous_elements > 0) {
+            __memcpy(
+                nram_A + strided_elements,
+                A + chunk_offset + strided_elements + row * lda,
+                contiguous_elements * sizeof(Tdata),
+                GDRAM2NRAM);
+        }
+    }
+}
+
+template <typename Tdata>
+__mlu_func__ void loadSymmBColumnChunk(
+    Tdata *nram_B,
+    const Tdata *B,
+    int ldb,
+    int col,
+    int chunk_offset,
+    int chunk_elements) {
+
+    __memcpy(nram_B, B + chunk_offset + col * ldb, chunk_elements * sizeof(Tdata), GDRAM2NRAM);
+}
+
+template <typename Tdata>
+__mlu_func__ void loadSymmBRowChunk(
+    Tdata *nram_B,
+    const Tdata *B,
+    int ldb,
+    int row,
+    int chunk_offset,
+    int chunk_elements) {
+
+    for (int k = 0; k < chunk_elements; ++k) {
+        nram_B[k] = B[row + (chunk_offset + k) * ldb];
+    }
+}
+
+template <typename Tdata, int TILE_ROWS, int TILE_COLS>
+__mlu_global__ void symmKernel(
+    infiniopBlasSideMode_t side,
+    infiniopBlasFillMode_t uplo,
+    int m,
+    int n,
+    const Tdata *alpha,
+    const Tdata *A,
+    int lda,
+    const Tdata *B,
+    int ldb,
+    const Tdata *beta,
+    Tdata *C,
+    int ldc) {
+
+    const Tdata alpha_v = alpha[0];
+    const Tdata beta_v = beta[0];
+    const int k_dim = side == INFINIOP_BLAS_SIDE_LEFT ? m : n;
+
+    if (k_dim == 1) {
+        const int tile_rows = (m + TILE_ROWS - 1) / TILE_ROWS;
+        const int tile_cols = (n + TILE_COLS - 1) / TILE_COLS;
+        const int total_tiles = tile_rows * tile_cols;
+        const Tdata a00 = A[0];
+
+        for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+            const int tile_row = (tile % tile_rows) * TILE_ROWS;
+            const int tile_col = (tile / tile_rows) * TILE_COLS;
+            const int rows = m - tile_row < TILE_ROWS ? m - tile_row : TILE_ROWS;
+            const int cols = n - tile_col < TILE_COLS ? n - tile_col : TILE_COLS;
+
+            for (int c = 0; c < cols; ++c) {
+                for (int r = 0; r < rows; ++r) {
+                    const int idx = tile_row + r + (tile_col + c) * ldc;
+                    Tdata sum = static_cast<Tdata>(0);
+                    if (alpha_v != static_cast<Tdata>(0)) {
+                        sum = a00 * B[tile_row + r + (tile_col + c) * ldb];
+                    }
+                    if (beta_v == static_cast<Tdata>(0)) {
+                        C[idx] = alpha_v * sum;
+                    } else {
+                        C[idx] = alpha_v * sum + beta_v * C[idx];
+                    }
+                }
+            }
+        }
+
+        return;
+    }
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    const size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+
+    const size_t a_buffer_count = side == INFINIOP_BLAS_SIDE_LEFT ? TILE_ROWS : TILE_COLS;
+    const size_t b_buffer_count = side == INFINIOP_BLAS_SIDE_LEFT ? TILE_COLS : TILE_ROWS;
+    const size_t buffer_count = a_buffer_count + b_buffer_count + 1;
+    const size_t max_chunk_elements = nram_usable / (buffer_count * sizeof(Tdata));
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+    if (chunk_size <= 0) {
+        return;
+    }
+
+    Tdata *nram_A = (Tdata *)nram_aligned;
+    Tdata *nram_B = nram_A + a_buffer_count * chunk_size;
+    Tdata *nram_mul = nram_B + b_buffer_count * chunk_size;
+
+    const int tile_rows = (m + TILE_ROWS - 1) / TILE_ROWS;
+    const int tile_cols = (n + TILE_COLS - 1) / TILE_COLS;
+    const int total_tiles = tile_rows * tile_cols;
+
+    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+        const int tile_row = (tile % tile_rows) * TILE_ROWS;
+        const int tile_col = (tile / tile_rows) * TILE_COLS;
+        const int rows = m - tile_row < TILE_ROWS ? m - tile_row : TILE_ROWS;
+        const int cols = n - tile_col < TILE_COLS ? n - tile_col : TILE_COLS;
+
+        Tdata sums[TILE_ROWS][TILE_COLS];
+        for (int r = 0; r < TILE_ROWS; ++r) {
+            for (int c = 0; c < TILE_COLS; ++c) {
+                sums[r][c] = static_cast<Tdata>(0);
+            }
+        }
+
+        if (alpha_v != static_cast<Tdata>(0)) {
+            for (int k0 = 0; k0 < k_dim; k0 += chunk_size) {
+                const int chunk_elements = k_dim - k0 < chunk_size ? k_dim - k0 : chunk_size;
+
+                if (side == INFINIOP_BLAS_SIDE_LEFT) {
+                    for (int r = 0; r < rows; ++r) {
+                        loadSymmAChunk(
+                            nram_A + r * chunk_size,
+                            uplo,
+                            A,
+                            lda,
+                            tile_row + r,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int c = 0; c < cols; ++c) {
+                        loadSymmBColumnChunk(
+                            nram_B + c * chunk_size,
+                            B,
+                            ldb,
+                            tile_col + c,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int r = 0; r < rows; ++r) {
+                        for (int c = 0; c < cols; ++c) {
+                            __bang_mul(
+                                nram_mul,
+                                nram_A + r * chunk_size,
+                                nram_B + c * chunk_size,
+                                chunk_elements);
+                            sums[r][c] += __bang_sum(nram_mul, chunk_elements);
+                        }
+                    }
+                } else {
+                    for (int c = 0; c < cols; ++c) {
+                        loadSymmAChunk(
+                            nram_A + c * chunk_size,
+                            uplo,
+                            A,
+                            lda,
+                            tile_col + c,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int r = 0; r < rows; ++r) {
+                        loadSymmBRowChunk(
+                            nram_B + r * chunk_size,
+                            B,
+                            ldb,
+                            tile_row + r,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int r = 0; r < rows; ++r) {
+                        for (int c = 0; c < cols; ++c) {
+                            __bang_mul(
+                                nram_mul,
+                                nram_B + r * chunk_size,
+                                nram_A + c * chunk_size,
+                                chunk_elements);
+                            sums[r][c] += __bang_sum(nram_mul, chunk_elements);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int c = 0; c < cols; ++c) {
+            for (int r = 0; r < rows; ++r) {
+                const int c_idx = tile_row + r + (tile_col + c) * ldc;
+                if (beta_v == static_cast<Tdata>(0)) {
+                    C[c_idx] = alpha_v * sums[r][c];
+                } else {
+                    C[c_idx] = alpha_v * sums[r][c] + beta_v * C[c_idx];
+                }
+            }
+        }
+    }
+}
