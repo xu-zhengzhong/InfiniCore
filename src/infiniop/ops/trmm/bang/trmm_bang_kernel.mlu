@@ -1,0 +1,387 @@
+#include "../../../devices/bang/common_bang.h"
+#include "trmm_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata, bool B_CONTIGUOUS>
+__mlu_func__ void trmmCopyBKernelImpl(
+    int m,
+    int n,
+    const Tdata *B,
+    int ldb,
+    Tdata *B_copy) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / sizeof(Tdata);
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+    if (chunk_size <= 0) {
+        return;
+    }
+
+    Tdata *nram_B = (Tdata *)nram_aligned;
+    const int elements = m * n;
+
+    for (int offset = taskId * chunk_size; offset < elements; offset += taskDim * chunk_size) {
+        int current_elements = elements - offset < chunk_size ? elements - offset : chunk_size;
+
+        if constexpr (B_CONTIGUOUS) {
+            __memcpy(nram_B, B + offset, current_elements * sizeof(Tdata), GDRAM2NRAM);
+        } else {
+            for (int i = 0; i < current_elements; ++i) {
+                int index = offset + i;
+                int row = index % m;
+                int col = index / m;
+                nram_B[i] = B[row + col * ldb];
+            }
+        }
+
+        __memcpy(B_copy + offset, nram_B, current_elements * sizeof(Tdata), NRAM2GDRAM);
+    }
+}
+
+#define DISPATCH_TRMM_COPY(CONTIG) \
+    trmmCopyBKernelImpl<Tdata, CONTIG>(m, n, B, ldb, B_copy)
+
+template <typename Tdata>
+__mlu_global__ void trmmCopyBKernel(
+    int m,
+    int n,
+    const Tdata *B,
+    int ldb,
+    Tdata *B_copy) {
+
+    if (ldb == m) {
+        DISPATCH_TRMM_COPY(true);
+    } else {
+        DISPATCH_TRMM_COPY(false);
+    }
+
+#undef DISPATCH_TRMM_COPY
+}
+
+template <typename Tdata, bool UPPER, bool TRANS, bool UNIT_DIAG>
+__mlu_func__ Tdata loadTrmmOpAElement(
+    const Tdata *A,
+    int lda,
+    int row,
+    int col) {
+
+    int a_row = TRANS ? col : row;
+    int a_col = TRANS ? row : col;
+
+    if (a_row == a_col && UNIT_DIAG) {
+        return static_cast<Tdata>(1);
+    }
+
+    const bool inside = UPPER ? a_row <= a_col : a_row >= a_col;
+    if (!inside) {
+        return static_cast<Tdata>(0);
+    }
+
+    return A[a_row + a_col * lda];
+}
+
+template <typename Tdata, bool UPPER, bool TRANS, bool UNIT_DIAG>
+__mlu_func__ void loadTrmmARowChunk(
+    Tdata *nram_A,
+    const Tdata *A,
+    int lda,
+    int row,
+    int col_offset,
+    int chunk_elements) {
+
+    for (int k = 0; k < chunk_elements; ++k) {
+        nram_A[k] = loadTrmmOpAElement<Tdata, UPPER, TRANS, UNIT_DIAG>(
+            A,
+            lda,
+            row,
+            col_offset + k);
+    }
+}
+
+template <typename Tdata, bool UPPER, bool TRANS, bool UNIT_DIAG>
+__mlu_func__ void loadTrmmAColumnChunk(
+    Tdata *nram_A,
+    const Tdata *A,
+    int lda,
+    int row_offset,
+    int col,
+    int chunk_elements) {
+
+    for (int k = 0; k < chunk_elements; ++k) {
+        nram_A[k] = loadTrmmOpAElement<Tdata, UPPER, TRANS, UNIT_DIAG>(
+            A,
+            lda,
+            row_offset + k,
+            col);
+    }
+}
+
+template <typename Tdata>
+__mlu_func__ void loadTrmmBColumnChunk(
+    Tdata *nram_B,
+    const Tdata *B_copy,
+    int m,
+    int col,
+    int chunk_offset,
+    int chunk_elements) {
+
+    __memcpy(nram_B, B_copy + chunk_offset + col * m, chunk_elements * sizeof(Tdata), GDRAM2NRAM);
+}
+
+template <typename Tdata>
+__mlu_func__ void loadTrmmBRowChunk(
+    Tdata *nram_B,
+    const Tdata *B_copy,
+    int m,
+    int row,
+    int chunk_offset,
+    int chunk_elements) {
+
+    for (int k = 0; k < chunk_elements; ++k) {
+        nram_B[k] = B_copy[row + (chunk_offset + k) * m];
+    }
+}
+
+template <typename Tdata, bool LEFT, bool UPPER, bool TRANS, bool UNIT_DIAG, int TILE_ROWS, int TILE_COLS>
+__mlu_func__ void trmmKernelImpl(
+    int m,
+    int n,
+    Tdata alpha,
+    const Tdata *A,
+    int lda,
+    const Tdata *B_copy,
+    Tdata *B,
+    int ldb) {
+
+    const int k_dim = LEFT ? m : n;
+    const int tile_rows = (m + TILE_ROWS - 1) / TILE_ROWS;
+    const int tile_cols = (n + TILE_COLS - 1) / TILE_COLS;
+    const int total_tiles = tile_rows * tile_cols;
+
+    if (k_dim == 1) {
+        const Tdata a00 = UNIT_DIAG ? static_cast<Tdata>(1) : A[0];
+
+        for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+            const int tile_row = (tile % tile_rows) * TILE_ROWS;
+            const int tile_col = (tile / tile_rows) * TILE_COLS;
+            const int rows = m - tile_row < TILE_ROWS ? m - tile_row : TILE_ROWS;
+            const int cols = n - tile_col < TILE_COLS ? n - tile_col : TILE_COLS;
+
+            for (int c = 0; c < cols; ++c) {
+                for (int r = 0; r < rows; ++r) {
+                    const int row = tile_row + r;
+                    const int col = tile_col + c;
+                    B[row + col * ldb] = alpha * a00 * B_copy[row + col * m];
+                }
+            }
+        }
+
+        return;
+    }
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    const size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+
+    const size_t a_buffer_count = LEFT ? TILE_ROWS : TILE_COLS;
+    const size_t b_buffer_count = LEFT ? TILE_COLS : TILE_ROWS;
+    const size_t buffer_count = a_buffer_count + b_buffer_count + 1;
+    const size_t max_chunk_elements = nram_usable / (buffer_count * sizeof(Tdata));
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+    if (chunk_size <= 0) {
+        return;
+    }
+
+    Tdata *nram_A = (Tdata *)nram_aligned;
+    Tdata *nram_B = nram_A + a_buffer_count * chunk_size;
+    Tdata *nram_mul = nram_B + b_buffer_count * chunk_size;
+
+    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+        const int tile_row = (tile % tile_rows) * TILE_ROWS;
+        const int tile_col = (tile / tile_rows) * TILE_COLS;
+        const int rows = m - tile_row < TILE_ROWS ? m - tile_row : TILE_ROWS;
+        const int cols = n - tile_col < TILE_COLS ? n - tile_col : TILE_COLS;
+
+        Tdata sums[TILE_ROWS][TILE_COLS];
+        for (int r = 0; r < TILE_ROWS; ++r) {
+            for (int c = 0; c < TILE_COLS; ++c) {
+                sums[r][c] = static_cast<Tdata>(0);
+            }
+        }
+
+        if (alpha != static_cast<Tdata>(0)) {
+            for (int k0 = 0; k0 < k_dim; k0 += chunk_size) {
+                const int chunk_elements = k_dim - k0 < chunk_size ? k_dim - k0 : chunk_size;
+
+                if constexpr (LEFT) {
+                    for (int r = 0; r < rows; ++r) {
+                        loadTrmmARowChunk<Tdata, UPPER, TRANS, UNIT_DIAG>(
+                            nram_A + r * chunk_size,
+                            A,
+                            lda,
+                            tile_row + r,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int c = 0; c < cols; ++c) {
+                        loadTrmmBColumnChunk(
+                            nram_B + c * chunk_size,
+                            B_copy,
+                            m,
+                            tile_col + c,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int r = 0; r < rows; ++r) {
+                        for (int c = 0; c < cols; ++c) {
+                            __bang_mul(
+                                nram_mul,
+                                nram_A + r * chunk_size,
+                                nram_B + c * chunk_size,
+                                chunk_elements);
+                            sums[r][c] += __bang_sum(nram_mul, chunk_elements);
+                        }
+                    }
+                } else {
+                    for (int c = 0; c < cols; ++c) {
+                        loadTrmmAColumnChunk<Tdata, UPPER, TRANS, UNIT_DIAG>(
+                            nram_A + c * chunk_size,
+                            A,
+                            lda,
+                            k0,
+                            tile_col + c,
+                            chunk_elements);
+                    }
+
+                    for (int r = 0; r < rows; ++r) {
+                        loadTrmmBRowChunk(
+                            nram_B + r * chunk_size,
+                            B_copy,
+                            m,
+                            tile_row + r,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int r = 0; r < rows; ++r) {
+                        for (int c = 0; c < cols; ++c) {
+                            __bang_mul(
+                                nram_mul,
+                                nram_B + r * chunk_size,
+                                nram_A + c * chunk_size,
+                                chunk_elements);
+                            sums[r][c] += __bang_sum(nram_mul, chunk_elements);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int c = 0; c < cols; ++c) {
+            for (int r = 0; r < rows; ++r) {
+                B[tile_row + r + (tile_col + c) * ldb] = alpha * sums[r][c];
+            }
+        }
+    }
+}
+
+#define DISPATCH_TRMM(LEFT, UPPER, TRANS, UNIT) \
+    trmmKernelImpl<Tdata, LEFT, UPPER, TRANS, UNIT, TILE_ROWS, TILE_COLS>(m, n, alpha[0], A, lda, B_copy, B, ldb)
+
+template <typename Tdata, int TILE_ROWS, int TILE_COLS>
+__mlu_global__ void trmmKernel(
+    infiniopBlasSideMode_t side,
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    infiniopBlasDiagType_t diag,
+    int m,
+    int n,
+    const Tdata *alpha,
+    const Tdata *A,
+    int lda,
+    const Tdata *B_copy,
+    Tdata *B,
+    int ldb) {
+
+    const bool left = side == INFINIOP_BLAS_SIDE_LEFT;
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+    const bool transposed = trans == INFINIOP_BLAS_OP_T;
+    const bool unit_diag = diag == INFINIOP_BLAS_DIAG_UNIT;
+
+    if (left) {
+        if (upper) {
+            if (transposed) {
+                if (unit_diag) {
+                    DISPATCH_TRMM(true, true, true, true);
+                } else {
+                    DISPATCH_TRMM(true, true, true, false);
+                }
+            } else {
+                if (unit_diag) {
+                    DISPATCH_TRMM(true, true, false, true);
+                } else {
+                    DISPATCH_TRMM(true, true, false, false);
+                }
+            }
+        } else {
+            if (transposed) {
+                if (unit_diag) {
+                    DISPATCH_TRMM(true, false, true, true);
+                } else {
+                    DISPATCH_TRMM(true, false, true, false);
+                }
+            } else {
+                if (unit_diag) {
+                    DISPATCH_TRMM(true, false, false, true);
+                } else {
+                    DISPATCH_TRMM(true, false, false, false);
+                }
+            }
+        }
+    } else {
+        if (upper) {
+            if (transposed) {
+                if (unit_diag) {
+                    DISPATCH_TRMM(false, true, true, true);
+                } else {
+                    DISPATCH_TRMM(false, true, true, false);
+                }
+            } else {
+                if (unit_diag) {
+                    DISPATCH_TRMM(false, true, false, true);
+                } else {
+                    DISPATCH_TRMM(false, true, false, false);
+                }
+            }
+        } else {
+            if (transposed) {
+                if (unit_diag) {
+                    DISPATCH_TRMM(false, false, true, true);
+                } else {
+                    DISPATCH_TRMM(false, false, true, false);
+                }
+            } else {
+                if (unit_diag) {
+                    DISPATCH_TRMM(false, false, false, true);
+                } else {
+                    DISPATCH_TRMM(false, false, false, false);
+                }
+            }
+        }
+    }
+
+#undef DISPATCH_TRMM
+}
