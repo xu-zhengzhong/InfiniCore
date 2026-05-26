@@ -2830,6 +2830,41 @@ def symv_(lib):
 
 
 @OpRegister.operator
+def syr_(lib):
+    lib.infiniopCreateSyrDescriptor.restype = c_int32
+    lib.infiniopCreateSyrDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSyrWorkspaceSize.restype = c_int32
+    lib.infiniopGetSyrWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSyr.restype = c_int32
+    lib.infiniopSyr.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySyrDescriptor.restype = c_int32
+    lib.infiniopDestroySyrDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def spmv_(lib):
     lib.infiniopCreateSpmvDescriptor.restype = c_int32
     lib.infiniopCreateSpmvDescriptor.argtypes = [
