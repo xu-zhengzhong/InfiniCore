@@ -6,6 +6,9 @@
 #define HPCC_R_16BF MACA_R_16BF
 #define hpcc_bfloat162 maca_bfloat162
 #define hpcc_bfloat16 maca_bfloat16
+#define hcFloatComplex mcFloatComplex
+#define hcDoubleComplex mcDoubleComplex
+#define hcComplex mcComplex
 #define hcSuccess mcSuccess
 #define hcStreamWaitEvent mcStreamWaitEvent
 #define hcStreamSynchronize mcStreamSynchronize
@@ -144,6 +147,8 @@
 #define hcblasDswap mcblasDswap
 #define hcblasSsymm mcblasSsymm
 #define hcblasDsymm mcblasDsymm
+#define hcblasChemm mcblasChemm
+#define hcblasZhemm mcblasZhemm
 #define hcblasStrmm mcblasStrmm
 #define hcblasDtrmm mcblasDtrmm
 #define HCBLAS_STATUS_SUCCESS MCBLAS_STATUS_SUCCESS

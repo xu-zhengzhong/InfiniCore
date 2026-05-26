@@ -1,0 +1,275 @@
+#include "../../../devices/bang/bang_complex.h"
+#include "../../../devices/bang/common_bang.h"
+#include "hemm_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+__mlu_func__ static inline device::bang::FloatComplex loadHemmAValue(
+    infiniopBlasFillMode_t uplo,
+    const device::bang::FloatComplex *A,
+    int lda,
+    int row,
+    int col) {
+
+    if (row == col) {
+        const int A_idx = row + row * lda;
+        return device::bang::makeFloatComplex(A[A_idx].x, 0.0f);
+    }
+
+    if (uplo == INFINIOP_BLAS_FILL_MODE_UPPER) {
+        if (row < col) {
+            return A[row + col * lda];
+        }
+        return device::bang::cConj(A[col + row * lda]);
+    }
+
+    if (row > col) {
+        return A[row + col * lda];
+    }
+    return device::bang::cConj(A[col + row * lda]);
+}
+
+__mlu_func__ void loadHemmAChunk(
+    float *A_real,
+    float *A_imag,
+    infiniopBlasFillMode_t uplo,
+    const device::bang::FloatComplex *A,
+    int lda,
+    int row,
+    int offset,
+    int len) {
+
+    for (int k = 0; k < len; ++k) {
+        const auto value = loadHemmAValue(uplo, A, lda, row, offset + k);
+        A_real[k] = device::bang::cReal(value);
+        A_imag[k] = device::bang::cImag(value);
+    }
+}
+
+__mlu_func__ void loadHemmAColumnChunk(
+    float *A_real,
+    float *A_imag,
+    infiniopBlasFillMode_t uplo,
+    const device::bang::FloatComplex *A,
+    int lda,
+    int col,
+    int offset,
+    int len) {
+
+    for (int k = 0; k < len; ++k) {
+        const auto value = loadHemmAValue(uplo, A, lda, offset + k, col);
+        A_real[k] = device::bang::cReal(value);
+        A_imag[k] = device::bang::cImag(value);
+    }
+}
+
+__mlu_func__ void loadHemmBColumnChunk(
+    float *B_real,
+    float *B_imag,
+    const device::bang::FloatComplex *B,
+    int ldb,
+    int col,
+    int offset,
+    int len) {
+
+    for (int k = 0; k < len; ++k) {
+        const auto value = B[offset + k + col * ldb];
+        B_real[k] = device::bang::cReal(value);
+        B_imag[k] = device::bang::cImag(value);
+    }
+}
+
+__mlu_func__ void loadHemmBRowChunk(
+    float *B_real,
+    float *B_imag,
+    const device::bang::FloatComplex *B,
+    int ldb,
+    int row,
+    int offset,
+    int len) {
+
+    for (int k = 0; k < len; ++k) {
+        const auto value = B[row + (offset + k) * ldb];
+        B_real[k] = device::bang::cReal(value);
+        B_imag[k] = device::bang::cImag(value);
+    }
+}
+
+__mlu_func__ void complexDotAccumulate(
+    float *prod,
+    const float *lhs_real,
+    const float *lhs_imag,
+    const float *rhs_real,
+    const float *rhs_imag,
+    int len,
+    float *sum_real,
+    float *sum_imag) {
+
+    __bang_mul(prod, lhs_real, rhs_real, len);
+    *sum_real += __bang_sum(prod, len);
+    __bang_mul(prod, lhs_imag, rhs_imag, len);
+    *sum_real -= __bang_sum(prod, len);
+
+    __bang_mul(prod, lhs_real, rhs_imag, len);
+    *sum_imag += __bang_sum(prod, len);
+    __bang_mul(prod, lhs_imag, rhs_real, len);
+    *sum_imag += __bang_sum(prod, len);
+}
+
+template <int TILE_ROWS, int TILE_COLS>
+__mlu_global__ void hemmKernel(
+    infiniopBlasSideMode_t side,
+    infiniopBlasFillMode_t uplo,
+    int m,
+    int n,
+    const device::bang::FloatComplex *alpha,
+    const device::bang::FloatComplex *A,
+    int lda,
+    const device::bang::FloatComplex *B,
+    int ldb,
+    const device::bang::FloatComplex *beta,
+    device::bang::FloatComplex *C,
+    int ldc) {
+
+    const auto alpha_v = alpha[0];
+    const auto beta_v = beta[0];
+    const int k_dim = side == INFINIOP_BLAS_SIDE_LEFT ? m : n;
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    const size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+
+    size_t align_elements = ALIGN_SIZE / sizeof(float);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+
+    const size_t a_buffer_count = side == INFINIOP_BLAS_SIDE_LEFT ? TILE_ROWS : TILE_COLS;
+    const size_t b_buffer_count = side == INFINIOP_BLAS_SIDE_LEFT ? TILE_COLS : TILE_ROWS;
+    const size_t buffer_count = 2 * (a_buffer_count + b_buffer_count) + 1;
+    const size_t max_chunk_elements = nram_usable / (buffer_count * sizeof(float));
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+    if (chunk_size <= 0) {
+        return;
+    }
+
+    float *nram_A_real = (float *)nram_aligned;
+    float *nram_A_imag = nram_A_real + a_buffer_count * chunk_size;
+    float *nram_B_real = nram_A_imag + a_buffer_count * chunk_size;
+    float *nram_B_imag = nram_B_real + b_buffer_count * chunk_size;
+    float *nram_prod = nram_B_imag + b_buffer_count * chunk_size;
+
+    const int tile_rows = (m + TILE_ROWS - 1) / TILE_ROWS;
+    const int tile_cols = (n + TILE_COLS - 1) / TILE_COLS;
+    const int total_tiles = tile_rows * tile_cols;
+
+    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+        const int tile_row = (tile % tile_rows) * TILE_ROWS;
+        const int tile_col = (tile / tile_rows) * TILE_COLS;
+        const int rows = m - tile_row < TILE_ROWS ? m - tile_row : TILE_ROWS;
+        const int cols = n - tile_col < TILE_COLS ? n - tile_col : TILE_COLS;
+
+        float sums_real[TILE_ROWS][TILE_COLS];
+        float sums_imag[TILE_ROWS][TILE_COLS];
+        for (int r = 0; r < TILE_ROWS; ++r) {
+            for (int c = 0; c < TILE_COLS; ++c) {
+                sums_real[r][c] = 0.0f;
+                sums_imag[r][c] = 0.0f;
+            }
+        }
+
+        if (!device::bang::cIsZero(alpha_v)) {
+            for (int k0 = 0; k0 < k_dim; k0 += chunk_size) {
+                const int chunk_elements = k_dim - k0 < chunk_size ? k_dim - k0 : chunk_size;
+
+                if (side == INFINIOP_BLAS_SIDE_LEFT) {
+                    for (int r = 0; r < rows; ++r) {
+                        loadHemmAChunk(
+                            nram_A_real + r * chunk_size,
+                            nram_A_imag + r * chunk_size,
+                            uplo,
+                            A,
+                            lda,
+                            tile_row + r,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int c = 0; c < cols; ++c) {
+                        loadHemmBColumnChunk(
+                            nram_B_real + c * chunk_size,
+                            nram_B_imag + c * chunk_size,
+                            B,
+                            ldb,
+                            tile_col + c,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int r = 0; r < rows; ++r) {
+                        for (int c = 0; c < cols; ++c) {
+                            complexDotAccumulate(
+                                nram_prod,
+                                nram_A_real + r * chunk_size,
+                                nram_A_imag + r * chunk_size,
+                                nram_B_real + c * chunk_size,
+                                nram_B_imag + c * chunk_size,
+                                chunk_elements,
+                                &sums_real[r][c],
+                                &sums_imag[r][c]);
+                        }
+                    }
+                } else {
+                    for (int c = 0; c < cols; ++c) {
+                        loadHemmAColumnChunk(
+                            nram_A_real + c * chunk_size,
+                            nram_A_imag + c * chunk_size,
+                            uplo,
+                            A,
+                            lda,
+                            tile_col + c,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int r = 0; r < rows; ++r) {
+                        loadHemmBRowChunk(
+                            nram_B_real + r * chunk_size,
+                            nram_B_imag + r * chunk_size,
+                            B,
+                            ldb,
+                            tile_row + r,
+                            k0,
+                            chunk_elements);
+                    }
+
+                    for (int r = 0; r < rows; ++r) {
+                        for (int c = 0; c < cols; ++c) {
+                            complexDotAccumulate(
+                                nram_prod,
+                                nram_B_real + r * chunk_size,
+                                nram_B_imag + r * chunk_size,
+                                nram_A_real + c * chunk_size,
+                                nram_A_imag + c * chunk_size,
+                                chunk_elements,
+                                &sums_real[r][c],
+                                &sums_imag[r][c]);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int c = 0; c < cols; ++c) {
+            for (int r = 0; r < rows; ++r) {
+                const int c_idx = tile_row + r + (tile_col + c) * ldc;
+                const auto sum_v = device::bang::makeFloatComplex(sums_real[r][c], sums_imag[r][c]);
+                const auto alpha_sum = device::bang::cMul(alpha_v, sum_v);
+                if (device::bang::cIsZero(beta_v)) {
+                    C[c_idx] = alpha_sum;
+                } else {
+                    C[c_idx] = device::bang::cAdd(alpha_sum, device::bang::cMul(beta_v, C[c_idx]));
+                }
+            }
+        }
+    }
+}

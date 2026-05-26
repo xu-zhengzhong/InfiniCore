@@ -2639,6 +2639,46 @@ def symm_(lib):
 
 
 @OpRegister.operator
+def hemm_(lib):
+    lib.infiniopCreateHemmDescriptor.restype = c_int32
+    lib.infiniopCreateHemmDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetHemmWorkspaceSize.restype = c_int32
+    lib.infiniopGetHemmWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopHemm.restype = c_int32
+    lib.infiniopHemm.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyHemmDescriptor.restype = c_int32
+    lib.infiniopDestroyHemmDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def trmm_(lib):
     lib.infiniopCreateTrmmDescriptor.restype = c_int32
     lib.infiniopCreateTrmmDescriptor.argtypes = [
