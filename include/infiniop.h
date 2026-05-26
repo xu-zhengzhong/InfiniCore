@@ -117,6 +117,7 @@
 #include "infiniop/ops/softsign.h"
 #include "infiniop/ops/spmm.h"
 #include "infiniop/ops/spmv.h"
+#include "infiniop/ops/spvv.h"
 #include "infiniop/ops/sub.h"
 #include "infiniop/ops/sum.h"
 #include "infiniop/ops/swap.h"
@@ -138,5 +139,6 @@
 #include "infiniop/ops/var_mean.h"
 #include "infiniop/ops/zeros.h"
 #include "infiniop/spmat_descriptor.h"
+#include "infiniop/spvec_descriptor.h"
 #include "infiniop/tensor_descriptor.h"
 #endif // __INFINIOP_API_H__

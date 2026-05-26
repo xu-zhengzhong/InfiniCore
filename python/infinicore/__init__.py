@@ -123,6 +123,7 @@ from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
 from infinicore.ops.spmm import spmm
 from infinicore.ops.spmv import spmv
+from infinicore.ops.spvv import spvv
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
 from infinicore.ops.swap import swap
@@ -147,6 +148,7 @@ from infinicore.tensor import (
     zeros,
 )
 from infinicore.spmat import SpMat, csr_spmat
+from infinicore.spvec import SpVec, coo_spvec
 
 __all__ = [
     # Modules.
@@ -158,6 +160,7 @@ __all__ = [
     "dtype",
     "Tensor",
     "SpMat",
+    "SpVec",
     # Context functions.
     "get_device",
     "get_device_count",
@@ -228,6 +231,7 @@ __all__ = [
     "matmul",
     "spmm",
     "spmv",
+    "spvv",
     "equal",
     "mul",
     "diff",
@@ -251,6 +255,7 @@ __all__ = [
     "from_numpy",
     "from_torch",
     "csr_spmat",
+    "coo_spvec",
     "mha_kvcache",
     "mha_varlen",
     "fmin",

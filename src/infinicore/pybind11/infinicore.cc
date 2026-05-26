@@ -10,6 +10,7 @@
 #include "io.hpp"
 #include "ops.hpp"
 #include "spmat.hpp"
+#include "spvec.hpp"
 #include "tensor.hpp"
 
 #ifdef ENABLE_MUTUAL_AWARENESS
@@ -25,6 +26,7 @@ PYBIND11_MODULE(_infinicore, m) {
     dtype::bind(m);
     tensor::bind(m);
     spmat::bind(m);
+    spvec::bind(m);
     ops::bind(m);
     io::bind(m);
     graph::bind(m);

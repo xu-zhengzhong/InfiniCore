@@ -15,6 +15,13 @@ class SpMatDescriptor(Structure):
 infiniopSpMatDescriptor_t = POINTER(SpMatDescriptor)
 
 
+class SpVecDescriptor(Structure):
+    _fields_ = []
+
+
+infiniopSpVecDescriptor_t = POINTER(SpVecDescriptor)
+
+
 class Handle(Structure):
     _fields_ = [("device", c_int), ("device_id", c_int)]
 

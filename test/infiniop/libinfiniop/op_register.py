@@ -1,6 +1,7 @@
 from .structs import (
     infiniopHandle_t,
     infiniopSpMatDescriptor_t,
+    infiniopSpVecDescriptor_t,
     infiniopTensorDescriptor_t,
     infiniopOperatorDescriptor_t,
 )
@@ -711,6 +712,41 @@ def spmv_(lib):
 
     lib.infiniopDestroySpMVDescriptor.restype = c_int32
     lib.infiniopDestroySpMVDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def spvv_(lib):
+    lib.infiniopCreateSpVVDescriptor.restype = c_int32
+    lib.infiniopCreateSpVVDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpVecDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSpVVWorkspaceSize.restype = c_int32
+    lib.infiniopGetSpVVWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSpVV.restype = c_int32
+    lib.infiniopSpVV.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_float,
+        c_float,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySpVVDescriptor.restype = c_int32
+    lib.infiniopDestroySpVVDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
 
