@@ -1,0 +1,152 @@
+#include "../../../devices/bang/common_bang.h"
+#include "herk_bang.h"
+#include "herk_bang_kernel.mlu"
+
+namespace {
+
+void dispatchHerkKernel(
+    int task_count,
+    cnrtDim3_t k_dim,
+    cnrtFunctionType_t k_type,
+    cnrtQueue_t queue,
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    int n,
+    int k,
+    const float *alpha,
+    const device::bang::FloatComplex *A,
+    int lda,
+    const float *beta,
+    device::bang::FloatComplex *C,
+    int ldc) {
+
+    const int tile_count_8 = CEIL_DIV(n, 8) * CEIL_DIV(n, 8);
+    const int tile_count_16 = CEIL_DIV(n, 16) * CEIL_DIV(n, 16);
+
+    if (tile_count_16 >= task_count || tile_count_8 < task_count) {
+        herkKernel<16><<<k_dim, k_type, queue>>>(uplo, trans, n, k, alpha, A, lda, beta, C, ldc);
+    } else {
+        herkKernel<8><<<k_dim, k_type, queue>>>(uplo, trans, n, k, alpha, A, lda, beta, C, ldc);
+    }
+}
+
+} // namespace
+
+namespace op::herk::bang {
+
+struct Descriptor::Opaque {
+    std::shared_ptr<device::bang::Handle::Internal> internal;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    infiniopTensorDescriptor_t alpha_desc,
+    infiniopTensorDescriptor_t A_desc,
+    infiniopTensorDescriptor_t beta_desc,
+    infiniopTensorDescriptor_t C_desc) {
+
+    auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
+    auto result = HerkInfo::createHerkInfo(uplo, trans, alpha_desc, A_desc, beta_desc, C_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        0,
+        new Descriptor::Opaque{handle->internal()},
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t calculateHerk(
+    const HerkInfo &info,
+    const float *alpha,
+    const device::bang::FloatComplex *A,
+    const float *beta,
+    device::bang::FloatComplex *C,
+    int core_per_cluster,
+    int cluster_count,
+    cnrtQueue_t queue) {
+
+    const int n = utils::cast<int>(info.n);
+    const int k = utils::cast<int>(info.k);
+    auto uplo = info.uplo;
+    auto trans = info.trans;
+    const int lda = utils::cast<int>(info.A_col_stride);
+    const int ldc = utils::cast<int>(info.C_col_stride);
+
+    cnrtDim3_t k_dim;
+    cnrtFunctionType_t k_type;
+
+    k_dim.x = core_per_cluster;
+    k_dim.y = cluster_count;
+    k_dim.z = 1;
+    k_type = cnrtFuncTypeUnion1;
+
+    dispatchHerkKernel(
+        core_per_cluster * cluster_count,
+        k_dim,
+        k_type,
+        queue,
+        uplo,
+        trans,
+        n,
+        k,
+        alpha,
+        A,
+        lda,
+        beta,
+        C,
+        ldc);
+
+    cnrtQueueSync(queue);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+#define CALCULATE_HERK(TALPHA, TDATA)    \
+    calculateHerk(_info,                 \
+                  (const TALPHA *)alpha, \
+                  (const TDATA *)A,      \
+                  (const TALPHA *)beta,  \
+                  (TDATA *)C,            \
+                  core_per_cluster,      \
+                  cluster_count,         \
+                  (cnrtQueue_t)stream)
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *alpha,
+    const void *A,
+    const void *beta,
+    void *C,
+    void *stream) const {
+
+    (void)workspace;
+    (void)workspace_size;
+
+    int core_per_cluster = _opaque->internal->getCorePerCluster();
+    int cluster_count = _opaque->internal->getClusterCount();
+
+    switch (_info.data_type) {
+    case INFINI_DTYPE_C64:
+        return CALCULATE_HERK(float, device::bang::FloatComplex);
+    case INFINI_DTYPE_C128:
+        return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+#undef CALCULATE_HERK
+
+} // namespace op::herk::bang

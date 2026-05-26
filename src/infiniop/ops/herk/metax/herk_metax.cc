@@ -1,0 +1,94 @@
+#include "herk_metax.h"
+#include "../../../devices/metax/metax_common.h"
+#include "../../../devices/metax/metax_handle.h"
+
+namespace op::herk::metax {
+
+struct Descriptor::Opaque {
+    std::shared_ptr<device::metax::Handle::Internal> internal;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    infiniopTensorDescriptor_t alpha_desc,
+    infiniopTensorDescriptor_t A_desc,
+    infiniopTensorDescriptor_t beta_desc,
+    infiniopTensorDescriptor_t C_desc) {
+
+    auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
+    auto result = HerkInfo::createHerkInfo(uplo, trans, alpha_desc, A_desc, beta_desc, C_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        0,
+        new Opaque{handle->internal()},
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *alpha,
+    const void *A,
+    const void *beta,
+    void *C,
+    void *stream) const {
+
+    (void)workspace;
+    (void)workspace_size;
+
+    auto uplo = _info.uplo == INFINIOP_BLAS_FILL_MODE_UPPER ? HCBLAS_FILL_MODE_UPPER : HCBLAS_FILL_MODE_LOWER;
+    auto trans = _info.trans == INFINIOP_BLAS_OP_N ? HCBLAS_OP_N : HCBLAS_OP_T;
+    const int n = utils::cast<int>(_info.n);
+    const int k = utils::cast<int>(_info.k);
+    const int lda = utils::cast<int>(_info.A_col_stride);
+    const int ldc = utils::cast<int>(_info.C_col_stride);
+
+    const infiniDtype_t data_type = _info.data_type;
+
+    CHECK_STATUS(_opaque->internal->useMcblas(
+        (hcStream_t)stream,
+        [&](hcblasHandle_t handle) {
+            CHECK_MCBLAS(hcblasSetPointerMode(handle, HCBLAS_POINTER_MODE_DEVICE));
+
+            switch (data_type) {
+            case INFINI_DTYPE_C64:
+                CHECK_MCBLAS(hcblasCherk(
+                    handle, uplo, trans,
+                    n, k,
+                    static_cast<const float *>(alpha),
+                    static_cast<const hcFloatComplex *>(A), lda,
+                    static_cast<const float *>(beta),
+                    static_cast<hcFloatComplex *>(C), ldc));
+                break;
+            case INFINI_DTYPE_C128:
+                CHECK_MCBLAS(hcblasZherk(
+                    handle, uplo, trans,
+                    n, k,
+                    static_cast<const double *>(alpha),
+                    static_cast<const hcDoubleComplex *>(A), lda,
+                    static_cast<const double *>(beta),
+                    static_cast<hcDoubleComplex *>(C), ldc));
+                break;
+            default:
+                return INFINI_STATUS_BAD_TENSOR_DTYPE;
+            }
+
+            return INFINI_STATUS_SUCCESS;
+        }));
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+} // namespace op::herk::metax
