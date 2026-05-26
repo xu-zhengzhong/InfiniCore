@@ -3488,3 +3488,41 @@ def symm_(lib):
     lib.infiniopDestroySymmDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+
+@OpRegister.operator
+def trmm_(lib):
+    lib.infiniopCreateTrmmDescriptor.restype = c_int32
+    lib.infiniopCreateTrmmDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        c_int32,
+        c_int32,
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetTrmmWorkspaceSize.restype = c_int32
+    lib.infiniopGetTrmmWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopTrmm.restype = c_int32
+    lib.infiniopTrmm.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyTrmmDescriptor.restype = c_int32
+    lib.infiniopDestroyTrmmDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]

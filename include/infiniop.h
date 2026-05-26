@@ -150,6 +150,7 @@
 #include "infiniop/ops/tpsv.h"
 #include "infiniop/ops/triplet_margin_loss.h"
 #include "infiniop/ops/triplet_margin_with_distance_loss.h"
+#include "infiniop/ops/trmm.h"
 #include "infiniop/ops/trmv.h"
 #include "infiniop/ops/trsv.h"
 #include "infiniop/ops/unfold.h"
