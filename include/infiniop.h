@@ -126,6 +126,7 @@
 #include "infiniop/ops/swap.h"
 #include "infiniop/ops/swiglu.h"
 #include "infiniop/ops/symv.h"
+#include "infiniop/ops/syr.h"
 #include "infiniop/ops/take.h"
 #include "infiniop/ops/tan.h"
 #include "infiniop/ops/tanh.h"
