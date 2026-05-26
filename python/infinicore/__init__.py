@@ -122,6 +122,7 @@ from infinicore.ops.scal import scal
 from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
 from infinicore.ops.spmm import spmm
+from infinicore.ops.spmv import spmv
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
 from infinicore.ops.swap import swap
@@ -226,6 +227,7 @@ __all__ = [
     "logaddexp2",
     "matmul",
     "spmm",
+    "spmv",
     "equal",
     "mul",
     "diff",

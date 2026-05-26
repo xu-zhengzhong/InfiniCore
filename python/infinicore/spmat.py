@@ -51,6 +51,11 @@ class SpMat:
         return Tensor(self._underlying.values)
 
     def __matmul__(self, other):
+        if other.ndim == 1:
+            from infinicore.ops.spmv import spmv
+
+            return spmv(self, other)
+
         from infinicore.ops.spmm import spmm
 
         return spmm(self, other)

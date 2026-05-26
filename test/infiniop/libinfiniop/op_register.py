@@ -681,6 +681,41 @@ def spmm_(lib):
 
 
 @OpRegister.operator
+def spmv_(lib):
+    lib.infiniopCreateSpMVDescriptor.restype = c_int32
+    lib.infiniopCreateSpMVDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpMatDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSpMVWorkspaceSize.restype = c_int32
+    lib.infiniopGetSpMVWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSpMV.restype = c_int32
+    lib.infiniopSpMV.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_float,
+        c_float,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySpMVDescriptor.restype = c_int32
+    lib.infiniopDestroySpMVDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def gemm_(lib):
     lib.infiniopCreateGemmDescriptor.restype = c_int32
     lib.infiniopCreateGemmDescriptor.argtypes = [
