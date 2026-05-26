@@ -193,6 +193,8 @@
 #define hcblasDtrsv mcblasDtrsv
 #define hcblasSsymm mcblasSsymm
 #define hcblasDsymm mcblasDsymm
+#define hcblasChemm mcblasChemm
+#define hcblasZhemm mcblasZhemm
 #define hcblasStrmm mcblasStrmm
 #define hcblasDtrmm mcblasDtrmm
 #define HCBLAS_STATUS_SUCCESS MCBLAS_STATUS_SUCCESS

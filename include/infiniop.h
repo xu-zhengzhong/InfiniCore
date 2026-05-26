@@ -62,6 +62,7 @@
 #include "infiniop/ops/hardswish.h"
 #include "infiniop/ops/hardtanh.h"
 #include "infiniop/ops/hbmv.h"
+#include "infiniop/ops/hemm.h"
 #include "infiniop/ops/hemv.h"
 #include "infiniop/ops/her.h"
 #include "infiniop/ops/her2.h"
