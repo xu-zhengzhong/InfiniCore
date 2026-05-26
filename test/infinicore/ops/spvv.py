@@ -1,5 +1,6 @@
 import os
 import sys
+import random
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -7,10 +8,57 @@ import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 
-_TEST_CASES_DATA = [
-    (6, [0, 2, 5]),
-    (8, [1, 3, 4, 7]),
-]
+
+def _summarize_indices(indices, limit=6):
+    if len(indices) <= limit:
+        return str(indices)
+    head = ", ".join(str(v) for v in indices[: limit // 2])
+    tail = ", ".join(str(v) for v in indices[-(limit // 2) :])
+    return f"[{head}, ..., {tail}]"
+
+
+class SparseTestCase(TestCase):
+    def __str__(self):
+        input_str = "; ".join(str(inp) for inp in self.inputs)
+        size = self.kwargs["size"]
+        indices = self.kwargs["indices"]
+        density = len(indices) / size if size else 0
+        kwargs_strs = [
+            f"size={size}",
+            f"nnz={len(indices)}",
+            f"density={density:.6f}",
+            f"indices={_summarize_indices(indices)}",
+        ]
+        out = self.kwargs.get("out")
+        if out is not None:
+            kwargs_strs.append(f"out={out}")
+        return (
+            f"TestCase({self.description} - inputs=[{input_str}], "
+            f"kwargs={{{'; '.join(kwargs_strs)}}})"
+        )
+
+
+def _generate_spvv_cases():
+    cases = []
+    random.seed(42)
+    # (size, density)
+    configs = [
+        (6, 0.5),             # Baseline
+        (2048, 0.05),         # 2K scale
+        (8192, 0.01),         # 8K scale
+    ]
+    for size, density in configs:
+        nnz = int(size * density)
+        indices = sorted(random.sample(range(size), nnz))
+        cases.append((size, indices))
+    return cases
+
+_TEST_CASES_DATA = _generate_spvv_cases()
+
+# _TEST_CASES_DATA = [
+#     (6, [0, 2, 5]),
+#     (8, [1, 3, 4, 7]),
+# ]
 
 _TOLERANCE_MAP = {
     infinicore.float16: {"atol": 0, "rtol": 1e-2},
@@ -31,7 +79,7 @@ def parse_test_cases():
         nnz = len(indices)
         for dtype in _TENSOR_DTYPES:
             test_cases.append(
-                TestCase(
+                SparseTestCase(
                     inputs=[
                         TensorSpec.from_tensor((nnz,), dtype=dtype, name="values"),
                         TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
@@ -45,7 +93,7 @@ def parse_test_cases():
                 )
             )
             test_cases.append(
-                TestCase(
+                SparseTestCase(
                     inputs=[
                         TensorSpec.from_tensor((nnz,), dtype=dtype, name="values"),
                         TensorSpec.from_tensor((size,), dtype=dtype, name="x"),

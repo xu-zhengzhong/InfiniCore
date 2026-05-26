@@ -40,6 +40,19 @@ _TOLERANCE_MAP = {
 DEBUG = False
 
 
+def csr_to_dense(values, rows, cols, crow, col):
+    device = values.device
+    crow_tensor = torch.tensor(crow, dtype=torch.int64, device=device)
+    col_tensor = torch.tensor(col, dtype=torch.int64, device=device)
+    row_counts = crow_tensor[1:] - crow_tensor[:-1]
+    row_tensor = torch.repeat_interleave(
+        torch.arange(rows, dtype=torch.int64, device=device), row_counts
+    )
+    dense = torch.zeros((rows, cols), dtype=values.dtype, device=device)
+    dense.index_put_((row_tensor, col_tensor), values, accumulate=True)
+    return dense
+
+
 def test(
     handle,
     device,
@@ -68,13 +81,7 @@ def test(
     c = TestTensor((rows, n), None, dtype, device, mode="ones")
     ans = TestTensor((rows, n), None, dtype, device, mode="zeros")
 
-    sparse = torch.sparse_csr_tensor(
-        crow_tensor.torch_tensor(),
-        col_tensor.torch_tensor(),
-        values.torch_tensor(),
-        size=(rows, cols),
-        device=values.torch_tensor().device,
-    )
+    sparse = csr_to_dense(values.torch_tensor(), rows, cols, crow, col)
     ans.set_tensor(
         alpha * torch.matmul(sparse, b.torch_tensor()) + beta * c.torch_tensor()
     )
