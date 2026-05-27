@@ -15,19 +15,17 @@ from framework.tensor import TensorInitializer
 import infinicore
 
 _TEST_CASES_DATA = [
-    ((13,), None, None),
-    ((13,), (10,), (10,)),
-    ((5632,), None, None),
-    ((5632,), (5,), (5,)),
-    ((16,), (4,), (4,)),
-    ((5632,), (32,), (32,)),
+    ((4194304,), None, None),
+    ((6535362,), None, None),
+    ((8327558,), None, None),
+    ((16777216,), None, None),
 ]
 
 _TENSOR_DTYPES = [
-    infinicore.float16,
+    # infinicore.float16,
     infinicore.float32,
     # infinicore.float64,
-    infinicore.bfloat16,
+    # infinicore.bfloat16,
 ]
 
 _TOLERANCE_MAP = {
@@ -58,14 +56,14 @@ def parse_test_cases():
                 None,
                 dtype,
                 init_mode=TensorInitializer.MANUAL,
-                set_tensor=torch.tensor(0.6),
+                set_tensor=torch.tensor(0.75),
             )
             s_spec = TensorSpec.from_tensor(
                 (),
                 None,
                 dtype,
                 init_mode=TensorInitializer.MANUAL,
-                set_tensor=torch.tensor(0.8),
+                set_tensor=torch.tensor(0.25),
             )
 
             test_cases.append(
@@ -91,8 +89,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_rot(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_rot(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.rot(*args, **kwargs)

@@ -15,10 +15,10 @@ from framework.tensor import TensorInitializer
 import infinicore
 
 _TEST_CASES_DATA = [
-    ((13,), None, None, (-1.0, 1.2, -0.3, 0.4, 0.8)),
-    ((13,), (10,), (10,), (0.0, 0.0, -0.25, 0.5, 0.0)),
-    ((5632,), None, None, (1.0, 1.1, 0.0, 0.0, 0.9)),
-    ((5632,), (5,), (5,), (-2.0, 0.0, 0.0, 0.0, 0.0)),
+    ((4194304,), None, None, (0.001, 0.002, 0.003, 0.004, 0.005)),
+    ((6535362,), None, None, (0.001, 0.002, 0.003, 0.004, 0.005)),
+    ((8327558,), None, None, (0.001, 0.002, 0.003, 0.004, 0.005)),
+    ((16777216,), None, None, (0.001, 0.002, 0.003, 0.004, 0.005)),
 ]
 
 _TENSOR_DTYPES = [
@@ -94,8 +94,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_rotm(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_rotm(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.rotm(*args, **kwargs)

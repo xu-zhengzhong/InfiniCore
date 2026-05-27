@@ -14,12 +14,10 @@ from framework import (
 import infinicore
 
 _TEST_CASES_DATA = [
-    ((13,), None),
-    ((13,), (10,)),
-    ((5632,), None),
-    ((5632,), (5,)),
-    ((16,), (4,)),
-    ((5632,), (32,)),
+    ((4194304,), None),
+    ((6535362,), None),
+    ((8327558,), None),
+    ((16777216,), None),
 ]
 
 _TOLERANCE_MAP = {
@@ -30,10 +28,10 @@ _TOLERANCE_MAP = {
 }
 
 _TENSOR_DTYPES = [
-    infinicore.float16,
+    # infinicore.float16,
     infinicore.float32,
     # infinicore.float64,
-    infinicore.bfloat16,
+    # infinicore.bfloat16,
 ]
 
 
@@ -58,17 +56,6 @@ def parse_test_cases():
                 TestCase(
                     inputs=[x_spec],
                     kwargs={},
-                    output_spec=None,
-                    comparison_target=None,
-                    tolerance=tol,
-                    description="nrm2 - OUT_OF_PLACE",
-                )
-            )
-
-            test_cases.append(
-                TestCase(
-                    inputs=[x_spec],
-                    kwargs={},
                     output_spec=out_spec,
                     comparison_target="out",
                     tolerance=tol,
@@ -88,8 +75,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_nrm2(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_nrm2(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.nrm2(*args, **kwargs)

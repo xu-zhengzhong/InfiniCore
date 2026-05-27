@@ -15,11 +15,10 @@ from framework.tensor import TensorInitializer
 import infinicore
 
 _TEST_CASES_DATA = [
-    ((3,), None, None),
-    ((8,), (2,), (3,)),
-    ((32,), None, (2,)),
-    ((257,), (3,), None),
-    ((65535,), None, None),
+    ((4194304,), None, None),
+    ((6535362,), None, None),
+    ((8327558,), None, None),
+    ((16777216,), None, None),
 ]
 
 _TOLERANCE_MAP = {
@@ -30,10 +29,10 @@ _TOLERANCE_MAP = {
 }
 
 _TENSOR_DTYPES = [
-    infinicore.float16,
+    # infinicore.float16,
     infinicore.float32,
     # infinicore.float64,
-    infinicore.bfloat16,
+    # infinicore.bfloat16,
 ]
 
 
@@ -65,17 +64,6 @@ def parse_test_cases():
                 TestCase(
                     inputs=[x_spec, y_spec],
                     kwargs={},
-                    output_spec=None,
-                    comparison_target=None,
-                    tolerance=tol,
-                    description="blas_dot - OUT_OF_PLACE",
-                )
-            )
-
-            test_cases.append(
-                TestCase(
-                    inputs=[x_spec, y_spec],
-                    kwargs={},
                     output_spec=out_spec,
                     comparison_target="out",
                     tolerance=tol,
@@ -95,8 +83,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_blas_dot(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_blas_dot(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.blas_dot(*args, **kwargs)

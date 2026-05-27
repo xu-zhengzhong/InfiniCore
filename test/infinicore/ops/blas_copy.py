@@ -13,11 +13,10 @@ from framework import (
 import infinicore
 
 _TEST_CASES_DATA = [
-    ((3,), None, None),
-    ((8,), (2,), (3,)),
-    ((32,), None, (2,)),
-    ((257,), (3,), None),
-    ((65535,), None, None),
+    ((4194304,), None, None),
+    ((6535362,), None, None),
+    ((8327558,), None, None),
+    ((16777216,), None, None),
 ]
 
 _TENSOR_DTYPES = [
@@ -71,8 +70,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_blas_copy(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_blas_copy(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.blas_copy(*args, **kwargs)

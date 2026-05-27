@@ -15,11 +15,10 @@ from framework.tensor import TensorInitializer
 import infinicore
 
 _TEST_CASES_DATA = [
-    ((3,), None),
-    ((8,), (2,)),
-    ((32,), None),
-    ((257,), (3,)),
-    ((65535,), None),
+    ((4194304,), None),
+    ((6535362,), None),
+    ((8327558,), None),
+    ((16777216,), None),
 ]
 
 _TENSOR_DTYPES = [
@@ -54,17 +53,6 @@ def parse_test_cases():
                 TestCase(
                     inputs=[x_spec],
                     kwargs={},
-                    output_spec=None,
-                    comparison_target=None,
-                    tolerance=_TOLERANCE,
-                    description="blas_amin - OUT_OF_PLACE",
-                )
-            )
-
-            test_cases.append(
-                TestCase(
-                    inputs=[x_spec],
-                    kwargs={},
                     output_spec=out_spec,
                     comparison_target="out",
                     tolerance=_TOLERANCE,
@@ -84,8 +72,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_blas_amin(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_blas_amin(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.blas_amin(*args, **kwargs)

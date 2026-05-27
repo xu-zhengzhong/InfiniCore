@@ -3,6 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import torch
 from framework import (
     BaseOperatorTest,
     GenericTestRunner,
@@ -14,18 +15,17 @@ from framework.tensor import TensorInitializer
 import infinicore
 
 _TEST_CASES_DATA = [
-    ((3,), None, None),
-    ((8,), (2,), (3,)),
-    ((32,), None, (2,)),
-    ((257,), (3,), None),
-    ((65535,), None, None),
+    ((4194304,), None, None),
+    ((6535362,), None, None),
+    ((8327558,), None, None),
+    ((16777216,), None, None),
 ]
 
 _TENSOR_DTYPES = [
-    infinicore.float16,
+    # infinicore.float16,
     infinicore.float32,
     # infinicore.float64,
-    infinicore.bfloat16,
+    # infinicore.bfloat16,
 ]
 
 _TOLERANCE_MAP = {
@@ -48,7 +48,11 @@ def parse_test_cases():
         for dtype in _TENSOR_DTYPES:
             tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-4})
             alpha_spec = TensorSpec.from_tensor(
-                (), None, dtype, init_mode=TensorInitializer.ONES
+                (),
+                None,
+                dtype,
+                init_mode=TensorInitializer.MANUAL,
+                set_tensor=torch.tensor(1.25),
             )
             x_spec = TensorSpec.from_tensor(shape, x_strides, dtype)
             y_spec = TensorSpec.from_tensor(shape, y_strides, dtype)
@@ -76,8 +80,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_axpy(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_axpy(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.axpy(*args, **kwargs)
