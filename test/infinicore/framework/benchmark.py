@@ -231,20 +231,26 @@ class BenchmarkUtils:
             torch_device_time = torch_device
 
         if infini_implemented:
-            if comparison_target is None:
-                # Out-of-place benchmarking
+            if output_count > 1:
+                # For multiple outputs, just call the operator
                 def infini_op():
                     return infini_operator(*infini_inputs, **infini_kwargs)
 
             else:
-                # In-place benchmarking
-                def infini_op():
-                    infini_operator(*infini_inputs, **infini_kwargs)
-                    return (
-                        infini_kwargs.get("out")
-                        if "out" in infini_kwargs
-                        else infini_inputs[comparison_target]
-                    )
+                if comparison_target is None:
+                    # Out-of-place benchmarking
+                    def infini_op():
+                        return infini_operator(*infini_inputs, **infini_kwargs)
+
+                else:
+                    # In-place benchmarking
+                    def infini_op():
+                        infini_operator(*infini_inputs, **infini_kwargs)
+                        return (
+                            infini_kwargs.get("out")
+                            if "out" in infini_kwargs
+                            else infini_inputs[comparison_target]
+                        )
 
             infini_host, infini_device = BenchmarkUtils.profile_operation(
                 "InfiniCore",
