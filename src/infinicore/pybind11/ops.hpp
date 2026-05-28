@@ -48,6 +48,7 @@
 #include "ops/fmin.hpp"
 #include "ops/fmod.hpp"
 #include "ops/gaussian_nll_loss.hpp"
+#include "ops/gemv.hpp"
 #include "ops/ger.hpp"
 #include "ops/hardswish.hpp"
 #include "ops/hardtanh.hpp"
@@ -182,6 +183,7 @@ inline void bind(py::module &m) {
     bind_hardswish(m);
     bind_hardtanh(m);
     bind_gaussian_nll_loss(m);
+    bind_gemv(m);
     bind_ger(m);
     bind_interpolate(m);
     bind_paged_attention(m);
