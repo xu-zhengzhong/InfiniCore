@@ -59,4 +59,5 @@
 #include "ops/softmax.hpp"
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
+#include "ops/symm.hpp"
 #include "ops/topksoftmax.hpp"
