@@ -113,8 +113,18 @@ def rearrange_tensor(tensor, new_strides):
     offset = -left
     new_positions += offset
 
-    # Copy the original data to the new tensor
-    new_tensor.reshape(-1).index_add_(0, new_positions, tensor.reshape(-1))
+    # Copy the original data to the new tensor. Cambricon torch backends do not
+    # implement complex index_add, so build complex backing storage on CPU.
+    if tensor.dtype in (torch.complex64, torch.complex128) and tensor.device.type == "mlu":
+        cpu_tensor = tensor.cpu()
+        cpu_positions = new_positions.cpu()
+        cpu_new_tensor = torch.zeros(new_tensor.shape, dtype=tensor.dtype, device="cpu")
+        cpu_new_tensor.reshape(-1).index_add_(
+            0, cpu_positions, cpu_tensor.contiguous().reshape(-1)
+        )
+        new_tensor = cpu_new_tensor.to(tensor.device)
+    else:
+        new_tensor.reshape(-1).index_add_(0, new_positions, tensor.reshape(-1))
     new_tensor.set_(new_tensor.untyped_storage(), offset, shape, tuple(new_strides))
 
     return new_tensor
