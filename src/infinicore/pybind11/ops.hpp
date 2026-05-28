@@ -115,6 +115,7 @@
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
 #include "ops/symv.hpp"
+#include "ops/syr.hpp"
 #include "ops/take.hpp"
 #include "ops/tan.hpp"
 #include "ops/tanhshrink.hpp"
@@ -264,6 +265,7 @@ inline void bind(py::module &m) {
     bind_selu(m);
     bind_swap(m);
     bind_symv(m);
+    bind_syr(m);
     bind_tbmv(m);
     bind_sinh(m);
     bind_layer_norm(m);

@@ -132,6 +132,7 @@ from infinicore.ops.spmv import spmv
 from infinicore.ops.sum import sum
 from infinicore.ops.swap import swap
 from infinicore.ops.symv import symv
+from infinicore.ops.syr import syr
 from infinicore.ops.take import take
 from infinicore.ops.tan import tan
 from infinicore.ops.tbmv import tbmv
@@ -288,6 +289,7 @@ __all__ = [
     "sinh",
     "swap",
     "symv",
+    "syr",
     "tbmv",
     "trmv",
     "trsv",

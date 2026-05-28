@@ -66,6 +66,7 @@
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
 #include "ops/symv.hpp"
+#include "ops/syr.hpp"
 #include "ops/tbmv.hpp"
 #include "ops/topksoftmax.hpp"
 #include "ops/trmv.hpp"
