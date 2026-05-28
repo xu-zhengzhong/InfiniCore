@@ -128,6 +128,7 @@ from infinicore.ops.scal import scal
 from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
 from infinicore.ops.squeeze import squeeze
+from infinicore.ops.spmv import spmv
 from infinicore.ops.sum import sum
 from infinicore.ops.swap import swap
 from infinicore.ops.symv import symv
@@ -248,6 +249,7 @@ __all__ = [
     "kthvalue",
     "squeeze",
     "unsqueeze",
+    "spmv",
     "rearrange",
     "cross_entropy",
     "tan",
