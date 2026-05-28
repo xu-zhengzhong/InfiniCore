@@ -97,6 +97,7 @@ from infinicore.ops.hemv import hemv
 from infinicore.ops.hpr import hpr
 from infinicore.ops.hpr2 import hpr2
 from infinicore.ops.hpmv import hpmv
+from infinicore.ops.hemm import hemm
 from infinicore.ops.hypot import hypot
 from infinicore.ops.index_add import index_add
 from infinicore.ops.index_copy import index_copy
@@ -290,6 +291,7 @@ __all__ = [
     "floor_divide",
     "float_power",
     "flipud",
+    "hemm",
     "scatter",
     "rot",
     "rotg",

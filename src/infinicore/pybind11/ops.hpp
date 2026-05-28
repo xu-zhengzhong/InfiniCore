@@ -54,6 +54,7 @@
 #include "ops/hardswish.hpp"
 #include "ops/hardtanh.hpp"
 #include "ops/hbmv.hpp"
+#include "ops/hemm.hpp"
 #include "ops/hemv.hpp"
 #include "ops/her.hpp"
 #include "ops/her2.hpp"
@@ -280,6 +281,7 @@ inline void bind(py::module &m) {
     bind_binary_cross_entropy_with_logits(m);
     bind_reciprocal(m);
     bind_upsample_bilinear(m);
+    bind_hemm(m);
     bind_kthvalue(m);
     bind_ldexp(m);
     bind_lerp(m);

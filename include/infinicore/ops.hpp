@@ -34,6 +34,7 @@
 #include "ops/hardswish.hpp"
 #include "ops/hardtanh.hpp"
 #include "ops/hbmv.hpp"
+#include "ops/hemm.hpp"
 #include "ops/hemv.hpp"
 #include "ops/her.hpp"
 #include "ops/her2.hpp"
