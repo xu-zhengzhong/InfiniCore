@@ -90,6 +90,7 @@ from infinicore.ops.fmod import fmod
 from infinicore.ops.gbmv import gbmv
 from infinicore.ops.gemv import gemv
 from infinicore.ops.ger import ger
+from infinicore.ops.hemv import hemv
 from infinicore.ops.hypot import hypot
 from infinicore.ops.index_add import index_add
 from infinicore.ops.index_copy import index_copy
@@ -225,6 +226,7 @@ __all__ = [
     "gbmv",
     "gemv",
     "ger",
+    "hemv",
     "cat",
     "inner",
     "masked_select",
