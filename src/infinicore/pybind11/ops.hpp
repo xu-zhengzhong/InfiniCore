@@ -122,6 +122,7 @@
 #include "ops/sum.hpp"
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
+#include "ops/symm.hpp"
 #include "ops/symv.hpp"
 #include "ops/syr.hpp"
 #include "ops/syr2.hpp"
@@ -289,6 +290,7 @@ inline void bind(py::module &m) {
     bind_syr2(m);
     bind_tbmv(m);
     bind_tbsv(m);
+    bind_symm(m);
     bind_sinh(m);
     bind_layer_norm(m);
     bind_topksoftmax(m);

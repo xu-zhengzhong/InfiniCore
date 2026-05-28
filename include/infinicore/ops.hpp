@@ -71,6 +71,7 @@
 #include "ops/spmv.hpp"
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
+#include "ops/symm.hpp"
 #include "ops/symv.hpp"
 #include "ops/syr.hpp"
 #include "ops/syr2.hpp"
