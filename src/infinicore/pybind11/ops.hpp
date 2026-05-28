@@ -58,6 +58,7 @@
 #include "ops/hemv.hpp"
 #include "ops/her.hpp"
 #include "ops/her2.hpp"
+#include "ops/herk.hpp"
 #include "ops/hinge_embedding_loss.hpp"
 #include "ops/hpmv.hpp"
 #include "ops/hpr.hpp"
@@ -282,6 +283,7 @@ inline void bind(py::module &m) {
     bind_binary_cross_entropy_with_logits(m);
     bind_reciprocal(m);
     bind_upsample_bilinear(m);
+    bind_herk(m);
     bind_hemm(m);
     bind_kthvalue(m);
     bind_ldexp(m);
