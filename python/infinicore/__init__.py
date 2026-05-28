@@ -132,6 +132,7 @@ from infinicore.ops.symv import symv
 from infinicore.ops.take import take
 from infinicore.ops.tan import tan
 from infinicore.ops.topk import topk
+from infinicore.ops.trmv import trmv
 from infinicore.ops.unsqueeze import unsqueeze
 from infinicore.ops.vander import vander
 from infinicore.ops.var import var
@@ -279,6 +280,7 @@ __all__ = [
     "sinh",
     "swap",
     "symv",
+    "trmv",
     "ones",
     "broadcast_to",
     "strided_empty",
