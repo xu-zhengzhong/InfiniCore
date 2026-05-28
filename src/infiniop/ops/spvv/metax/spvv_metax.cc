@@ -1,9 +1,54 @@
 #include "spvv_metax.h"
+#include "../../../devices/metax/metax_common.h"
 #include "../../../devices/metax/metax_handle.h"
 
 namespace op::spvv::metax {
 
-struct Descriptor::Opaque {};
+constexpr size_t DOT_WORKSPACE_SIZE = 256;
+
+struct Descriptor::Opaque {
+    std::shared_ptr<device::metax::Handle::Internal> internal;
+    hcsparseSpVecDescr_t vec_a = nullptr;
+    hcsparseDnVecDescr_t vec_x = nullptr;
+    hpccDataType data_type = HPCC_R_32F;
+    hcsparseIndexType_t index_type = HCSPARSE_INDEX_64I;
+
+    explicit Opaque(std::shared_ptr<device::metax::Handle::Internal> internal)
+        : internal(std::move(internal)) {}
+
+    ~Opaque() {
+        if (vec_a != nullptr) {
+            hcsparseDestroySpVec(vec_a);
+        }
+        if (vec_x != nullptr) {
+            hcsparseDestroyDnVec(vec_x);
+        }
+    }
+};
+
+static hpccDataType dataTypeOf(infiniDtype_t dtype) {
+    switch (dtype) {
+    case INFINI_DTYPE_F16:
+        return HPCC_R_16F;
+    case INFINI_DTYPE_BF16:
+        return HPCC_R_16BF;
+    case INFINI_DTYPE_F32:
+        return HPCC_R_32F;
+    default:
+        return HPCC_R_32F;
+    }
+}
+
+static hcsparseIndexType_t indexTypeOf(infiniDtype_t dtype) {
+    switch (dtype) {
+    case INFINI_DTYPE_I32:
+        return HCSPARSE_INDEX_32I;
+    case INFINI_DTYPE_I64:
+        return HCSPARSE_INDEX_64I;
+    default:
+        return HCSPARSE_INDEX_64I;
+    }
+}
 
 Descriptor::~Descriptor() {
     delete _opaque;
@@ -27,14 +72,60 @@ infiniStatus_t Descriptor::create(
 
     CHECK_OR_RETURN(info.x_vector.stride == 1, INFINI_STATUS_BAD_TENSOR_STRIDES);
 
-    auto opaque = new Opaque();
+    auto opaque = new Opaque(handle->internal());
+    opaque->data_type = dataTypeOf(dtype);
+    opaque->index_type = indexTypeOf(index_dtype);
+
+    auto status = hcsparseCreateSpVec(
+        &opaque->vec_a,
+        static_cast<int64_t>(info.size),
+        static_cast<int64_t>(info.nnz),
+        const_cast<void *>(a_desc->indices()),
+        const_cast<void *>(a_desc->values()),
+        opaque->index_type,
+        HCSPARSE_INDEX_BASE_ZERO,
+        opaque->data_type);
+    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
+        delete opaque;
+        return INFINI_STATUS_INTERNAL_ERROR;
+    });
+
+    status = hcsparseCreateDnVec(
+        &opaque->vec_x,
+        static_cast<int64_t>(info.size),
+        const_cast<void *>(a_desc->values()),
+        opaque->data_type);
+    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
+        delete opaque;
+        return INFINI_STATUS_INTERNAL_ERROR;
+    });
+
+    size_t workspace_size = DOT_WORKSPACE_SIZE;
+    float result_dummy = 0.0f;
+    auto buffer_status = opaque->internal->useMcsparse(nullptr, [&](hcsparseHandle_t sparse_handle) {
+        size_t sparse_workspace_size = 0;
+        CHECK_MCSPARSE(hcsparseSpVV_bufferSize(
+            sparse_handle,
+            HCSPARSE_OPERATION_NON_TRANSPOSE,
+            opaque->vec_a,
+            opaque->vec_x,
+            &result_dummy,
+            HPCC_R_32F,
+            &sparse_workspace_size));
+        workspace_size += sparse_workspace_size;
+        return INFINI_STATUS_SUCCESS;
+    });
+    CHECK_API_OR(buffer_status, INFINI_STATUS_SUCCESS, {
+        delete opaque;
+        return buffer_status;
+    });
 
     *desc_ptr = new Descriptor(
         dtype,
         index_dtype,
         info,
         a_desc,
-        0,
+        workspace_size,
         opaque,
         handle->device,
         handle->device_id);
@@ -52,32 +143,28 @@ infiniStatus_t Descriptor::calculate(
     if (workspace_size < _workspace_size) {
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
-    (void)workspace;
 
-    switch (_index_dtype) {
-    case INFINI_DTYPE_I32:
-        return launchCalculateI32(
-            y,
-            _a_desc->values(),
-            _a_desc->indices(),
-            x,
-            _info.nnz,
-            alpha,
-            beta,
-            stream);
-    case INFINI_DTYPE_I64:
-        return launchCalculateI64(
-            y,
-            _a_desc->values(),
-            _a_desc->indices(),
-            x,
-            _info.nnz,
-            alpha,
-            beta,
-            stream);
-    default:
-        return INFINI_STATUS_BAD_TENSOR_DTYPE;
-    }
+    auto dot = reinterpret_cast<float *>(workspace);
+    auto sparse_workspace = static_cast<void *>(static_cast<char *>(workspace) + DOT_WORKSPACE_SIZE);
+    CHECK_MCSPARSE(hcsparseDnVecSetValues(_opaque->vec_x, const_cast<void *>(x)));
+
+    CHECK_STATUS(_opaque->internal->useMcsparse(
+        reinterpret_cast<hcStream_t>(stream),
+        [&](hcsparseHandle_t sparse_handle) {
+            CHECK_MCSPARSE(hcsparseSpVV(
+                sparse_handle,
+                HCSPARSE_OPERATION_NON_TRANSPOSE,
+                _opaque->vec_a,
+                _opaque->vec_x,
+                dot,
+                HPCC_R_32F,
+                sparse_workspace));
+            return INFINI_STATUS_SUCCESS;
+        }));
+
+    CHECK_STATUS(launchApplyAlphaBeta(y, dot, alpha, beta, stream));
+
+    return INFINI_STATUS_SUCCESS;
 }
 
 } // namespace op::spvv::metax
