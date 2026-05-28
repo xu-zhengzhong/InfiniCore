@@ -34,6 +34,7 @@
 #include "ops/hardswish.hpp"
 #include "ops/hardtanh.hpp"
 #include "ops/hemv.hpp"
+#include "ops/her.hpp"
 #include "ops/kv_caching.hpp"
 #include "ops/layer_norm.hpp"
 #include "ops/linear.hpp"
