@@ -62,6 +62,7 @@
 #include "ops/silu.hpp"
 #include "ops/silu_and_mul.hpp"
 #include "ops/softmax.hpp"
+#include "ops/spmv.hpp"
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
 #include "ops/symv.hpp"

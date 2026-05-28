@@ -110,6 +110,7 @@
 #include "ops/smooth_l1_loss.hpp"
 #include "ops/softplus.hpp"
 #include "ops/softsign.hpp"
+#include "ops/spmv.hpp"
 #include "ops/sum.hpp"
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
@@ -235,6 +236,7 @@ inline void bind(py::module &m) {
     bind_broadcast_to(m);
     bind_softplus(m);
     bind_softsign(m);
+    bind_spmv(m);
     bind_linear(m);
     bind_huber_loss(m);
     bind_triplet_margin_with_distance_loss(m);
