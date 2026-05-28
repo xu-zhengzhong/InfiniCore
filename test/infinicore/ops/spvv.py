@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
+from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
 
 def _summarize_indices(indices, limit=6):
@@ -43,9 +44,9 @@ def _generate_spvv_cases():
     random.seed(42)
     # (size, density)
     configs = [
-        (6, 0.5),             # Baseline
-        (2048, 0.05),         # 2K scale
-        (8192, 0.01),         # 8K scale
+        (23456, 0.03),
+        (5898192, 0.007),
+        (4578447, 0.0095)
     ]
     for size, density in configs:
         nnz = int(size * density)
@@ -73,15 +74,82 @@ _TENSOR_DTYPES = [
 ]
 
 
+class SpVecSpec(TensorSpec):
+    def __init__(self, *, values_spec, size, indices, name="sparse"):
+        super().__init__(shape=(size,), dtype=values_spec.dtype, name=name)
+        self.values_spec = values_spec
+        self.size = size
+        self.indices = indices
+        self._cached_values = None
+
+    def create_torch_tensor(self, device):
+        if self._cached_values is None:
+            self._cached_values = self.values_spec.create_torch_tensor(device)
+        values = self._cached_values
+        indices_tensor = infinicore.from_list(
+            self.indices,
+            dtype=infinicore.int32,
+            device=infinicore_tensor_from_torch(values).device,
+        )
+        return infinicore.coo_spvec(
+            indices_tensor,
+            infinicore_tensor_from_torch(values),
+            self.size,
+        )
+
+    def __str__(self):
+        density = len(self.indices) / self.size if self.size else 0
+        return (
+            f"{self.name}: spvec(size={self.size}, nnz={len(self.indices)}, "
+            f"density={density:.6f})"
+        )
+
+
+class CachedTensorSpec(TensorSpec):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._cache = {}
+
+    @classmethod
+    def from_tensor(
+        cls,
+        shape,
+        strides=None,
+        dtype=None,
+        init_mode=None,
+        **kwargs,
+    ):
+        if init_mode is None:
+            return cls(shape=shape, dtype=dtype, strides=strides, **kwargs)
+        return cls(
+            shape=shape,
+            dtype=dtype,
+            strides=strides,
+            init_mode=init_mode,
+            **kwargs,
+        )
+
+    def create_torch_tensor(self, device):
+        if device not in self._cache:
+            self._cache[device] = super().create_torch_tensor(device)
+        return self._cache[device]
+
+
 def parse_test_cases():
     test_cases = []
     for size, indices in _TEST_CASES_DATA:
         nnz = len(indices)
         for dtype in _TENSOR_DTYPES:
+            values_spec = CachedTensorSpec.from_tensor((nnz,), dtype=dtype, name="values")
             test_cases.append(
                 SparseTestCase(
                     inputs=[
-                        TensorSpec.from_tensor((nnz,), dtype=dtype, name="values"),
+                        values_spec,
+                        SpVecSpec(
+                            values_spec=values_spec,
+                            size=size,
+                            indices=indices,
+                        ),
                         TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
                     ],
                     kwargs={
@@ -92,10 +160,16 @@ def parse_test_cases():
                     description="SpVV - OUT_OF_PLACE",
                 )
             )
+            values_spec = CachedTensorSpec.from_tensor((nnz,), dtype=dtype, name="values")
             test_cases.append(
                 SparseTestCase(
                     inputs=[
-                        TensorSpec.from_tensor((nnz,), dtype=dtype, name="values"),
+                        values_spec,
+                        SpVecSpec(
+                            values_spec=values_spec,
+                            size=size,
+                            indices=indices,
+                        ),
                         TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
                     ],
                     kwargs={
@@ -118,7 +192,7 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, x, *, size, indices, out=None):
+    def torch_operator(self, values, sparse, x, *, size, indices, out=None):
         sparse_dense = torch.zeros(size, dtype=values.dtype, device=values.device)
         sparse_dense[torch.tensor(indices, dtype=torch.int64, device=values.device)] = values
         result = torch.dot(sparse_dense, x)
@@ -127,10 +201,7 @@ class OpTest(BaseOperatorTest):
             return out
         return result
 
-    def infinicore_operator(self, values, x, *, size, indices, out=None):
-        device = values.device
-        indices_tensor = infinicore.from_list(indices, dtype=infinicore.int64, device=device)
-        sparse = infinicore.coo_spvec(indices_tensor, values, size)
+    def infinicore_operator(self, _values, sparse, x, *, size, indices, out=None):
         return infinicore.spvv(sparse, x, out=out)
 
 
