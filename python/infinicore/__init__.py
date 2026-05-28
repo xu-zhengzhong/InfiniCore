@@ -123,6 +123,7 @@ from infinicore.ops.rot import rot
 from infinicore.ops.rotg import rotg
 from infinicore.ops.rotm import rotm
 from infinicore.ops.rotmg import rotmg
+from infinicore.ops.sbmv import sbmv
 from infinicore.ops.scal import scal
 from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
@@ -268,6 +269,7 @@ __all__ = [
     "rotg",
     "rotm",
     "rotmg",
+    "sbmv",
     "scal",
     "logcumsumexp",
     "logical_not",
