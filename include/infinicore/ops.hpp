@@ -31,6 +31,7 @@
 #include "ops/hardswish.hpp"
 #include "ops/hardtanh.hpp"
 #include "ops/hemm.hpp"
+#include "ops/herk.hpp"
 #include "ops/kv_caching.hpp"
 #include "ops/layer_norm.hpp"
 #include "ops/linear.hpp"
