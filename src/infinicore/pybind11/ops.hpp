@@ -54,6 +54,7 @@
 #include "ops/hardswish.hpp"
 #include "ops/hardtanh.hpp"
 #include "ops/hemv.hpp"
+#include "ops/her.hpp"
 #include "ops/hinge_embedding_loss.hpp"
 #include "ops/huber_loss.hpp"
 #include "ops/hypot.hpp"
@@ -195,6 +196,7 @@ inline void bind(py::module &m) {
     bind_gbmv(m);
     bind_gemv(m);
     bind_ger(m);
+    bind_her(m);
     bind_hemv(m);
     bind_interpolate(m);
     bind_paged_attention(m);
