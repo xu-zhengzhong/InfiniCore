@@ -99,6 +99,7 @@
 #include "ops/rotg.hpp"
 #include "ops/rotm.hpp"
 #include "ops/rotmg.hpp"
+#include "ops/sbmv.hpp"
 #include "ops/scal.hpp"
 #include "ops/scatter.hpp"
 #include "ops/selu.hpp"
@@ -224,6 +225,7 @@ inline void bind(py::module &m) {
     bind_rotg(m);
     bind_rotm(m);
     bind_rotmg(m);
+    bind_sbmv(m);
     bind_floor_divide(m);
     bind_float_power(m);
     bind_flipud(m);
