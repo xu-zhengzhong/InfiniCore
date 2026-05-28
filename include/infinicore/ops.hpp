@@ -76,6 +76,7 @@
 #include "ops/symv.hpp"
 #include "ops/syr.hpp"
 #include "ops/syr2.hpp"
+#include "ops/syrk.hpp"
 #include "ops/tbmv.hpp"
 #include "ops/tbsv.hpp"
 #include "ops/topksoftmax.hpp"

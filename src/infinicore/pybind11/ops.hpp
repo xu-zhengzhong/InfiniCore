@@ -127,6 +127,7 @@
 #include "ops/symv.hpp"
 #include "ops/syr.hpp"
 #include "ops/syr2.hpp"
+#include "ops/syrk.hpp"
 #include "ops/take.hpp"
 #include "ops/tan.hpp"
 #include "ops/tanhshrink.hpp"
@@ -294,6 +295,7 @@ inline void bind(py::module &m) {
     bind_tbmv(m);
     bind_tbsv(m);
     bind_symm(m);
+    bind_syrk(m);
     bind_trmm(m);
     bind_sinh(m);
     bind_layer_norm(m);

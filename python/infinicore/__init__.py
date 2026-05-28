@@ -144,6 +144,7 @@ from infinicore.ops.symv import symv
 from infinicore.ops.syr import syr
 from infinicore.ops.syr2 import syr2
 from infinicore.ops.symm import symm
+from infinicore.ops.syrk import syrk
 from infinicore.ops.take import take
 from infinicore.ops.tan import tan
 from infinicore.ops.tbmv import tbmv
@@ -322,6 +323,7 @@ __all__ = [
     "trmv",
     "trsv",
     "symm",
+    "syrk",
     "trmm",
     "ones",
     "broadcast_to",
