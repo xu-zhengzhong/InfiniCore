@@ -64,3 +64,4 @@
 #include "ops/swiglu.hpp"
 #include "ops/symv.hpp"
 #include "ops/topksoftmax.hpp"
+#include "ops/trmv.hpp"

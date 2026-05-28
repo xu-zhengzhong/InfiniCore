@@ -119,6 +119,7 @@
 #include "ops/topksoftmax.hpp"
 #include "ops/triplet_margin_loss.hpp"
 #include "ops/triplet_margin_with_distance_loss.hpp"
+#include "ops/trmv.hpp"
 #include "ops/unfold.hpp"
 #include "ops/upsample_bilinear.hpp"
 #include "ops/upsample_nearest.hpp"
@@ -258,6 +259,7 @@ inline void bind(py::module &m) {
     bind_sinh(m);
     bind_layer_norm(m);
     bind_topksoftmax(m);
+    bind_trmv(m);
 }
 
 } // namespace infinicore::ops
