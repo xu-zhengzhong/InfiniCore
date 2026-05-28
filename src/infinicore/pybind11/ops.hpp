@@ -50,6 +50,7 @@
 #include "ops/gaussian_nll_loss.hpp"
 #include "ops/hardswish.hpp"
 #include "ops/hardtanh.hpp"
+#include "ops/hemm.hpp"
 #include "ops/hinge_embedding_loss.hpp"
 #include "ops/huber_loss.hpp"
 #include "ops/hypot.hpp"
@@ -243,6 +244,7 @@ inline void bind(py::module &m) {
     bind_binary_cross_entropy_with_logits(m);
     bind_reciprocal(m);
     bind_upsample_bilinear(m);
+    bind_hemm(m);
     bind_kthvalue(m);
     bind_ldexp(m);
     bind_lerp(m);
