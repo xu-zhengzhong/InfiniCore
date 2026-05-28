@@ -66,3 +66,4 @@
 #include "ops/symv.hpp"
 #include "ops/topksoftmax.hpp"
 #include "ops/trmv.hpp"
+#include "ops/trsv.hpp"
