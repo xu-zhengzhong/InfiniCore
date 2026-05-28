@@ -28,6 +28,7 @@
 #include "ops/fmod.hpp"
 #include "ops/gelu.hpp"
 #include "ops/gelutanh.hpp"
+#include "ops/ger.hpp"
 #include "ops/hardswish.hpp"
 #include "ops/hardtanh.hpp"
 #include "ops/kv_caching.hpp"
