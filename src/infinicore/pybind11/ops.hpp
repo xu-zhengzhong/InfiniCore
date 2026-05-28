@@ -116,6 +116,7 @@
 #include "ops/topksoftmax.hpp"
 #include "ops/triplet_margin_loss.hpp"
 #include "ops/triplet_margin_with_distance_loss.hpp"
+#include "ops/trmm.hpp"
 #include "ops/unfold.hpp"
 #include "ops/upsample_bilinear.hpp"
 #include "ops/upsample_nearest.hpp"
@@ -249,6 +250,7 @@ inline void bind(py::module &m) {
     bind_selu(m);
     bind_swap(m);
     bind_symm(m);
+    bind_trmm(m);
     bind_sinh(m);
     bind_layer_norm(m);
     bind_topksoftmax(m);

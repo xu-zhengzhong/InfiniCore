@@ -129,6 +129,7 @@ from infinicore.ops.symm import symm
 from infinicore.ops.take import take
 from infinicore.ops.tan import tan
 from infinicore.ops.topk import topk
+from infinicore.ops.trmm import trmm
 from infinicore.ops.unsqueeze import unsqueeze
 from infinicore.ops.vander import vander
 from infinicore.ops.var import var
@@ -273,6 +274,7 @@ __all__ = [
     "sinh",
     "swap",
     "symm",
+    "trmm",
     "ones",
     "broadcast_to",
     "strided_empty",
