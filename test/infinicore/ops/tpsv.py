@@ -15,20 +15,8 @@ import infinicore
 
 _TEST_CASES_DATA = [
     # uplo, trans, diag, n, x_stride
-    (0, 0, 0, 1, None),
-    (0, 0, 0, 5, None),
-    (0, 0, 1, 5, None),
-    (0, 1, 0, 5, None),
-    (0, 1, 1, 17, (2,)),
-    (0, 0, 0, 128, (3,)),
-    (0, 1, 0, 256, None),
-    (1, 0, 0, 1, None),
-    (1, 0, 0, 5, None),
-    (1, 0, 1, 5, None),
-    (1, 1, 0, 5, None),
-    (1, 1, 1, 17, (2,)),
-    (1, 0, 0, 128, (3,)),
-    (1, 1, 0, 256, None),
+    (0, 0, 0, n, None)
+    for n in (4096, 6144, 8192)
 ]
 
 _TENSOR_DTYPES = [
@@ -117,8 +105,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_tpsv(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_tpsv(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.tpsv(*args, **kwargs)

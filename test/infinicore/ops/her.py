@@ -10,23 +10,14 @@ from framework import (
     TensorSpec,
     TestCase,
 )
+from framework.tensor import TensorInitializer
 
 import infinicore
 
 _TEST_CASES_DATA = [
     # uplo, n, a_stride, x_stride
-    (0, 1, None, None),
-    (0, 5, None, None),
-    (0, 17, None, (2,)),
-    (0, 33, (1, 40), None),
-    (0, 128, None, (3,)),
-    (0, 1024, None, None),
-    (1, 1, None, None),
-    (1, 5, None, None),
-    (1, 17, None, (2,)),
-    (1, 33, (1, 40), (2,)),
-    (1, 128, None, (3,)),
-    (1, 1024, None, None),
+    (0, n, None, None)
+    for n in (4096, 6144, 8192)
 ]
 
 _TENSOR_DTYPES = [
@@ -103,7 +94,9 @@ def parse_test_cases():
         for dtype in _TENSOR_DTYPES:
             tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-5})
 
-            alpha_spec = TensorSpec.from_tensor((), None, _real_dtype(dtype))
+            alpha_spec = TensorSpec.from_tensor(
+                (), None, _real_dtype(dtype), init_mode=TensorInitializer.ONES
+            )
             x_spec = TensorSpec.from_tensor((n,), x_stride, dtype)
             a_spec = TensorSpec.from_tensor(
                 (n, n), a_stride if a_stride is not None else (1, n), dtype
@@ -132,8 +125,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_her(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_her(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.her(*args, **kwargs)

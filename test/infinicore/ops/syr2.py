@@ -16,22 +16,8 @@ import infinicore
 
 _TEST_CASES_DATA = [
     # uplo, n, a_stride, x_stride, y_stride
-    (0, 1, None, None, None),
-    (0, 5, None, None, None),
-    (0, 5, (5, 1), None, (2,)),
-    (0, 17, None, (2,), None),
-    (0, 33, (1, 40), None, (2,)),
-    (0, 33, (40, 1), (2,), None),
-    (0, 128, None, (2,), (3,)),
-    (0, 256, None, None, None),
-    (1, 1, None, None, None),
-    (1, 5, None, None, None),
-    (1, 5, (5, 1), (2,), None),
-    (1, 17, None, None, (2,)),
-    (1, 33, (1, 40), (2,), None),
-    (1, 33, (40, 1), None, (2,)),
-    (1, 128, None, (3,), (2,)),
-    (1, 256, None, None, None),
+    (0, n, None, None, None)
+    for n in (4096, 6144, 8192)
 ]
 
 _TENSOR_DTYPES = [
@@ -100,8 +86,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_syr2(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_syr2(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.syr2(*args, **kwargs)

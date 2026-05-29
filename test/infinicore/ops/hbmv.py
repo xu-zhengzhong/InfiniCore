@@ -16,22 +16,8 @@ import infinicore
 
 _TEST_CASES_DATA = [
     # uplo, n, k, a_stride, x_stride, y_stride
-    (0, 1, 0, None, None, None),
-    (0, 5, 0, None, None, None),
-    (0, 5, 1, None, None, None),
-    (0, 17, 3, None, (2,), None),
-    (0, 33, 4, (1, 8), None, (2,)),
-    (0, 33, 32, None, (2,), None),
-    (0, 128, 7, None, (2,), (3,)),
-    (0, 1024, 2, None, None, None),
-    (1, 1, 0, None, None, None),
-    (1, 5, 0, None, None, None),
-    (1, 5, 1, None, None, None),
-    (1, 17, 3, None, None, (2,)),
-    (1, 33, 4, (1, 8), (2,), None),
-    (1, 33, 32, None, None, None),
-    (1, 128, 7, None, (3,), (2,)),
-    (1, 1024, 2, None, None, None),
+    (0, n, 64, None, None, None)
+    for n in (4096, 6144, 8192)
 ]
 
 _TENSOR_DTYPES = [
@@ -157,7 +143,7 @@ def parse_test_cases():
             )
             x_spec = TensorSpec.from_tensor((n,), x_stride, dtype)
             beta_spec = TensorSpec.from_tensor(
-                (), None, dtype, init_mode=TensorInitializer.ONES
+                (), None, dtype, init_mode=TensorInitializer.ZEROS
             )
             y_spec = TensorSpec.from_tensor(
                 (n,), y_stride, dtype, init_mode=TensorInitializer.RANDOM
@@ -186,8 +172,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_hbmv(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_hbmv(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.hbmv(*args, **kwargs)

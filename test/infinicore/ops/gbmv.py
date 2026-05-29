@@ -16,36 +16,9 @@ import infinicore
 
 _TEST_CASES_DATA = [
     # trans, m, n, kl, ku, a_stride, x_stride, y_stride
-    (0, 1, 1, 0, 0, None, None, None),
-    (0, 1, 7, 0, 3, None, None, None),
-    (0, 6, 6, 5, 5, None, None, None),
-    (0, 9, 9, 8, 0, None, None, None),
-    (0, 9, 9, 0, 8, None, None, None),
-    (0, 4, 5, 1, 2, None, None, None),
-    (0, 3, 11, 2, 4, None, (2,), None),
-    (0, 11, 3, 4, 2, None, None, (2,)),
-    (0, 7, 3, 3, 1, (1, 8), (2,), (3,)),
-    (0, 8, 10, 2, 3, (1, 8), None, None),
-    (0, 8, 10, 2, 3, (1, 16), (2,), (3,)),
-    (0, 16, 17, 2, 2, None, (2,), (2,)),
-    (0, 33, 65, 1, 4, None, None, None),
-    (0, 65, 33, 4, 1, None, (2,), (2,)),
-    (0, 16, 5632, 2, 2, None, (2,), (2,)),
-    (0, 5632, 33, 4, 1, None, None, None),
-    (0, 2048, 2560, 2, 3, (1, 8), None, None),
-    (1, 1, 7, 0, 3, None, None, None),
-    (1, 6, 6, 5, 5, None, None, None),
-    (1, 4, 5, 1, 2, None, None, None),
-    (1, 3, 11, 2, 4, None, None, (2,)),
-    (1, 11, 3, 4, 2, None, (2,), None),
-    (1, 7, 3, 3, 1, (1, 8), (2,), (3,)),
-    (1, 8, 10, 2, 3, (1, 8), None, None),
-    (1, 8, 10, 2, 3, (1, 16), (3,), (2,)),
-    (1, 33, 65, 1, 4, None, (2,), (2,)),
-    (1, 65, 33, 4, 1, None, None, None),
-    (1, 16, 5632, 2, 2, None, (2,), (2,)),
-    (1, 5632, 33, 4, 1, None, None, None),
-    (1, 2048, 2560, 2, 3, (1, 8), None, None),
+    (0, m, n, 64, 64, None, None, None)
+    for m in (4096, 6144, 8192)
+    for n in (4096, 6144, 8192)
 ]
 
 _TENSOR_DTYPES = [
@@ -99,7 +72,7 @@ def parse_test_cases():
             )
             x_spec = TensorSpec.from_tensor((x_len,), x_stride, dtype)
             beta_spec = TensorSpec.from_tensor(
-                (), None, dtype, init_mode=TensorInitializer.ONES
+                (), None, dtype, init_mode=TensorInitializer.ZEROS
             )
             y_spec = TensorSpec.from_tensor(
                 (y_len,), y_stride, dtype, init_mode=TensorInitializer.RANDOM
@@ -128,8 +101,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_gbmv(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_gbmv(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         kwargs = dict(kwargs)

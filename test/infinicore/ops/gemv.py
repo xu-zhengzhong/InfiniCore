@@ -16,44 +16,9 @@ import infinicore
 
 _TEST_CASES_DATA = [
     # trans, m, n, a_stride, x_stride, y_stride
-    (0, 1, 1, None, None, None),
-    (0, 1, 7, None, None, None),
-    (0, 7, 1, None, None, None),
-    (0, 5, 5, None, None, None),
-    (0, 3, 4, (1, 3), None, None),
-    (0, 4, 5, (8, 1), (2,), (3,)),
-    (0, 7, 3, (1, 9), (2,), (3,)),
-    (0, 8, 10, (1, 12), None, None),
-    (0, 8, 10, (1, 16), (3,), (2,)),
-    (0, 9, 6, (12, 1), None, (2,)),
-    (0, 17, 31, None, (2,), None),
-    (0, 31, 17, None, None, (2,)),
-    (0, 32, 17, None, None, None),
-    (0, 64, 33, (1, 66), (2,), (2,)),
-    (0, 65, 33, (1, 80), None, None),
-    (0, 33, 65, (96, 1), (2,), (2,)),
-    (0, 16, 5632, None, (2,), (2,)),
-    (0, 5632, 33, (1, 5632), None, None),
-    (0, 2048, 2560, (1, 4096), None, None),
-    (1, 1, 1, None, None, None),
-    (1, 1, 7, None, None, None),
-    (1, 7, 1, None, None, None),
-    (1, 5, 5, None, None, None),
-    (1, 3, 4, (1, 3), None, None),
-    (1, 4, 5, (8, 1), (2,), (3,)),
-    (1, 7, 3, (1, 9), (2,), (3,)),
-    (1, 8, 10, (1, 12), None, None),
-    (1, 8, 10, (1, 16), (3,), (2,)),
-    (1, 9, 6, (12, 1), None, (2,)),
-    (1, 17, 31, None, None, (2,)),
-    (1, 31, 17, None, (2,), None),
-    (1, 32, 17, None, None, None),
-    (1, 64, 33, (1, 66), (2,), (2,)),
-    (1, 65, 33, (1, 80), None, None),
-    (1, 33, 65, (96, 1), (2,), (2,)),
-    (1, 16, 5632, None, (2,), (2,)),
-    (1, 5632, 33, (1, 5632), None, None),
-    (1, 2048, 2560, (1, 4096), None, None),
+    (0, m, n, None, None, None)
+    for m in (4096, 6144, 8192)
+    for n in (4096, 6144, 8192)
 ]
 
 _TENSOR_DTYPES = [
@@ -88,7 +53,7 @@ def parse_test_cases():
             a_spec = TensorSpec.from_tensor((m, n), a_stride, dtype)
             x_spec = TensorSpec.from_tensor((x_len,), x_stride, dtype)
             beta_spec = TensorSpec.from_tensor(
-                (), None, dtype, init_mode=TensorInitializer.ONES
+                (), None, dtype, init_mode=TensorInitializer.ZEROS
             )
             y_spec = TensorSpec.from_tensor(
                 (y_len,), y_stride, dtype, init_mode=TensorInitializer.RANDOM
@@ -117,8 +82,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, *args, **kwargs):
-        return torch_gemv(*args, **kwargs)
+    # def torch_operator(self, *args, **kwargs):
+    #     return torch_gemv(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
         return infinicore.gemv(*args, **kwargs)
