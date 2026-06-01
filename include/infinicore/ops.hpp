@@ -36,6 +36,7 @@
 #include "ops/hbmv.hpp"
 #include "ops/hemv.hpp"
 #include "ops/her.hpp"
+#include "ops/her2.hpp"
 #include "ops/hpmv.hpp"
 #include "ops/hpr.hpp"
 #include "ops/hpr2.hpp"

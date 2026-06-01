@@ -56,6 +56,7 @@
 #include "ops/hbmv.hpp"
 #include "ops/hemv.hpp"
 #include "ops/her.hpp"
+#include "ops/her2.hpp"
 #include "ops/hinge_embedding_loss.hpp"
 #include "ops/hpmv.hpp"
 #include "ops/hpr.hpp"
@@ -208,6 +209,7 @@ inline void bind(py::module &m) {
     bind_ger(m);
     bind_hbmv(m);
     bind_her(m);
+    bind_her2(m);
     bind_hemv(m);
     bind_hpr(m);
     bind_hpr2(m);
