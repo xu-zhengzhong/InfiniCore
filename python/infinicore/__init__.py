@@ -131,6 +131,7 @@ from infinicore.ops.sinh import sinh
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.spmv import spmv
 from infinicore.ops.spr import spr
+from infinicore.ops.spr2 import spr2
 from infinicore.ops.sum import sum
 from infinicore.ops.swap import swap
 from infinicore.ops.symv import symv
@@ -256,6 +257,7 @@ __all__ = [
     "unsqueeze",
     "spmv",
     "spr",
+    "spr2",
     "rearrange",
     "cross_entropy",
     "tan",
