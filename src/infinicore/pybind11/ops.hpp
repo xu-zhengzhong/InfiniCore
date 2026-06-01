@@ -53,6 +53,7 @@
 #include "ops/ger.hpp"
 #include "ops/hardswish.hpp"
 #include "ops/hardtanh.hpp"
+#include "ops/hbmv.hpp"
 #include "ops/hemv.hpp"
 #include "ops/her.hpp"
 #include "ops/hinge_embedding_loss.hpp"
@@ -202,6 +203,7 @@ inline void bind(py::module &m) {
     bind_gbmv(m);
     bind_gemv(m);
     bind_ger(m);
+    bind_hbmv(m);
     bind_her(m);
     bind_hemv(m);
     bind_interpolate(m);
