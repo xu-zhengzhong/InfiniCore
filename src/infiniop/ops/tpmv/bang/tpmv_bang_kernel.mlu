@@ -1,0 +1,271 @@
+#include "../../../devices/bang/common_bang.h"
+#include "tpmv_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata, bool X_CONTIGUOUS>
+__mlu_func__ void tpmvCopyKernelImpl(
+    int n,
+    const Tdata *x, int incx,
+    Tdata *x_copy) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / sizeof(Tdata);
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_x = (Tdata *)nram_aligned;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    int chunks = core_elements / chunk_size;
+    int chunk_rem = core_elements % chunk_size;
+
+    for (int c = 0; c < chunks; c++) {
+        int current_offset = core_offset + c * chunk_size;
+
+        if constexpr (X_CONTIGUOUS) {
+            __memcpy(nram_x, x + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+        } else {
+            for (int i = 0; i < chunk_size; ++i) {
+                nram_x[i] = x[(current_offset + i) * incx];
+            }
+        }
+        __memcpy(x_copy + current_offset, nram_x, chunk_size * sizeof(Tdata), NRAM2GDRAM);
+    }
+
+    if (chunk_rem > 0) {
+        int current_offset = core_offset + chunks * chunk_size;
+
+        if constexpr (X_CONTIGUOUS) {
+            __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+        } else {
+            for (int i = 0; i < chunk_rem; ++i) {
+                nram_x[i] = x[(current_offset + i) * incx];
+            }
+        }
+        __memcpy(x_copy + current_offset, nram_x, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
+    }
+}
+
+#define DISPATCH_TPMV_COPY(CONTIG) \
+    tpmvCopyKernelImpl<Tdata, CONTIG>(n, x, incx, x_copy)
+
+template <typename Tdata>
+__mlu_global__ void tpmvCopyKernel(
+    int n,
+    const Tdata *x, int incx,
+    Tdata *x_copy) {
+
+    const bool x_contiguous = incx == 1;
+
+    if (x_contiguous) {
+        DISPATCH_TPMV_COPY(true);
+    } else {
+        DISPATCH_TPMV_COPY(false);
+    }
+
+#undef DISPATCH_TPMV_COPY
+}
+
+template <typename Tdata, bool UPPER, bool TRANS>
+__mlu_func__ void loadTpmvAPChunk(
+    Tdata *nram_AP,
+    const Tdata *AP,
+    int n,
+    int output_index,
+    int input_offset,
+    int chunk_elements) {
+
+    for (int k = 0; k < chunk_elements; ++k) {
+        int input_index = input_offset + k;
+        int AP_idx;
+
+        if constexpr (TRANS) {
+            if constexpr (UPPER) {
+                AP_idx = output_index * (output_index + 1) / 2 + input_index;
+            } else {
+                AP_idx = output_index * n - output_index * (output_index - 1) / 2 + input_index - output_index;
+            }
+        } else {
+            if constexpr (UPPER) {
+                AP_idx = input_index * (input_index + 1) / 2 + output_index;
+            } else {
+                AP_idx = input_index * n - input_index * (input_index - 1) / 2 + output_index - input_index;
+            }
+        }
+
+        nram_AP[k] = AP[AP_idx];
+    }
+}
+
+template <typename Tdata, bool UPPER, bool TRANS>
+__mlu_func__ Tdata computeTpmvChunk(
+    Tdata *nram_AP,
+    Tdata *nram_x,
+    const Tdata *AP,
+    int n,
+    const Tdata *x_copy,
+    int output_index,
+    int input_offset,
+    int chunk_elements) {
+
+    loadTpmvAPChunk<Tdata, UPPER, TRANS>(
+        nram_AP,
+        AP, n,
+        output_index,
+        input_offset,
+        chunk_elements);
+    __memcpy(nram_x, x_copy + input_offset, chunk_elements * sizeof(Tdata), GDRAM2NRAM);
+
+    __bang_mul(nram_AP, nram_AP, nram_x, chunk_elements);
+    return __bang_sum(nram_AP, chunk_elements);
+}
+
+template <typename Tdata, bool UPPER, bool TRANS, bool UNIT_DIAG>
+__mlu_func__ void tpmvKernelImpl(
+    int n,
+    const Tdata *AP,
+    const Tdata *x_copy,
+    Tdata *x, int incx) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_AP = (Tdata *)nram_aligned;
+    Tdata *nram_x = nram_AP + chunk_size;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    for (int i = core_offset; i < core_offset + core_elements; ++i) {
+        int begin;
+        int end;
+        if constexpr (TRANS) {
+            begin = UPPER ? 0 : i;
+            end = UPPER ? i + 1 : n;
+        } else {
+            begin = UPPER ? i : 0;
+            end = UPPER ? n : i + 1;
+        }
+
+        Tdata sum;
+        if constexpr (UNIT_DIAG) {
+            sum = x_copy[i];
+            if constexpr ((!TRANS && UPPER) || (TRANS && !UPPER)) {
+                begin++;
+            } else {
+                end--;
+            }
+        } else {
+            sum = 0;
+        }
+
+        int elements = end - begin;
+        int chunks = elements / chunk_size;
+        int chunk_rem = elements % chunk_size;
+
+        for (int c = 0; c < chunks; ++c) {
+            int current_offset = begin + c * chunk_size;
+            sum += computeTpmvChunk<Tdata, UPPER, TRANS>(
+                nram_AP,
+                nram_x,
+                AP, n,
+                x_copy,
+                i,
+                current_offset,
+                chunk_size);
+        }
+
+        if (chunk_rem > 0) {
+            int current_offset = begin + chunks * chunk_size;
+            sum += computeTpmvChunk<Tdata, UPPER, TRANS>(
+                nram_AP,
+                nram_x,
+                AP, n,
+                x_copy,
+                i,
+                current_offset,
+                chunk_rem);
+        }
+
+        x[i * incx] = sum;
+    }
+}
+
+#define DISPATCH_TPMV(UPPER, TRANS, UNIT) \
+    tpmvKernelImpl<Tdata, UPPER, TRANS, UNIT>(n, AP, x_copy, x, incx)
+
+template <typename Tdata>
+__mlu_global__ void tpmvKernel(
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    infiniopBlasDiagType_t diag,
+    int n,
+    const Tdata *AP,
+    const Tdata *x_copy,
+    Tdata *x, int incx) {
+
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+    const bool transposed = trans == INFINIOP_BLAS_OP_T;
+    const bool unit_diag = diag == INFINIOP_BLAS_DIAG_UNIT;
+
+    if (transposed) {
+        if (unit_diag) {
+            if (upper) {
+                DISPATCH_TPMV(true, true, true);
+            } else {
+                DISPATCH_TPMV(false, true, true);
+            }
+        } else {
+            if (upper) {
+                DISPATCH_TPMV(true, true, false);
+            } else {
+                DISPATCH_TPMV(false, true, false);
+            }
+        }
+    } else {
+        if (unit_diag) {
+            if (upper) {
+                DISPATCH_TPMV(true, false, true);
+            } else {
+                DISPATCH_TPMV(false, false, true);
+            }
+        } else {
+            if (upper) {
+                DISPATCH_TPMV(true, false, false);
+            } else {
+                DISPATCH_TPMV(false, false, false);
+            }
+        }
+    }
+
+#undef DISPATCH_TPMV
+}
