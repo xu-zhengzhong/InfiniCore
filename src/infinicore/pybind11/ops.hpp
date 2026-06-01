@@ -124,6 +124,7 @@
 #include "ops/tan.hpp"
 #include "ops/tanhshrink.hpp"
 #include "ops/tbmv.hpp"
+#include "ops/tbsv.hpp"
 #include "ops/topk.hpp"
 #include "ops/topksoftmax.hpp"
 #include "ops/triplet_margin_loss.hpp"
@@ -275,6 +276,7 @@ inline void bind(py::module &m) {
     bind_syr(m);
     bind_syr2(m);
     bind_tbmv(m);
+    bind_tbsv(m);
     bind_sinh(m);
     bind_layer_norm(m);
     bind_topksoftmax(m);
