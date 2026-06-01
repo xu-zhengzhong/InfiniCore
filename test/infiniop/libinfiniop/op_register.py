@@ -3163,6 +3163,45 @@ def hemv_(lib):
 
 
 @OpRegister.operator
+def hpmv_(lib):
+    lib.infiniopCreateHpmvDescriptor.restype = c_int32
+    lib.infiniopCreateHpmvDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetHpmvWorkspaceSize.restype = c_int32
+    lib.infiniopGetHpmvWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopHpmv.restype = c_int32
+    lib.infiniopHpmv.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyHpmvDescriptor.restype = c_int32
+    lib.infiniopDestroyHpmvDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def tpsv_(lib):
     lib.infiniopCreateTpsvDescriptor.restype = c_int32
     lib.infiniopCreateTpsvDescriptor.argtypes = [
