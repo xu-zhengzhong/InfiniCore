@@ -112,6 +112,7 @@
 #include "ops/softplus.hpp"
 #include "ops/softsign.hpp"
 #include "ops/spmv.hpp"
+#include "ops/spr.hpp"
 #include "ops/sum.hpp"
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
@@ -241,6 +242,7 @@ inline void bind(py::module &m) {
     bind_softplus(m);
     bind_softsign(m);
     bind_spmv(m);
+    bind_spr(m);
     bind_linear(m);
     bind_huber_loss(m);
     bind_triplet_margin_with_distance_loss(m);
