@@ -127,6 +127,7 @@
 #include "ops/tbsv.hpp"
 #include "ops/topk.hpp"
 #include "ops/topksoftmax.hpp"
+#include "ops/tpmv.hpp"
 #include "ops/triplet_margin_loss.hpp"
 #include "ops/triplet_margin_with_distance_loss.hpp"
 #include "ops/trmv.hpp"
@@ -280,6 +281,7 @@ inline void bind(py::module &m) {
     bind_sinh(m);
     bind_layer_norm(m);
     bind_topksoftmax(m);
+    bind_tpmv(m);
     bind_trmv(m);
     bind_trsv(m);
 }
