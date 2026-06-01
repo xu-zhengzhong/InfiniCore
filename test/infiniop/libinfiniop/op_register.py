@@ -3120,6 +3120,43 @@ def hpr_(lib):
 
 
 @OpRegister.operator
+def hpr2_(lib):
+    lib.infiniopCreateHpr2Descriptor.restype = c_int32
+    lib.infiniopCreateHpr2Descriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetHpr2WorkspaceSize.restype = c_int32
+    lib.infiniopGetHpr2WorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopHpr2.restype = c_int32
+    lib.infiniopHpr2.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyHpr2Descriptor.restype = c_int32
+    lib.infiniopDestroyHpr2Descriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def spmv_(lib):
     lib.infiniopCreateSpmvDescriptor.restype = c_int32
     lib.infiniopCreateSpmvDescriptor.argtypes = [
