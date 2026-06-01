@@ -92,6 +92,7 @@ from infinicore.ops.gemv import gemv
 from infinicore.ops.ger import ger
 from infinicore.ops.hbmv import hbmv
 from infinicore.ops.her import her
+from infinicore.ops.her2 import her2
 from infinicore.ops.hemv import hemv
 from infinicore.ops.hpr import hpr
 from infinicore.ops.hpr2 import hpr2
@@ -244,6 +245,7 @@ __all__ = [
     "ger",
     "hbmv",
     "her",
+    "her2",
     "hemv",
     "hpr",
     "hpr2",
