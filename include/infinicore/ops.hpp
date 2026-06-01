@@ -38,6 +38,7 @@
 #include "ops/her.hpp"
 #include "ops/hpmv.hpp"
 #include "ops/hpr.hpp"
+#include "ops/hpr2.hpp"
 #include "ops/kv_caching.hpp"
 #include "ops/layer_norm.hpp"
 #include "ops/linear.hpp"
