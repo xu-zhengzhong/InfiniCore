@@ -1,0 +1,287 @@
+#include "../../../devices/bang/common_bang.h"
+#include "tpsv_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata, bool UPPER, bool TRANS>
+__mlu_func__ void loadTpsvAPChunk(
+    Tdata *nram_AP,
+    const Tdata *AP,
+    int n,
+    int fixed_index,
+    int chunk_offset,
+    int chunk_elements) {
+
+    for (int k = 0; k < chunk_elements; ++k) {
+        int moving_index = chunk_offset + k;
+        int AP_idx;
+
+        if constexpr (TRANS) {
+            if constexpr (UPPER) {
+                AP_idx = fixed_index * (fixed_index + 1) / 2 + moving_index;
+            } else {
+                AP_idx = fixed_index * n - fixed_index * (fixed_index - 1) / 2 + moving_index - fixed_index;
+            }
+        } else {
+            if constexpr (UPPER) {
+                AP_idx = fixed_index * (fixed_index + 1) / 2 + moving_index;
+            } else {
+                AP_idx = fixed_index * n - fixed_index * (fixed_index - 1) / 2 + moving_index - fixed_index;
+            }
+        }
+
+        nram_AP[k] = AP[AP_idx];
+    }
+}
+
+template <typename Tdata, bool UPPER, bool TRANS, bool UNIT_DIAG, bool X_CONTIGUOUS>
+__mlu_func__ void tpsvKernelImpl(
+    int n,
+    const Tdata *AP,
+    Tdata *x, int incx) {
+
+    if (n <= 0 || taskId != 0) {
+        return;
+    }
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(Tdata));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    Tdata *nram_AP = (Tdata *)nram_aligned;
+    Tdata *nram_x = nram_AP + chunk_size;
+
+    int i_start;
+    int i_end;
+    int i_step;
+    if constexpr ((!TRANS && UPPER) || (TRANS && !UPPER)) {
+        i_start = n - 1;
+        i_end = -1;
+        i_step = -1;
+    } else {
+        i_start = 0;
+        i_end = n;
+        i_step = 1;
+    }
+
+    for (int i = i_start; i != i_end; i += i_step) {
+        Tdata value = x[i * incx];
+
+        if constexpr (TRANS) {
+            int begin;
+            int end;
+            if constexpr (UPPER) {
+                begin = 0;
+                end = i;
+            } else {
+                begin = i + 1;
+                end = n;
+            }
+
+            int elements = end - begin;
+            int chunks = elements / chunk_size;
+            int chunk_rem = elements % chunk_size;
+
+            for (int c = 0; c < chunks; ++c) {
+                int current_offset = begin + c * chunk_size;
+
+                loadTpsvAPChunk<Tdata, UPPER, TRANS>(nram_AP, AP, n, i, current_offset, chunk_size);
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_size; ++k) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul(nram_x, nram_x, nram_AP, chunk_size);
+                value -= __bang_sum(nram_x, chunk_size);
+            }
+
+            if (chunk_rem > 0) {
+                int current_offset = begin + chunks * chunk_size;
+
+                loadTpsvAPChunk<Tdata, UPPER, TRANS>(nram_AP, AP, n, i, current_offset, chunk_rem);
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_rem; ++k) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul(nram_x, nram_x, nram_AP, chunk_rem);
+                value -= __bang_sum(nram_x, chunk_rem);
+            }
+
+            if constexpr (!UNIT_DIAG) {
+                if constexpr (UPPER) {
+                    value /= AP[i * (i + 1) / 2 + i];
+                } else {
+                    value /= AP[i * n - i * (i - 1) / 2];
+                }
+            }
+            x[i * incx] = value;
+        } else {
+            if constexpr (!UNIT_DIAG) {
+                if constexpr (UPPER) {
+                    value /= AP[i * (i + 1) / 2 + i];
+                } else {
+                    value /= AP[i * n - i * (i - 1) / 2];
+                }
+                x[i * incx] = value;
+            }
+
+            int begin;
+            int end;
+            if constexpr (UPPER) {
+                begin = 0;
+                end = i;
+            } else {
+                begin = i + 1;
+                end = n;
+            }
+
+            int elements = end - begin;
+            int chunks = elements / chunk_size;
+            int chunk_rem = elements % chunk_size;
+
+            for (int c = 0; c < chunks; ++c) {
+                int current_offset = begin + c * chunk_size;
+
+                loadTpsvAPChunk<Tdata, UPPER, TRANS>(nram_AP, AP, n, i, current_offset, chunk_size);
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_size * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_size; ++k) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul_scalar(nram_AP, nram_AP, value, chunk_size);
+                __bang_sub(nram_x, nram_x, nram_AP, chunk_size);
+
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(x + current_offset, nram_x, chunk_size * sizeof(Tdata), NRAM2GDRAM);
+                } else {
+                    for (int k = 0; k < chunk_size; ++k) {
+                        x[(current_offset + k) * incx] = nram_x[k];
+                    }
+                }
+            }
+
+            if (chunk_rem > 0) {
+                int current_offset = begin + chunks * chunk_size;
+
+                loadTpsvAPChunk<Tdata, UPPER, TRANS>(nram_AP, AP, n, i, current_offset, chunk_rem);
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(Tdata), GDRAM2NRAM);
+                } else {
+                    for (int k = 0; k < chunk_rem; ++k) {
+                        nram_x[k] = x[(current_offset + k) * incx];
+                    }
+                }
+
+                __bang_mul_scalar(nram_AP, nram_AP, value, chunk_rem);
+                __bang_sub(nram_x, nram_x, nram_AP, chunk_rem);
+
+                if constexpr (X_CONTIGUOUS) {
+                    __memcpy(x + current_offset, nram_x, chunk_rem * sizeof(Tdata), NRAM2GDRAM);
+                } else {
+                    for (int k = 0; k < chunk_rem; ++k) {
+                        x[(current_offset + k) * incx] = nram_x[k];
+                    }
+                }
+            }
+        }
+    }
+}
+
+#define DISPATCH_TPSV(UPPER, TRANS, UNIT, CONTIG) \
+    tpsvKernelImpl<Tdata, UPPER, TRANS, UNIT, CONTIG>(n, AP, x, incx)
+
+template <typename Tdata>
+__mlu_global__ void tpsvKernel(
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    infiniopBlasDiagType_t diag,
+    int n,
+    const Tdata *AP,
+    Tdata *x, int incx) {
+
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+    const bool transposed = trans == INFINIOP_BLAS_OP_T;
+    const bool unit_diag = diag == INFINIOP_BLAS_DIAG_UNIT;
+    const bool x_contiguous = incx == 1;
+
+    if (transposed) {
+        if (unit_diag) {
+            if (upper) {
+                if (x_contiguous) {
+                    DISPATCH_TPSV(true, true, true, true);
+                } else {
+                    DISPATCH_TPSV(true, true, true, false);
+                }
+            } else {
+                if (x_contiguous) {
+                    DISPATCH_TPSV(false, true, true, true);
+                } else {
+                    DISPATCH_TPSV(false, true, true, false);
+                }
+            }
+        } else {
+            if (upper) {
+                if (x_contiguous) {
+                    DISPATCH_TPSV(true, true, false, true);
+                } else {
+                    DISPATCH_TPSV(true, true, false, false);
+                }
+            } else {
+                if (x_contiguous) {
+                    DISPATCH_TPSV(false, true, false, true);
+                } else {
+                    DISPATCH_TPSV(false, true, false, false);
+                }
+            }
+        }
+    } else {
+        if (unit_diag) {
+            if (upper) {
+                if (x_contiguous) {
+                    DISPATCH_TPSV(true, false, true, true);
+                } else {
+                    DISPATCH_TPSV(true, false, true, false);
+                }
+            } else {
+                if (x_contiguous) {
+                    DISPATCH_TPSV(false, false, true, true);
+                } else {
+                    DISPATCH_TPSV(false, false, true, false);
+                }
+            }
+        } else {
+            if (upper) {
+                if (x_contiguous) {
+                    DISPATCH_TPSV(true, false, false, true);
+                } else {
+                    DISPATCH_TPSV(true, false, false, false);
+                }
+            } else {
+                if (x_contiguous) {
+                    DISPATCH_TPSV(false, false, false, true);
+                } else {
+                    DISPATCH_TPSV(false, false, false, false);
+                }
+            }
+        }
+    }
+
+#undef DISPATCH_TPSV
+}
