@@ -1,0 +1,22 @@
+#pragma once
+
+#include <pybind11/pybind11.h>
+
+#include "infinicore/ops/tpsv.hpp"
+
+namespace py = pybind11;
+
+namespace infinicore::ops {
+
+inline void bind_tpsv(py::module &m) {
+    m.def("tpsv_",
+          &op::tpsv_,
+          py::arg("ap"),
+          py::arg("x"),
+          py::arg("uplo"),
+          py::arg("trans"),
+          py::arg("diag"),
+          R"doc(In-place BLAS level-2 packed triangular solve.)doc");
+}
+
+} // namespace infinicore::ops

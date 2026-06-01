@@ -73,5 +73,6 @@
 #include "ops/tbsv.hpp"
 #include "ops/topksoftmax.hpp"
 #include "ops/tpmv.hpp"
+#include "ops/tpsv.hpp"
 #include "ops/trmv.hpp"
 #include "ops/trsv.hpp"
