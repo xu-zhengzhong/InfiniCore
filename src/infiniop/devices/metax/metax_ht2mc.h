@@ -173,6 +173,8 @@
 #define hcblasZhpmv mcblasZhpmv
 #define hcblasCher mcblasCher
 #define hcblasZher mcblasZher
+#define hcblasCher2 mcblasCher2
+#define hcblasZher2 mcblasZher2
 #define hcblasChpr mcblasChpr
 #define hcblasZhpr mcblasZhpr
 #define hcblasChpr2 mcblasChpr2

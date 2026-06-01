@@ -1,0 +1,98 @@
+#include "../../../devices/bang/common_bang.h"
+#include "her2_bang.h"
+#include "her2_bang_kernel.mlu"
+
+namespace op::her2::bang {
+
+Descriptor::~Descriptor() = default;
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopBlasFillMode_t uplo,
+    infiniopTensorDescriptor_t alpha_desc,
+    infiniopTensorDescriptor_t x_desc,
+    infiniopTensorDescriptor_t y_desc,
+    infiniopTensorDescriptor_t A_desc) {
+
+    auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
+    auto result = Her2Info::createHer2Info(uplo, alpha_desc, x_desc, y_desc, A_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        0,
+        nullptr,
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t calculateHer2(
+    const Her2Info &info,
+    const device::bang::FloatComplex *alpha,
+    const device::bang::FloatComplex *x,
+    const device::bang::FloatComplex *y,
+    device::bang::FloatComplex *A,
+    cnrtQueue_t queue) {
+
+    const int n = utils::cast<int>(info.n);
+    const int incx = utils::cast<int>(info.incx);
+    const int incy = utils::cast<int>(info.incy);
+    const int lda = utils::cast<int>(info.A_col_stride);
+
+    cnrtDim3_t k_dim;
+    cnrtFunctionType_t k_type;
+
+    k_dim.x = 4;
+    k_dim.y = 1;
+    k_dim.z = 1;
+    k_type = cnrtFuncTypeUnion1;
+
+    her2Kernel<<<k_dim, k_type, queue>>>(
+        info.uplo,
+        n,
+        alpha,
+        x, incx,
+        y, incy,
+        A, lda);
+
+    cnrtQueueSync(queue);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+#define CALCULATE_HER2(TDATA)           \
+    calculateHer2(_info,                \
+                  (const TDATA *)alpha, \
+                  (const TDATA *)x,     \
+                  (const TDATA *)y,     \
+                  (TDATA *)A,           \
+                  (cnrtQueue_t)stream)
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *alpha,
+    const void *x,
+    const void *y,
+    void *A,
+    void *stream) const {
+
+    (void)workspace;
+    (void)workspace_size;
+
+    switch (_info.data_type) {
+    case INFINI_DTYPE_C64:
+        return CALCULATE_HER2(device::bang::FloatComplex);
+    case INFINI_DTYPE_C128:
+        return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+#undef CALCULATE_HER2
+
+} // namespace op::her2::bang
