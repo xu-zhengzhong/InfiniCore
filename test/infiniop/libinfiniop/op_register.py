@@ -3085,6 +3085,43 @@ def her_(lib):
 
 
 @OpRegister.operator
+def her2_(lib):
+    lib.infiniopCreateHer2Descriptor.restype = c_int32
+    lib.infiniopCreateHer2Descriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetHer2WorkspaceSize.restype = c_int32
+    lib.infiniopGetHer2WorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopHer2.restype = c_int32
+    lib.infiniopHer2.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyHer2Descriptor.restype = c_int32
+    lib.infiniopDestroyHer2Descriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def hpr_(lib):
     lib.infiniopCreateHprDescriptor.restype = c_int32
     lib.infiniopCreateHprDescriptor.argtypes = [

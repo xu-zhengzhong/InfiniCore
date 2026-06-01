@@ -1,0 +1,152 @@
+#include "../../../devices/bang/bang_complex.h"
+#include "../../../devices/bang/common_bang.h"
+#include "her2_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <bool X_CONTIGUOUS, bool Y_CONTIGUOUS>
+__mlu_device__ void her2KernelImpl(
+    bool upper,
+    int n,
+    const device::bang::Complex *alpha,
+    const device::bang::Complex *x, int incx,
+    const device::bang::Complex *y, int incy,
+    device::bang::Complex *A, int lda) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (3 * sizeof(device::bang::Complex));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(device::bang::Complex);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    device::bang::Complex *nram_A = (device::bang::Complex *)nram_aligned;
+    device::bang::Complex *nram_x = nram_A + chunk_size;
+    device::bang::Complex *nram_y = nram_x + chunk_size;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    const auto alpha_v = *alpha;
+    if (core_elements <= 0 || device::bang::cIsZero(alpha_v)) {
+        return;
+    }
+
+    for (int j = core_offset; j < core_offset + core_elements; ++j) {
+        const auto xj = x[j * incx];
+        const auto yj = y[j * incy];
+        if (device::bang::cIsZero(xj) && device::bang::cIsZero(yj)) {
+            auto diag = A[j + j * lda];
+            diag.y = 0.0f;
+            A[j + j * lda] = diag;
+            continue;
+        }
+
+        const auto temp1 = device::bang::cMul(alpha_v, device::bang::cConj(yj));
+        const auto temp2 = device::bang::cConj(device::bang::cMul(alpha_v, xj));
+        const int start = upper ? 0 : j;
+        const int elements = upper ? j + 1 : n - j;
+        const int chunks = elements / chunk_size;
+        const int chunk_rem = elements % chunk_size;
+
+        for (int c = 0; c < chunks; ++c) {
+            const int current_offset = start + c * chunk_size;
+
+            __memcpy(nram_A, A + current_offset + j * lda, chunk_size * sizeof(device::bang::Complex), GDRAM2NRAM);
+            if constexpr (X_CONTIGUOUS) {
+                __memcpy(nram_x, x + current_offset, chunk_size * sizeof(device::bang::Complex), GDRAM2NRAM);
+            } else {
+                for (int i = 0; i < chunk_size; ++i) {
+                    nram_x[i] = x[(current_offset + i) * incx];
+                }
+            }
+            if constexpr (Y_CONTIGUOUS) {
+                __memcpy(nram_y, y + current_offset, chunk_size * sizeof(device::bang::Complex), GDRAM2NRAM);
+            } else {
+                for (int i = 0; i < chunk_size; ++i) {
+                    nram_y[i] = y[(current_offset + i) * incy];
+                }
+            }
+
+            for (int i = 0; i < chunk_size; ++i) {
+                const int row = current_offset + i;
+                const auto update = device::bang::cAdd(
+                    device::bang::cMul(nram_x[i], temp1),
+                    device::bang::cMul(nram_y[i], temp2));
+                nram_A[i] = device::bang::cAdd(nram_A[i], update);
+                if (row == j) {
+                    nram_A[i].y = 0.0f;
+                }
+            }
+
+            __memcpy(A + current_offset + j * lda, nram_A, chunk_size * sizeof(device::bang::Complex), NRAM2GDRAM);
+        }
+
+        if (chunk_rem > 0) {
+            const int current_offset = start + chunks * chunk_size;
+
+            __memcpy(nram_A, A + current_offset + j * lda, chunk_rem * sizeof(device::bang::Complex), GDRAM2NRAM);
+            if constexpr (X_CONTIGUOUS) {
+                __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(device::bang::Complex), GDRAM2NRAM);
+            } else {
+                for (int i = 0; i < chunk_rem; ++i) {
+                    nram_x[i] = x[(current_offset + i) * incx];
+                }
+            }
+            if constexpr (Y_CONTIGUOUS) {
+                __memcpy(nram_y, y + current_offset, chunk_rem * sizeof(device::bang::Complex), GDRAM2NRAM);
+            } else {
+                for (int i = 0; i < chunk_rem; ++i) {
+                    nram_y[i] = y[(current_offset + i) * incy];
+                }
+            }
+
+            for (int i = 0; i < chunk_rem; ++i) {
+                const int row = current_offset + i;
+                const auto update = device::bang::cAdd(
+                    device::bang::cMul(nram_x[i], temp1),
+                    device::bang::cMul(nram_y[i], temp2));
+                nram_A[i] = device::bang::cAdd(nram_A[i], update);
+                if (row == j) {
+                    nram_A[i].y = 0.0f;
+                }
+            }
+
+            __memcpy(A + current_offset + j * lda, nram_A, chunk_rem * sizeof(device::bang::Complex), NRAM2GDRAM);
+        }
+    }
+}
+
+#define DISPATCH_HER2(X_CONTIG, Y_CONTIG) \
+    her2KernelImpl<X_CONTIG, Y_CONTIG>(upper, n, alpha, x, incx, y, incy, A, lda)
+
+__mlu_global__ void her2Kernel(
+    infiniopBlasFillMode_t uplo,
+    int n,
+    const device::bang::Complex *alpha,
+    const device::bang::Complex *x, int incx,
+    const device::bang::Complex *y, int incy,
+    device::bang::Complex *A, int lda) {
+
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+    const bool x_contiguous = incx == 1;
+    const bool y_contiguous = incy == 1;
+
+    if (x_contiguous && y_contiguous) {
+        DISPATCH_HER2(true, true);
+    } else if (x_contiguous) {
+        DISPATCH_HER2(true, false);
+    } else if (y_contiguous) {
+        DISPATCH_HER2(false, true);
+    } else {
+        DISPATCH_HER2(false, false);
+    }
+
+#undef DISPATCH_HER2
+}
