@@ -141,6 +141,7 @@
 #include "infiniop/ops/topkrouter.h"
 #include "infiniop/ops/topksoftmax.h"
 #include "infiniop/ops/tpmv.h"
+#include "infiniop/ops/tpsv.h"
 #include "infiniop/ops/triplet_margin_loss.h"
 #include "infiniop/ops/triplet_margin_with_distance_loss.h"
 #include "infiniop/ops/trmv.h"
