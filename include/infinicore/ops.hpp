@@ -36,6 +36,7 @@
 #include "ops/hbmv.hpp"
 #include "ops/hemv.hpp"
 #include "ops/her.hpp"
+#include "ops/hpmv.hpp"
 #include "ops/kv_caching.hpp"
 #include "ops/layer_norm.hpp"
 #include "ops/linear.hpp"
