@@ -123,6 +123,7 @@
 #include "infiniop/ops/softsign.h"
 #include "infiniop/ops/spmv.h"
 #include "infiniop/ops/spr.h"
+#include "infiniop/ops/spr2.h"
 #include "infiniop/ops/sub.h"
 #include "infiniop/ops/sum.h"
 #include "infiniop/ops/swap.h"
