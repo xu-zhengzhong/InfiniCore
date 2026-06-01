@@ -1,0 +1,91 @@
+#include "../../../devices/bang/common_bang.h"
+#include "hpr_bang.h"
+#include "hpr_bang_kernel.mlu"
+
+namespace op::hpr::bang {
+
+Descriptor::~Descriptor() = default;
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopBlasFillMode_t uplo,
+    infiniopTensorDescriptor_t alpha_desc,
+    infiniopTensorDescriptor_t x_desc,
+    infiniopTensorDescriptor_t AP_desc) {
+
+    auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
+    auto result = HprInfo::createHprInfo(uplo, alpha_desc, x_desc, AP_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        0,
+        nullptr,
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t calculateHpr(
+    const HprInfo &info,
+    const float *alpha,
+    const device::bang::FloatComplex *x,
+    device::bang::FloatComplex *AP,
+    cnrtQueue_t queue) {
+
+    const int n = utils::cast<int>(info.n);
+    const int incx = utils::cast<int>(info.incx);
+
+    cnrtDim3_t k_dim;
+    cnrtFunctionType_t k_type;
+
+    k_dim.x = 4;
+    k_dim.y = 1;
+    k_dim.z = 1;
+    k_type = cnrtFuncTypeUnion1;
+
+    hprKernel<<<k_dim, k_type, queue>>>(
+        info.uplo,
+        n,
+        alpha,
+        x, incx,
+        AP);
+
+    cnrtQueueSync(queue);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+#define CALCULATE_HPR(TALPHA, TDATA)    \
+    calculateHpr(_info,                 \
+                 (const TALPHA *)alpha, \
+                 (const TDATA *)x,      \
+                 (TDATA *)AP,           \
+                 (cnrtQueue_t)stream)
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *alpha,
+    const void *x,
+    void *AP,
+    void *stream) const {
+
+    (void)workspace;
+    (void)workspace_size;
+
+    switch (_info.data_type) {
+    case INFINI_DTYPE_C64:
+        return CALCULATE_HPR(float, device::bang::FloatComplex);
+    case INFINI_DTYPE_C128:
+        return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+#undef CALCULATE_HPR
+
+} // namespace op::hpr::bang

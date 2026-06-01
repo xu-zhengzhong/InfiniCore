@@ -1,0 +1,84 @@
+#include "hpr_metax.h"
+#include "../../../devices/metax/metax_common.h"
+#include "../../../devices/metax/metax_handle.h"
+
+namespace op::hpr::metax {
+
+struct Descriptor::Opaque {
+    std::shared_ptr<device::metax::Handle::Internal> internal;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopBlasFillMode_t uplo,
+    infiniopTensorDescriptor_t alpha_desc,
+    infiniopTensorDescriptor_t x_desc,
+    infiniopTensorDescriptor_t AP_desc) {
+
+    auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
+    auto result = HprInfo::createHprInfo(uplo, alpha_desc, x_desc, AP_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        0,
+        new Opaque{handle->internal()},
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *alpha,
+    const void *x,
+    void *AP,
+    void *stream) const {
+
+    (void)workspace;
+    (void)workspace_size;
+
+    const int n = utils::cast<int>(_info.n);
+    const int incx = utils::cast<int>(_info.incx);
+    const infiniDtype_t data_type = _info.data_type;
+
+    auto uplo = _info.uplo == INFINIOP_BLAS_FILL_MODE_UPPER ? HCBLAS_FILL_MODE_UPPER : HCBLAS_FILL_MODE_LOWER;
+
+    CHECK_STATUS(_opaque->internal->useMcblas(
+        (hcStream_t)stream,
+        [&](hcblasHandle_t handle) {
+            CHECK_MCBLAS(hcblasSetPointerMode(handle, HCBLAS_POINTER_MODE_DEVICE));
+
+            switch (data_type) {
+            case INFINI_DTYPE_C64:
+                CHECK_MCBLAS(hcblasChpr(
+                    handle, uplo, n,
+                    static_cast<const float *>(alpha),
+                    static_cast<const hcFloatComplex *>(x), incx,
+                    static_cast<hcFloatComplex *>(AP)));
+                break;
+            case INFINI_DTYPE_C128:
+                CHECK_MCBLAS(hcblasZhpr(
+                    handle, uplo, n,
+                    static_cast<const double *>(alpha),
+                    static_cast<const hcDoubleComplex *>(x), incx,
+                    static_cast<hcDoubleComplex *>(AP)));
+                break;
+            default:
+                return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+            }
+
+            return INFINI_STATUS_SUCCESS;
+        }));
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+} // namespace op::hpr::metax
