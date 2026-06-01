@@ -94,6 +94,7 @@ from infinicore.ops.hbmv import hbmv
 from infinicore.ops.her import her
 from infinicore.ops.hemv import hemv
 from infinicore.ops.hpr import hpr
+from infinicore.ops.hpr2 import hpr2
 from infinicore.ops.hpmv import hpmv
 from infinicore.ops.hypot import hypot
 from infinicore.ops.index_add import index_add
@@ -245,6 +246,7 @@ __all__ = [
     "her",
     "hemv",
     "hpr",
+    "hpr2",
     "hpmv",
     "cat",
     "inner",
