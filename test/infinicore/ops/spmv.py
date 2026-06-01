@@ -43,19 +43,12 @@ _TOLERANCE_MAP = {
 
 def _packed_to_full(ap, uplo, n):
     matrix = torch.empty((n, n), dtype=ap.dtype, device=ap.device)
-    offset = 0
     if uplo == 0:
-        for j in range(n):
-            for i in range(j + 1):
-                matrix[i, j] = ap[offset]
-                matrix[j, i] = ap[offset]
-                offset += 1
+        rows, cols = torch.tril_indices(n, n, device=ap.device)
     else:
-        for j in range(n):
-            for i in range(j, n):
-                matrix[i, j] = ap[offset]
-                matrix[j, i] = ap[offset]
-                offset += 1
+        rows, cols = torch.triu_indices(n, n, device=ap.device)
+    matrix[cols, rows] = ap
+    matrix[rows, cols] = ap
     return matrix
 
 

@@ -57,19 +57,12 @@ NUM_ITERATIONS = 1000
 
 def _packed_to_full(AP, uplo, n):
     matrix = torch.empty((n, n), dtype=AP.dtype, device=AP.device)
-    offset = 0
     if uplo == 0:
-        for j in range(n):
-            for i in range(j + 1):
-                matrix[i, j] = AP[offset]
-                matrix[j, i] = AP[offset]
-                offset += 1
+        rows, cols = torch.tril_indices(n, n, device=AP.device)
     else:
-        for j in range(n):
-            for i in range(j, n):
-                matrix[i, j] = AP[offset]
-                matrix[j, i] = AP[offset]
-                offset += 1
+        rows, cols = torch.triu_indices(n, n, device=AP.device)
+    matrix[cols, rows] = AP
+    matrix[rows, cols] = AP
     return matrix
 
 
