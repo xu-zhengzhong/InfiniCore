@@ -58,6 +58,7 @@
 #include "ops/her.hpp"
 #include "ops/hinge_embedding_loss.hpp"
 #include "ops/hpmv.hpp"
+#include "ops/hpr.hpp"
 #include "ops/huber_loss.hpp"
 #include "ops/hypot.hpp"
 #include "ops/index_add.hpp"
@@ -207,6 +208,7 @@ inline void bind(py::module &m) {
     bind_hbmv(m);
     bind_her(m);
     bind_hemv(m);
+    bind_hpr(m);
     bind_hpmv(m);
     bind_interpolate(m);
     bind_paged_attention(m);
