@@ -1,0 +1,102 @@
+#include "../../../devices/bang/common_bang.h"
+#include "hpmv_bang.h"
+#include "hpmv_bang_kernel.mlu"
+
+namespace op::hpmv::bang {
+
+Descriptor::~Descriptor() = default;
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopBlasFillMode_t uplo,
+    infiniopTensorDescriptor_t alpha_desc,
+    infiniopTensorDescriptor_t AP_desc,
+    infiniopTensorDescriptor_t x_desc,
+    infiniopTensorDescriptor_t beta_desc,
+    infiniopTensorDescriptor_t y_desc) {
+
+    auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
+    auto result = HpmvInfo::createHpmvInfo(uplo, alpha_desc, AP_desc, x_desc, beta_desc, y_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        0,
+        nullptr,
+        handle->device,
+        handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t calculateHpmv(
+    const HpmvInfo &info,
+    const device::bang::FloatComplex *alpha,
+    const device::bang::FloatComplex *AP,
+    const device::bang::FloatComplex *x,
+    const device::bang::FloatComplex *beta,
+    device::bang::FloatComplex *y,
+    cnrtQueue_t queue) {
+
+    const int n = utils::cast<int>(info.n);
+    const int incx = utils::cast<int>(info.incx);
+    const int incy = utils::cast<int>(info.incy);
+
+    cnrtDim3_t k_dim;
+    cnrtFunctionType_t k_type;
+
+    k_dim.x = 4;
+    k_dim.y = 1;
+    k_dim.z = 1;
+    k_type = cnrtFuncTypeUnion1;
+
+    hpmvKernel<<<k_dim, k_type, queue>>>(
+        info.uplo,
+        n,
+        alpha,
+        AP,
+        x, incx,
+        beta,
+        y, incy);
+
+    cnrtQueueSync(queue);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+#define CALCULATE_HPMV(TDATA)           \
+    calculateHpmv(_info,                \
+                  (const TDATA *)alpha, \
+                  (const TDATA *)AP,    \
+                  (const TDATA *)x,     \
+                  (const TDATA *)beta,  \
+                  (TDATA *)y,           \
+                  (cnrtQueue_t)stream)
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *alpha,
+    const void *AP,
+    const void *x,
+    const void *beta,
+    void *y,
+    void *stream) const {
+
+    (void)workspace;
+    (void)workspace_size;
+
+    switch (_info.data_type) {
+    case INFINI_DTYPE_C64:
+        return CALCULATE_HPMV(device::bang::FloatComplex);
+    case INFINI_DTYPE_C128:
+        return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+#undef CALCULATE_HPMV
+
+} // namespace op::hpmv::bang
