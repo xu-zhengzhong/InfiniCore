@@ -2865,6 +2865,41 @@ def syr_(lib):
 
 
 @OpRegister.operator
+def spr_(lib):
+    lib.infiniopCreateSprDescriptor.restype = c_int32
+    lib.infiniopCreateSprDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSprWorkspaceSize.restype = c_int32
+    lib.infiniopGetSprWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSpr.restype = c_int32
+    lib.infiniopSpr.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySprDescriptor.restype = c_int32
+    lib.infiniopDestroySprDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def her_(lib):
     lib.infiniopCreateHerDescriptor.restype = c_int32
     lib.infiniopCreateHerDescriptor.argtypes = [
