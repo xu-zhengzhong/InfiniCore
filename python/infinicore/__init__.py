@@ -140,6 +140,7 @@ from infinicore.ops.syr2 import syr2
 from infinicore.ops.take import take
 from infinicore.ops.tan import tan
 from infinicore.ops.tbmv import tbmv
+from infinicore.ops.tbsv import tbsv
 from infinicore.ops.topk import topk
 from infinicore.ops.trmv import trmv
 from infinicore.ops.trsv import trsv
@@ -299,6 +300,7 @@ __all__ = [
     "syr",
     "syr2",
     "tbmv",
+    "tbsv",
     "trmv",
     "trsv",
     "ones",
