@@ -142,6 +142,7 @@ from infinicore.ops.tan import tan
 from infinicore.ops.tbmv import tbmv
 from infinicore.ops.tbsv import tbsv
 from infinicore.ops.topk import topk
+from infinicore.ops.tpmv import tpmv
 from infinicore.ops.trmv import trmv
 from infinicore.ops.trsv import trsv
 from infinicore.ops.unsqueeze import unsqueeze
@@ -301,6 +302,7 @@ __all__ = [
     "syr2",
     "tbmv",
     "tbsv",
+    "tpmv",
     "trmv",
     "trsv",
     "ones",
