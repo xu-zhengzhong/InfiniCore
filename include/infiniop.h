@@ -67,6 +67,7 @@
 #include "infiniop/ops/hinge_embedding_loss.h"
 #include "infiniop/ops/histc.h"
 #include "infiniop/ops/hpmv.h"
+#include "infiniop/ops/hpr.h"
 #include "infiniop/ops/huber_loss.h"
 #include "infiniop/ops/hypot.h"
 #include "infiniop/ops/index_add.h"

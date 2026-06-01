@@ -1,0 +1,135 @@
+#include "../../../devices/bang/bang_complex.h"
+#include "../../../devices/bang/common_bang.h"
+#include "hpr_bang.h"
+
+__nram__ char nram_buffer[NRAM_MAX_SIZE];
+
+template <bool CONTIGUOUS>
+__mlu_device__ void hprKernelImpl(
+    bool upper,
+    int n,
+    const float *alpha,
+    const device::bang::Complex *x, int incx,
+    device::bang::Complex *AP) {
+
+    char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
+    size_t max_chunk_elements = nram_usable / (2 * sizeof(device::bang::Complex));
+
+    size_t align_elements = ALIGN_SIZE / sizeof(device::bang::Complex);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+
+    device::bang::Complex *nram_AP = (device::bang::Complex *)nram_aligned;
+    device::bang::Complex *nram_x = nram_AP + chunk_size;
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    const float alpha_v = *alpha;
+    if (core_elements <= 0 || alpha_v == 0.0f) {
+        return;
+    }
+
+    for (int j = core_offset; j < core_offset + core_elements; ++j) {
+        const auto xj = x[j * incx];
+        const int diag_offset = upper ? j * (j + 1) / 2 + j
+                                      : j * n - j * (j - 1) / 2;
+
+        if (device::bang::cIsZero(xj)) {
+            auto diag = AP[diag_offset];
+            diag.y = 0.0f;
+            AP[diag_offset] = diag;
+            continue;
+        }
+
+        const int start = upper ? 0 : j;
+        const int elements = upper ? j + 1 : n - j;
+        const int AP_offset = upper ? j * (j + 1) / 2 : j * n - j * (j - 1) / 2;
+        const int chunks = elements / chunk_size;
+        const int chunk_rem = elements % chunk_size;
+
+        for (int c = 0; c < chunks; ++c) {
+            const int current_offset = start + c * chunk_size;
+            const int packed_offset = AP_offset + c * chunk_size;
+
+            __memcpy(nram_AP, AP + packed_offset, chunk_size * sizeof(device::bang::Complex), GDRAM2NRAM);
+            if constexpr (CONTIGUOUS) {
+                __memcpy(nram_x, x + current_offset, chunk_size * sizeof(device::bang::Complex), GDRAM2NRAM);
+            } else {
+                for (int i = 0; i < chunk_size; ++i) {
+                    nram_x[i] = x[(current_offset + i) * incx];
+                }
+            }
+
+            for (int i = 0; i < chunk_size; ++i) {
+                const int row = current_offset + i;
+                const auto xi = nram_x[i];
+                const auto update = device::bang::makeFloatComplex(
+                    alpha_v * (xi.x * xj.x + xi.y * xj.y),
+                    alpha_v * (xi.y * xj.x - xi.x * xj.y));
+                nram_AP[i] = device::bang::cAdd(nram_AP[i], update);
+                if (row == j) {
+                    nram_AP[i].y = 0.0f;
+                }
+            }
+
+            __memcpy(AP + packed_offset, nram_AP, chunk_size * sizeof(device::bang::Complex), NRAM2GDRAM);
+        }
+
+        if (chunk_rem > 0) {
+            const int current_offset = start + chunks * chunk_size;
+            const int packed_offset = AP_offset + chunks * chunk_size;
+
+            __memcpy(nram_AP, AP + packed_offset, chunk_rem * sizeof(device::bang::Complex), GDRAM2NRAM);
+            if constexpr (CONTIGUOUS) {
+                __memcpy(nram_x, x + current_offset, chunk_rem * sizeof(device::bang::Complex), GDRAM2NRAM);
+            } else {
+                for (int i = 0; i < chunk_rem; ++i) {
+                    nram_x[i] = x[(current_offset + i) * incx];
+                }
+            }
+
+            for (int i = 0; i < chunk_rem; ++i) {
+                const int row = current_offset + i;
+                const auto xi = nram_x[i];
+                const auto update = device::bang::makeFloatComplex(
+                    alpha_v * (xi.x * xj.x + xi.y * xj.y),
+                    alpha_v * (xi.y * xj.x - xi.x * xj.y));
+                nram_AP[i] = device::bang::cAdd(nram_AP[i], update);
+                if (row == j) {
+                    nram_AP[i].y = 0.0f;
+                }
+            }
+
+            __memcpy(AP + packed_offset, nram_AP, chunk_rem * sizeof(device::bang::Complex), NRAM2GDRAM);
+        }
+    }
+}
+
+#define DISPATCH_HPR(CONTIG) \
+    hprKernelImpl<CONTIG>(upper, n, alpha, x, incx, AP)
+
+__mlu_global__ void hprKernel(
+    infiniopBlasFillMode_t uplo,
+    int n,
+    const float *alpha,
+    const device::bang::Complex *x, int incx,
+    device::bang::Complex *AP) {
+
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+    const bool x_contiguous = incx == 1;
+
+    if (x_contiguous) {
+        DISPATCH_HPR(true);
+    } else {
+        DISPATCH_HPR(false);
+    }
+
+#undef DISPATCH_HPR
+}
