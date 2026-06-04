@@ -87,6 +87,7 @@ from infinicore.ops.floor import floor
 from infinicore.ops.floor_divide import floor_divide
 from infinicore.ops.fmin import fmin
 from infinicore.ops.fmod import fmod
+from infinicore.ops.her2k import her2k
 from infinicore.ops.herk import herk
 from infinicore.ops.hemm import hemm
 from infinicore.ops.hypot import hypot
@@ -258,6 +259,7 @@ __all__ = [
     "floor_divide",
     "float_power",
     "flipud",
+    "her2k",
     "herk",
     "hemm",
     "scatter",
