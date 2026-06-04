@@ -128,6 +128,7 @@ from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
 from infinicore.ops.swap import swap
 from infinicore.ops.symm import symm
+from infinicore.ops.syr2k import syr2k
 from infinicore.ops.syrk import syrk
 from infinicore.ops.take import take
 from infinicore.ops.tan import tan
@@ -279,6 +280,7 @@ __all__ = [
     "sinh",
     "swap",
     "symm",
+    "syr2k",
     "syrk",
     "trmm",
     "ones",

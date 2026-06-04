@@ -111,6 +111,7 @@
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
 #include "ops/symm.hpp"
+#include "ops/syr2k.hpp"
 #include "ops/syrk.hpp"
 #include "ops/take.hpp"
 #include "ops/tan.hpp"
@@ -255,6 +256,7 @@ inline void bind(py::module &m) {
     bind_selu(m);
     bind_swap(m);
     bind_symm(m);
+    bind_syr2k(m);
     bind_syrk(m);
     bind_trmm(m);
     bind_sinh(m);
