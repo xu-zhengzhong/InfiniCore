@@ -199,6 +199,8 @@
 #define hcblasDsyrk mcblasDsyrk
 #define hcblasChemm mcblasChemm
 #define hcblasZhemm mcblasZhemm
+#define hcblasCher2k mcblasCher2k
+#define hcblasZher2k mcblasZher2k
 #define hcblasCherk mcblasCherk
 #define hcblasZherk mcblasZherk
 #define hcblasStrmm mcblasStrmm

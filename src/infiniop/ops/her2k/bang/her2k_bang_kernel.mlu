@@ -1,0 +1,246 @@
+#include "../../../devices/bang/bang_complex.h"
+#include "../../../devices/bang/common_bang.h"
+#include "her2k_bang.h"
+
+__nram__ char her2k_nram_buffer[NRAM_MAX_SIZE];
+
+__mlu_func__ void loadHer2kChunk(
+    float *data_real,
+    float *data_imag,
+    infiniopBlasOperation_t trans,
+    const device::bang::FloatComplex *data,
+    int ld,
+    int index,
+    int chunk_offset,
+    int chunk_elements) {
+
+    if (trans == INFINIOP_BLAS_OP_N) {
+        for (int l = 0; l < chunk_elements; ++l) {
+            const auto value = data[index + (chunk_offset + l) * ld];
+            data_real[l] = device::bang::cReal(value);
+            data_imag[l] = device::bang::cImag(value);
+        }
+    } else {
+        for (int l = 0; l < chunk_elements; ++l) {
+            const auto value = data[chunk_offset + l + index * ld];
+            data_real[l] = device::bang::cReal(value);
+            data_imag[l] = device::bang::cImag(value);
+        }
+    }
+}
+
+__mlu_func__ void complexConjRightDotAccumulate(
+    float *prod,
+    const float *lhs_real,
+    const float *lhs_imag,
+    const float *rhs_real,
+    const float *rhs_imag,
+    int len,
+    float *sum_real,
+    float *sum_imag) {
+
+    __bang_mul(prod, lhs_real, rhs_real, len);
+    *sum_real += __bang_sum(prod, len);
+    __bang_mul(prod, lhs_imag, rhs_imag, len);
+    *sum_real += __bang_sum(prod, len);
+
+    __bang_mul(prod, lhs_imag, rhs_real, len);
+    *sum_imag += __bang_sum(prod, len);
+    __bang_mul(prod, lhs_real, rhs_imag, len);
+    *sum_imag -= __bang_sum(prod, len);
+}
+
+__mlu_func__ void complexConjLeftDotAccumulate(
+    float *prod,
+    const float *lhs_real,
+    const float *lhs_imag,
+    const float *rhs_real,
+    const float *rhs_imag,
+    int len,
+    float *sum_real,
+    float *sum_imag) {
+
+    __bang_mul(prod, lhs_real, rhs_real, len);
+    *sum_real += __bang_sum(prod, len);
+    __bang_mul(prod, lhs_imag, rhs_imag, len);
+    *sum_real += __bang_sum(prod, len);
+
+    __bang_mul(prod, lhs_real, rhs_imag, len);
+    *sum_imag += __bang_sum(prod, len);
+    __bang_mul(prod, lhs_imag, rhs_real, len);
+    *sum_imag -= __bang_sum(prod, len);
+}
+
+template <int TILE_SIZE>
+__mlu_global__ void her2kKernel(
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t trans,
+    int n,
+    int k,
+    const device::bang::FloatComplex *alpha,
+    const device::bang::FloatComplex *A,
+    int lda,
+    const device::bang::FloatComplex *B,
+    int ldb,
+    const float *beta,
+    device::bang::FloatComplex *C,
+    int ldc) {
+
+    const auto alpha_v = alpha[0];
+    const float alpha_real = device::bang::cReal(alpha_v);
+    const float alpha_imag = device::bang::cImag(alpha_v);
+    const float beta_v = beta[0];
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+
+    char *nram_aligned = (char *)(((size_t)her2k_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    const size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - her2k_nram_buffer);
+
+    size_t align_elements = ALIGN_SIZE / sizeof(float);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+
+    const size_t max_chunk_elements = nram_usable / (9 * sizeof(float));
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+    if (chunk_size <= 0) {
+        return;
+    }
+
+    float *nram_Ai_real = (float *)nram_aligned;
+    float *nram_Ai_imag = nram_Ai_real + chunk_size;
+    float *nram_Bj_real = nram_Ai_imag + chunk_size;
+    float *nram_Bj_imag = nram_Bj_real + chunk_size;
+    float *nram_Bi_real = nram_Bj_imag + chunk_size;
+    float *nram_Bi_imag = nram_Bi_real + chunk_size;
+    float *nram_Aj_real = nram_Bi_imag + chunk_size;
+    float *nram_Aj_imag = nram_Aj_real + chunk_size;
+    float *nram_prod = nram_Aj_imag + chunk_size;
+
+    const int tile_count = (n + TILE_SIZE - 1) / TILE_SIZE;
+    const int total_tiles = tile_count * tile_count;
+
+    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+        const int tile_row_id = tile % tile_count;
+        const int tile_col_id = tile / tile_count;
+
+        if (upper) {
+            if (tile_row_id > tile_col_id) {
+                continue;
+            }
+        } else if (tile_row_id < tile_col_id) {
+            continue;
+        }
+
+        const int tile_row = tile_row_id * TILE_SIZE;
+        const int tile_col = tile_col_id * TILE_SIZE;
+        const int rows = n - tile_row < TILE_SIZE ? n - tile_row : TILE_SIZE;
+        const int cols = n - tile_col < TILE_SIZE ? n - tile_col : TILE_SIZE;
+
+        float sums_ab_real[TILE_SIZE][TILE_SIZE];
+        float sums_ab_imag[TILE_SIZE][TILE_SIZE];
+        float sums_ba_real[TILE_SIZE][TILE_SIZE];
+        float sums_ba_imag[TILE_SIZE][TILE_SIZE];
+        for (int r = 0; r < TILE_SIZE; ++r) {
+            for (int c = 0; c < TILE_SIZE; ++c) {
+                sums_ab_real[r][c] = 0.0f;
+                sums_ab_imag[r][c] = 0.0f;
+                sums_ba_real[r][c] = 0.0f;
+                sums_ba_imag[r][c] = 0.0f;
+            }
+        }
+
+        if (alpha_real != 0.0f || alpha_imag != 0.0f) {
+            for (int k0 = 0; k0 < k; k0 += chunk_size) {
+                const int chunk_elements = k - k0 < chunk_size ? k - k0 : chunk_size;
+
+                for (int r = 0; r < rows; ++r) {
+                    const int row = tile_row + r;
+                    for (int c = 0; c < cols; ++c) {
+                        const int col = tile_col + c;
+                        const bool in_triangle = upper ? row <= col : row >= col;
+                        if (!in_triangle) {
+                            continue;
+                        }
+
+                        loadHer2kChunk(nram_Ai_real, nram_Ai_imag, trans, A, lda, row, k0, chunk_elements);
+                        loadHer2kChunk(nram_Bj_real, nram_Bj_imag, trans, B, ldb, col, k0, chunk_elements);
+                        loadHer2kChunk(nram_Bi_real, nram_Bi_imag, trans, B, ldb, row, k0, chunk_elements);
+                        loadHer2kChunk(nram_Aj_real, nram_Aj_imag, trans, A, lda, col, k0, chunk_elements);
+
+                        if (trans == INFINIOP_BLAS_OP_N) {
+                            complexConjRightDotAccumulate(
+                                nram_prod,
+                                nram_Ai_real,
+                                nram_Ai_imag,
+                                nram_Bj_real,
+                                nram_Bj_imag,
+                                chunk_elements,
+                                &sums_ab_real[r][c],
+                                &sums_ab_imag[r][c]);
+                            complexConjRightDotAccumulate(
+                                nram_prod,
+                                nram_Bi_real,
+                                nram_Bi_imag,
+                                nram_Aj_real,
+                                nram_Aj_imag,
+                                chunk_elements,
+                                &sums_ba_real[r][c],
+                                &sums_ba_imag[r][c]);
+                        } else {
+                            complexConjLeftDotAccumulate(
+                                nram_prod,
+                                nram_Ai_real,
+                                nram_Ai_imag,
+                                nram_Bj_real,
+                                nram_Bj_imag,
+                                chunk_elements,
+                                &sums_ab_real[r][c],
+                                &sums_ab_imag[r][c]);
+                            complexConjLeftDotAccumulate(
+                                nram_prod,
+                                nram_Bi_real,
+                                nram_Bi_imag,
+                                nram_Aj_real,
+                                nram_Aj_imag,
+                                chunk_elements,
+                                &sums_ba_real[r][c],
+                                &sums_ba_imag[r][c]);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int c = 0; c < cols; ++c) {
+            const int col = tile_col + c;
+            for (int r = 0; r < rows; ++r) {
+                const int row = tile_row + r;
+                const bool in_triangle = upper ? row <= col : row >= col;
+                if (!in_triangle) {
+                    continue;
+                }
+
+                const int c_idx = row + col * ldc;
+                const float ab_real = sums_ab_real[r][c];
+                const float ab_imag = sums_ab_imag[r][c];
+                const float ba_real = sums_ba_real[r][c];
+                const float ba_imag = sums_ba_imag[r][c];
+                const auto update = device::bang::makeFloatComplex(
+                    alpha_real * ab_real - alpha_imag * ab_imag
+                        + alpha_real * ba_real + alpha_imag * ba_imag,
+                    alpha_real * ab_imag + alpha_imag * ab_real
+                        + alpha_real * ba_imag - alpha_imag * ba_real);
+                if (beta_v == 0.0f) {
+                    C[c_idx] = update;
+                } else {
+                    C[c_idx] = device::bang::cAdd(
+                        update,
+                        device::bang::makeFloatComplex(beta_v * C[c_idx].x, beta_v * C[c_idx].y));
+                }
+                if (row == col) {
+                    C[c_idx].y = 0.0f;
+                }
+            }
+        }
+    }
+}

@@ -66,6 +66,7 @@
 #include "infiniop/ops/hemv.h"
 #include "infiniop/ops/her.h"
 #include "infiniop/ops/her2.h"
+#include "infiniop/ops/her2k.h"
 #include "infiniop/ops/herk.h"
 #include "infiniop/ops/hinge_embedding_loss.h"
 #include "infiniop/ops/histc.h"
