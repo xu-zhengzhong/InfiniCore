@@ -59,6 +59,7 @@
 #include "infiniop/ops/hardswish.h"
 #include "infiniop/ops/hardtanh.h"
 #include "infiniop/ops/hemm.h"
+#include "infiniop/ops/her2k.h"
 #include "infiniop/ops/herk.h"
 #include "infiniop/ops/hinge_embedding_loss.h"
 #include "infiniop/ops/histc.h"

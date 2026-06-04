@@ -2755,6 +2755,46 @@ def herk_(lib):
 
 
 @OpRegister.operator
+def her2k_(lib):
+    lib.infiniopCreateHer2kDescriptor.restype = c_int32
+    lib.infiniopCreateHer2kDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetHer2kWorkspaceSize.restype = c_int32
+    lib.infiniopGetHer2kWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopHer2k.restype = c_int32
+    lib.infiniopHer2k.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyHer2kDescriptor.restype = c_int32
+    lib.infiniopDestroyHer2kDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def hemm_(lib):
     lib.infiniopCreateHemmDescriptor.restype = c_int32
     lib.infiniopCreateHemmDescriptor.argtypes = [
