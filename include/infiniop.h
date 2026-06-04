@@ -139,6 +139,7 @@
 #include "infiniop/ops/symv.h"
 #include "infiniop/ops/syr.h"
 #include "infiniop/ops/syr2.h"
+#include "infiniop/ops/syr2k.h"
 #include "infiniop/ops/syrk.h"
 #include "infiniop/ops/take.h"
 #include "infiniop/ops/tan.h"

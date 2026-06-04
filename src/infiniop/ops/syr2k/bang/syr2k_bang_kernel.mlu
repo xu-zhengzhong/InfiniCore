@@ -1,0 +1,137 @@
+#include "../../../devices/bang/common_bang.h"
+#include "syr2k_bang.h"
+
+__nram__ char syr2k_nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tdata>
+__mlu_func__ void loadSyr2kChunk(
+    Tdata *nram_data,
+    infiniopBlasOperation_t trans,
+    const Tdata *data,
+    int ld,
+    int index,
+    int chunk_offset,
+    int chunk_elements) {
+
+    if (trans == INFINIOP_BLAS_OP_N) {
+        for (int l = 0; l < chunk_elements; ++l) {
+            nram_data[l] = data[index + (chunk_offset + l) * ld];
+        }
+    } else {
+        __memcpy(nram_data, data + chunk_offset + index * ld, chunk_elements * sizeof(Tdata), GDRAM2NRAM);
+    }
+}
+
+template <typename Tdata, int TILE_SIZE>
+__mlu_global__ void syr2kKernel(
+    infiniopBlasFillMode_t uplo,
+    infiniopBlasOperation_t transA,
+    infiniopBlasOperation_t transB,
+    int n,
+    int k,
+    const Tdata *alpha,
+    const Tdata *A,
+    int lda,
+    const Tdata *B,
+    int ldb,
+    const Tdata *beta,
+    Tdata *C,
+    int ldc) {
+
+    const Tdata alpha_v = alpha[0];
+    const Tdata beta_v = beta[0];
+    const bool upper = uplo == INFINIOP_BLAS_FILL_MODE_UPPER;
+
+    char *nram_aligned = (char *)(((size_t)syr2k_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    const size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - syr2k_nram_buffer);
+
+    size_t align_elements = ALIGN_SIZE / sizeof(Tdata);
+    if (align_elements == 0) {
+        align_elements = 1;
+    }
+
+    const size_t max_chunk_elements = nram_usable / (5 * sizeof(Tdata));
+    int chunk_size = (int)((max_chunk_elements / align_elements) * align_elements);
+    if (chunk_size <= 0) {
+        return;
+    }
+
+    Tdata *nram_Ai = (Tdata *)nram_aligned;
+    Tdata *nram_Bj = nram_Ai + chunk_size;
+    Tdata *nram_Bi = nram_Bj + chunk_size;
+    Tdata *nram_Aj = nram_Bi + chunk_size;
+    Tdata *nram_mul = nram_Aj + chunk_size;
+
+    const int tile_count = (n + TILE_SIZE - 1) / TILE_SIZE;
+    const int total_tiles = tile_count * tile_count;
+
+    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+        const int tile_row_id = tile % tile_count;
+        const int tile_col_id = tile / tile_count;
+
+        if (upper) {
+            if (tile_row_id > tile_col_id) {
+                continue;
+            }
+        } else if (tile_row_id < tile_col_id) {
+            continue;
+        }
+
+        const int tile_row = tile_row_id * TILE_SIZE;
+        const int tile_col = tile_col_id * TILE_SIZE;
+        const int rows = n - tile_row < TILE_SIZE ? n - tile_row : TILE_SIZE;
+        const int cols = n - tile_col < TILE_SIZE ? n - tile_col : TILE_SIZE;
+
+        Tdata sums[TILE_SIZE][TILE_SIZE];
+        for (int r = 0; r < TILE_SIZE; ++r) {
+            for (int c = 0; c < TILE_SIZE; ++c) {
+                sums[r][c] = static_cast<Tdata>(0);
+            }
+        }
+
+        if (alpha_v != static_cast<Tdata>(0)) {
+            for (int k0 = 0; k0 < k; k0 += chunk_size) {
+                const int chunk_elements = k - k0 < chunk_size ? k - k0 : chunk_size;
+
+                for (int r = 0; r < rows; ++r) {
+                    const int row = tile_row + r;
+                    for (int c = 0; c < cols; ++c) {
+                        const int col = tile_col + c;
+                        const bool in_triangle = upper ? row <= col : row >= col;
+                        if (!in_triangle) {
+                            continue;
+                        }
+
+                        loadSyr2kChunk(nram_Ai, transA, A, lda, row, k0, chunk_elements);
+                        loadSyr2kChunk(nram_Bj, transB, B, ldb, col, k0, chunk_elements);
+                        __bang_mul(nram_mul, nram_Ai, nram_Bj, chunk_elements);
+                        sums[r][c] += __bang_sum(nram_mul, chunk_elements);
+
+                        loadSyr2kChunk(nram_Bi, transB, B, ldb, row, k0, chunk_elements);
+                        loadSyr2kChunk(nram_Aj, transA, A, lda, col, k0, chunk_elements);
+                        __bang_mul(nram_mul, nram_Bi, nram_Aj, chunk_elements);
+                        sums[r][c] += __bang_sum(nram_mul, chunk_elements);
+                    }
+                }
+            }
+        }
+
+        for (int c = 0; c < cols; ++c) {
+            const int col = tile_col + c;
+            for (int r = 0; r < rows; ++r) {
+                const int row = tile_row + r;
+                const bool in_triangle = upper ? row <= col : row >= col;
+                if (!in_triangle) {
+                    continue;
+                }
+
+                const int c_idx = row + col * ldc;
+                if (beta_v == static_cast<Tdata>(0)) {
+                    C[c_idx] = alpha_v * sums[r][c];
+                } else {
+                    C[c_idx] = alpha_v * sums[r][c] + beta_v * C[c_idx];
+                }
+            }
+        }
+    }
+}

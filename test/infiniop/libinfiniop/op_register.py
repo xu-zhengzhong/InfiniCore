@@ -3529,6 +3529,46 @@ def syrk_(lib):
 
 
 @OpRegister.operator
+def syr2k_(lib):
+    lib.infiniopCreateSyr2kDescriptor.restype = c_int32
+    lib.infiniopCreateSyr2kDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSyr2kWorkspaceSize.restype = c_int32
+    lib.infiniopGetSyr2kWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSyr2k.restype = c_int32
+    lib.infiniopSyr2k.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySyr2kDescriptor.restype = c_int32
+    lib.infiniopDestroySyr2kDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def herk_(lib):
     lib.infiniopCreateHerkDescriptor.restype = c_int32
     lib.infiniopCreateHerkDescriptor.argtypes = [
