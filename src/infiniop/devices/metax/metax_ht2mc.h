@@ -147,6 +147,8 @@
 #define hcblasDswap mcblasDswap
 #define hcblasSsymm mcblasSsymm
 #define hcblasDsymm mcblasDsymm
+#define hcblasSsyr2k mcblasSsyr2k
+#define hcblasDsyr2k mcblasDsyr2k
 #define hcblasSsyrk mcblasSsyrk
 #define hcblasDsyrk mcblasDsyrk
 #define hcblasChemm mcblasChemm
