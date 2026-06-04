@@ -159,6 +159,8 @@
 #define hcblasZherk mcblasZherk
 #define hcblasStrmm mcblasStrmm
 #define hcblasDtrmm mcblasDtrmm
+#define hcblasStrsm mcblasStrsm
+#define hcblasDtrsm mcblasDtrsm
 #define HCBLAS_STATUS_SUCCESS MCBLAS_STATUS_SUCCESS
 #define HCBLAS_OP_T MCBLAS_OP_T
 #define HCBLAS_OP_N MCBLAS_OP_N
