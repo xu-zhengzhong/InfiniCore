@@ -144,6 +144,7 @@
 #include "ops/triplet_margin_with_distance_loss.hpp"
 #include "ops/trmm.hpp"
 #include "ops/trmv.hpp"
+#include "ops/trsm.hpp"
 #include "ops/trsv.hpp"
 #include "ops/unfold.hpp"
 #include "ops/upsample_bilinear.hpp"
@@ -303,6 +304,7 @@ inline void bind(py::module &m) {
     bind_syr2k(m);
     bind_syrk(m);
     bind_trmm(m);
+    bind_trsm(m);
     bind_sinh(m);
     bind_layer_norm(m);
     bind_topksoftmax(m);

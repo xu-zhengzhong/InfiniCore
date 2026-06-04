@@ -158,6 +158,7 @@ from infinicore.ops.tpsv import tpsv
 from infinicore.ops.trmv import trmv
 from infinicore.ops.trsv import trsv
 from infinicore.ops.trmm import trmm
+from infinicore.ops.trsm import trsm
 from infinicore.ops.unsqueeze import unsqueeze
 from infinicore.ops.vander import vander
 from infinicore.ops.var import var
@@ -331,6 +332,7 @@ __all__ = [
     "syr2k",
     "syrk",
     "trmm",
+    "trsm",
     "ones",
     "broadcast_to",
     "strided_empty",

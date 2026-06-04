@@ -87,4 +87,5 @@
 #include "ops/tpsv.hpp"
 #include "ops/trmm.hpp"
 #include "ops/trmv.hpp"
+#include "ops/trsm.hpp"
 #include "ops/trsv.hpp"
