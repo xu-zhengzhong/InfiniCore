@@ -3722,3 +3722,41 @@ def trmm_(lib):
     lib.infiniopDestroyTrmmDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+
+@OpRegister.operator
+def trsm_(lib):
+    lib.infiniopCreateTrsmDescriptor.restype = c_int32
+    lib.infiniopCreateTrsmDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        c_int32,
+        c_int32,
+        c_int32,
+        c_int32,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetTrsmWorkspaceSize.restype = c_int32
+    lib.infiniopGetTrsmWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopTrsm.restype = c_int32
+    lib.infiniopTrsm.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyTrsmDescriptor.restype = c_int32
+    lib.infiniopDestroyTrsmDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]

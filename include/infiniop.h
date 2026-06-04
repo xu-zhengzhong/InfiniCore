@@ -157,6 +157,7 @@
 #include "infiniop/ops/triplet_margin_with_distance_loss.h"
 #include "infiniop/ops/trmm.h"
 #include "infiniop/ops/trmv.h"
+#include "infiniop/ops/trsm.h"
 #include "infiniop/ops/trsv.h"
 #include "infiniop/ops/unfold.h"
 #include "infiniop/ops/upsample_bilinear.h"
