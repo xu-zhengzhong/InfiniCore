@@ -97,6 +97,7 @@ from infinicore.ops.hemv import hemv
 from infinicore.ops.hpr import hpr
 from infinicore.ops.hpr2 import hpr2
 from infinicore.ops.hpmv import hpmv
+from infinicore.ops.her2k import her2k
 from infinicore.ops.herk import herk
 from infinicore.ops.hemm import hemm
 from infinicore.ops.hypot import hypot
@@ -294,6 +295,7 @@ __all__ = [
     "floor_divide",
     "float_power",
     "flipud",
+    "her2k",
     "herk",
     "hemm",
     "scatter",
