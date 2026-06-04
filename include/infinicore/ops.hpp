@@ -67,3 +67,4 @@
 #include "ops/syrk.hpp"
 #include "ops/topksoftmax.hpp"
 #include "ops/trmm.hpp"
+#include "ops/trsm.hpp"
