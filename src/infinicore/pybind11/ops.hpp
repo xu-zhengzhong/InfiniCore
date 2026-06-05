@@ -49,6 +49,7 @@
 #include "ops/fmod.hpp"
 #include "ops/gaussian_nll_loss.hpp"
 #include "ops/gbmv.hpp"
+#include "ops/gemm.hpp"
 #include "ops/gemv.hpp"
 #include "ops/ger.hpp"
 #include "ops/hardswish.hpp"
@@ -213,6 +214,7 @@ inline void bind(py::module &m) {
     bind_hardtanh(m);
     bind_gaussian_nll_loss(m);
     bind_gbmv(m);
+    bind_gemm(m);
     bind_gemv(m);
     bind_ger(m);
     bind_hbmv(m);

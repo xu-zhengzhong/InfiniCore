@@ -88,6 +88,7 @@ from infinicore.ops.floor_divide import floor_divide
 from infinicore.ops.fmin import fmin
 from infinicore.ops.fmod import fmod
 from infinicore.ops.gbmv import gbmv
+from infinicore.ops.gemm import gemm
 from infinicore.ops.gemv import gemv
 from infinicore.ops.ger import ger
 from infinicore.ops.hbmv import hbmv
@@ -249,6 +250,7 @@ __all__ = [
     "bilinear",
     "fmod",
     "gbmv",
+    "gemm",
     "gemv",
     "ger",
     "hbmv",

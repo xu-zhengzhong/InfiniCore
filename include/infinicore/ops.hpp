@@ -29,6 +29,7 @@
 #include "ops/gbmv.hpp"
 #include "ops/gelu.hpp"
 #include "ops/gelutanh.hpp"
+#include "ops/gemm.hpp"
 #include "ops/gemv.hpp"
 #include "ops/ger.hpp"
 #include "ops/hardswish.hpp"
