@@ -8,6 +8,9 @@
 #ifdef ENABLE_NVIDIA_API
 #include "nvidia/spvv_nvidia.cuh"
 #endif
+#ifdef ENABLE_CAMBRICON_API
+#include "bang/spvv_bang.h"
+#endif
 #ifdef ENABLE_METAX_API
 #include "metax/spvv_metax.h"
 #endif
@@ -35,6 +38,9 @@ __INFINI_C infiniStatus_t infiniopCreateSpVVDescriptor(
 #ifdef ENABLE_NVIDIA_API
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
+#ifdef ENABLE_CAMBRICON_API
+        CREATE(INFINI_DEVICE_CAMBRICON, bang);
+#endif
 #ifdef ENABLE_METAX_API
         CREATE(INFINI_DEVICE_METAX, metax);
 #endif
@@ -56,6 +62,9 @@ __INFINI_C infiniStatus_t infiniopGetSpVVWorkspaceSize(infiniopSpVVDescriptor_t 
 #endif
 #ifdef ENABLE_NVIDIA_API
         GET(INFINI_DEVICE_NVIDIA, nvidia);
+#endif
+#ifdef ENABLE_CAMBRICON_API
+        GET(INFINI_DEVICE_CAMBRICON, bang);
 #endif
 #ifdef ENABLE_METAX_API
         GET(INFINI_DEVICE_METAX, metax);
@@ -88,6 +97,9 @@ __INFINI_C infiniStatus_t infiniopSpVV(
 #ifdef ENABLE_NVIDIA_API
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
+#ifdef ENABLE_CAMBRICON_API
+        CALCULATE(INFINI_DEVICE_CAMBRICON, bang);
+#endif
 #ifdef ENABLE_METAX_API
         CALCULATE(INFINI_DEVICE_METAX, metax);
 #endif
@@ -109,6 +121,9 @@ __INFINI_C infiniStatus_t infiniopDestroySpVVDescriptor(infiniopSpVVDescriptor_t
 #endif
 #ifdef ENABLE_NVIDIA_API
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
+#endif
+#ifdef ENABLE_CAMBRICON_API
+        DELETE(INFINI_DEVICE_CAMBRICON, bang);
 #endif
 #ifdef ENABLE_METAX_API
         DELETE(INFINI_DEVICE_METAX, metax);

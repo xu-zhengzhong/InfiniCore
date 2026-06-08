@@ -1,0 +1,65 @@
+#include "../../../devices/bang/common_bang.h"
+#include "axpby_bang.h"
+#include "axpby_bang_kernel.mlu"
+
+namespace op::axpby::bang {
+
+struct Descriptor::Opaque {
+    std::shared_ptr<device::bang::Handle::Internal> internal;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopTensorDescriptor_t x_desc,
+    infiniopTensorDescriptor_t y_desc) {
+    auto handle = reinterpret_cast<device::bang::cambricon::Handle *>(handle_);
+    CHECK_DTYPE(x_desc->dtype(), INFINI_DTYPE_F32);
+
+    auto result = AxpbyInfo::create(x_desc, y_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        0,
+        new Opaque{handle->internal()},
+        handle->device,
+        handle->device_id);
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    const void *x,
+    void *y,
+    float alpha,
+    float beta,
+    void *stream) const {
+    (void)workspace;
+    if (workspace_size < _workspace_size) {
+        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+    }
+    if (_info.dtype != INFINI_DTYPE_F32) {
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
+    cnrtDim3_t dim = {16, 1, 1};
+    cnrtFunctionType_t type = cnrtFuncTypeUnion1;
+    axpbyF32Kernel<<<dim, type, reinterpret_cast<cnrtQueue_t>(stream)>>>(
+        utils::cast<int>(_info.n),
+        utils::cast<int>(_info.incx),
+        utils::cast<int>(_info.incy),
+        reinterpret_cast<const float *>(x),
+        reinterpret_cast<float *>(y),
+        alpha,
+        beta);
+    cnrtQueueSync(reinterpret_cast<cnrtQueue_t>(stream));
+    return INFINI_STATUS_SUCCESS;
+}
+
+} // namespace op::axpby::bang

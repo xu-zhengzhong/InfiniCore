@@ -8,6 +8,9 @@
 #ifdef ENABLE_NVIDIA_API
 #include "nvidia/sddmm_nvidia.cuh"
 #endif
+#ifdef ENABLE_CAMBRICON_API
+#include "bang/sddmm_bang.h"
+#endif
 #ifdef ENABLE_METAX_API
 #include "metax/sddmm_metax.h"
 #endif
@@ -34,6 +37,9 @@ __INFINI_C infiniStatus_t infiniopCreateSDDMMDescriptor(
 #ifdef ENABLE_NVIDIA_API
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
+#ifdef ENABLE_CAMBRICON_API
+        CREATE(INFINI_DEVICE_CAMBRICON, bang);
+#endif
 #ifdef ENABLE_METAX_API
         CREATE(INFINI_DEVICE_METAX, metax);
 #endif
@@ -55,6 +61,9 @@ __INFINI_C infiniStatus_t infiniopGetSDDMMWorkspaceSize(infiniopSDDMMDescriptor_
 #endif
 #ifdef ENABLE_NVIDIA_API
         GET(INFINI_DEVICE_NVIDIA, nvidia);
+#endif
+#ifdef ENABLE_CAMBRICON_API
+        GET(INFINI_DEVICE_CAMBRICON, bang);
 #endif
 #ifdef ENABLE_METAX_API
         GET(INFINI_DEVICE_METAX, metax);
@@ -87,6 +96,9 @@ __INFINI_C infiniStatus_t infiniopSDDMM(
 #ifdef ENABLE_NVIDIA_API
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
+#ifdef ENABLE_CAMBRICON_API
+        CALCULATE(INFINI_DEVICE_CAMBRICON, bang);
+#endif
 #ifdef ENABLE_METAX_API
         CALCULATE(INFINI_DEVICE_METAX, metax);
 #endif
@@ -108,6 +120,9 @@ __INFINI_C infiniStatus_t infiniopDestroySDDMMDescriptor(infiniopSDDMMDescriptor
 #endif
 #ifdef ENABLE_NVIDIA_API
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
+#endif
+#ifdef ENABLE_CAMBRICON_API
+        DELETE(INFINI_DEVICE_CAMBRICON, bang);
 #endif
 #ifdef ENABLE_METAX_API
         DELETE(INFINI_DEVICE_METAX, metax);
