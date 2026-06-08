@@ -8,6 +8,9 @@
 #ifdef ENABLE_NVIDIA_API
 #include "nvidia/spmv_nvidia.cuh"
 #endif
+#ifdef ENABLE_CAMBRICON_API
+#include "bang/spmv_bang.h"
+#endif
 #ifdef ENABLE_METAX_API
 #include "metax/spmv_metax.h"
 #endif
@@ -35,6 +38,9 @@ __INFINI_C infiniStatus_t infiniopCreateSpMVDescriptor(
 #ifdef ENABLE_NVIDIA_API
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
+#ifdef ENABLE_CAMBRICON_API
+        CREATE(INFINI_DEVICE_CAMBRICON, bang);
+#endif
 #ifdef ENABLE_METAX_API
         CREATE(INFINI_DEVICE_METAX, metax);
 #endif
@@ -58,6 +64,9 @@ __INFINI_C infiniStatus_t infiniopGetSpMVWorkspaceSize(infiniopSpMVDescriptor_t 
 #endif
 #ifdef ENABLE_NVIDIA_API
         GET(INFINI_DEVICE_NVIDIA, nvidia);
+#endif
+#ifdef ENABLE_CAMBRICON_API
+        GET(INFINI_DEVICE_CAMBRICON, bang);
 #endif
 #ifdef ENABLE_METAX_API
         GET(INFINI_DEVICE_METAX, metax);
@@ -91,6 +100,9 @@ __INFINI_C infiniStatus_t infiniopSpMV(
 #ifdef ENABLE_NVIDIA_API
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
+#ifdef ENABLE_CAMBRICON_API
+        CALCULATE(INFINI_DEVICE_CAMBRICON, bang);
+#endif
 #ifdef ENABLE_METAX_API
         CALCULATE(INFINI_DEVICE_METAX, metax);
 #endif
@@ -114,6 +126,9 @@ __INFINI_C infiniStatus_t infiniopDestroySpMVDescriptor(infiniopSpMVDescriptor_t
 #endif
 #ifdef ENABLE_NVIDIA_API
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
+#endif
+#ifdef ENABLE_CAMBRICON_API
+        DELETE(INFINI_DEVICE_CAMBRICON, bang);
 #endif
 #ifdef ENABLE_METAX_API
         DELETE(INFINI_DEVICE_METAX, metax);
