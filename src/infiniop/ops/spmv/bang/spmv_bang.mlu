@@ -83,6 +83,9 @@ infiniStatus_t Descriptor::calculate(
     if (workspace_size < _workspace_size) {
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
+    if (_dtype != INFINI_DTYPE_F32) {
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
 
     auto queue = reinterpret_cast<cnrtQueue_t>(stream);
     switch (_index_dtype) {
