@@ -161,7 +161,7 @@ class OpTest(BaseOperatorTest):
         self, values, sparse, a, b, *, rows, cols, k, crow, col, alpha, beta
     ):
         del sparse
-        del cols, k
+        del k
         if _use_dense_reference(values.device):
             return sddmm_dense_reference(
                 values, a, b, rows=rows, cols=cols, crow=crow, col=col, alpha=alpha, beta=beta

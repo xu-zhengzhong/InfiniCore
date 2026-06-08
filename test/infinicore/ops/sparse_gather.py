@@ -27,14 +27,15 @@ def _use_dense_reference(device):
 
 
 def sparse_gather_sparse_reference(x, *, size, indices):
+    indices_tensor = torch.tensor(indices, dtype=torch.int64, device=x.device)
     values = torch.ones(len(indices), dtype=x.dtype, device=x.device)
-    pattern = torch.sparse_coo_tensor(
-        torch.tensor(indices, dtype=torch.int64, device=x.device).unsqueeze(0),
+    torch.sparse_coo_tensor(
+        indices_tensor.unsqueeze(0),
         values,
         size=(size,),
         device=x.device,
-    ).coalesce()
-    return x[pattern.indices()[0]]
+    )
+    return x[indices_tensor]
 
 
 def sparse_gather_dense_reference(x, *, size, indices):
