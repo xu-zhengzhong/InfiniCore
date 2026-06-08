@@ -1,0 +1,88 @@
+#include "../../../devices/metax/metax_ht2mc.h"
+#include "sddmm_metax.h"
+
+namespace op::sddmm::metax {
+
+template <typename Tindex>
+__global__ void sddmmKernel(
+    size_t m,
+    size_t k,
+    ptrdiff_t a_row_stride,
+    ptrdiff_t a_col_stride,
+    ptrdiff_t b_row_stride,
+    ptrdiff_t b_col_stride,
+    const Tindex *crow,
+    const Tindex *col,
+    const float *a,
+    const float *b,
+    float *c,
+    float alpha,
+    float beta) {
+    auto row = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= m) {
+        return;
+    }
+    for (Tindex ptr = crow[row]; ptr < crow[row + 1]; ++ptr) {
+        auto c_col = static_cast<size_t>(col[ptr]);
+        float acc = 0.0f;
+        for (size_t kk = 0; kk < k; ++kk) {
+            acc += a[row * a_row_stride + kk * a_col_stride] * b[kk * b_row_stride + c_col * b_col_stride];
+        }
+        c[ptr] = alpha * acc + beta * c[ptr];
+    }
+}
+
+template <typename Tindex>
+static infiniStatus_t launch(
+    const SDDMMInfo &info,
+    infiniopSpMatDescriptor_t c_desc,
+    void *c_values,
+    const void *a,
+    const void *b,
+    float alpha,
+    float beta,
+    void *stream) {
+    constexpr size_t block = 128;
+    auto grid = (info.m + block - 1) / block;
+    auto hc_stream = reinterpret_cast<hcStream_t>(stream);
+    sddmmKernel<Tindex><<<grid, block, 0, hc_stream>>>(
+        info.m,
+        info.k,
+        info.a_matrix.row_stride,
+        info.a_matrix.col_stride,
+        info.b_matrix.row_stride,
+        info.b_matrix.col_stride,
+        reinterpret_cast<const Tindex *>(c_desc->crowIndices()),
+        reinterpret_cast<const Tindex *>(c_desc->colIndices()),
+        reinterpret_cast<const float *>(a),
+        reinterpret_cast<const float *>(b),
+        reinterpret_cast<float *>(c_values),
+        alpha,
+        beta);
+    if (hcGetLastError() != hcSuccess) {
+        return INFINI_STATUS_INTERNAL_ERROR;
+    }
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t launchSDDMM(
+    const SDDMMInfo &info,
+    infiniopSpMatDescriptor_t c_desc,
+    void *c_values,
+    const void *a,
+    const void *b,
+    float alpha,
+    float beta,
+    infiniDtype_t index_dtype,
+    void *stream) {
+    switch (index_dtype) {
+    case INFINI_DTYPE_I32:
+        return launch<int32_t>(info, c_desc, c_values, a, b, alpha, beta, stream);
+    case INFINI_DTYPE_I64:
+        return launch<int64_t>(info, c_desc, c_values, a, b, alpha, beta, stream);
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+} // namespace op::sddmm::metax

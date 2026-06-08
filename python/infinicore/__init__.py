@@ -61,6 +61,7 @@ from infinicore.ops.asinh import asinh
 from infinicore.ops.asum import asum
 from infinicore.ops.atanh import atanh
 from infinicore.ops.attention import attention
+from infinicore.ops.axpby import axpby
 from infinicore.ops.axpy import axpy
 from infinicore.ops.baddbmm import baddbmm
 from infinicore.ops.bilinear import bilinear
@@ -121,6 +122,7 @@ from infinicore.ops.rotmg import rotmg
 from infinicore.ops.scal import scal
 from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
+from infinicore.ops.sddmm import sddmm
 from infinicore.ops.spmm import spmm
 from infinicore.ops.spmv import spmv
 from infinicore.ops.spvv import spvv
@@ -206,6 +208,7 @@ __all__ = [
     "argwhere",
     "asin",
     "asum",
+    "axpby",
     "axpy",
     "blas_amax",
     "blas_amin",
@@ -229,6 +232,7 @@ __all__ = [
     "logaddexp",
     "logaddexp2",
     "matmul",
+    "sddmm",
     "spmm",
     "spmv",
     "spvv",

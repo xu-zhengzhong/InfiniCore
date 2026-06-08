@@ -752,6 +752,42 @@ def spvv_(lib):
 
 
 @OpRegister.operator
+def sddmm_(lib):
+    lib.infiniopCreateSDDMMDescriptor.restype = c_int32
+    lib.infiniopCreateSDDMMDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopSpMatDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSDDMMWorkspaceSize.restype = c_int32
+    lib.infiniopGetSDDMMWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSDDMM.restype = c_int32
+    lib.infiniopSDDMM.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_float,
+        c_float,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySDDMMDescriptor.restype = c_int32
+    lib.infiniopDestroySDDMMDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def gemm_(lib):
     lib.infiniopCreateGemmDescriptor.restype = c_int32
     lib.infiniopCreateGemmDescriptor.argtypes = [
@@ -2395,6 +2431,40 @@ def axpy_(lib):
 
     lib.infiniopDestroyAxpyDescriptor.restype = c_int32
     lib.infiniopDestroyAxpyDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def axpby_(lib):
+    lib.infiniopCreateAxpbyDescriptor.restype = c_int32
+    lib.infiniopCreateAxpbyDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetAxpbyWorkspaceSize.restype = c_int32
+    lib.infiniopGetAxpbyWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopAxpby.restype = c_int32
+    lib.infiniopAxpby.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_float,
+        c_float,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyAxpbyDescriptor.restype = c_int32
+    lib.infiniopDestroyAxpbyDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
 

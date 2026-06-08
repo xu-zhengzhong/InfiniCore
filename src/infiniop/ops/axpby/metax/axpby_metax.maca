@@ -1,0 +1,52 @@
+#include "../../../devices/metax/metax_ht2mc.h"
+#include "axpby_metax.h"
+
+namespace op::axpby::metax {
+
+template <typename Tdata>
+__global__ void axpbyKernel(
+    size_t n,
+    ptrdiff_t incx,
+    ptrdiff_t incy,
+    const Tdata *x,
+    Tdata *y,
+    float alpha,
+    float beta) {
+    auto i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) {
+        return;
+    }
+    y[i * incy] = static_cast<Tdata>(alpha * static_cast<float>(x[i * incx]) + beta * static_cast<float>(y[i * incy]));
+}
+
+template <typename Tdata>
+static infiniStatus_t launchKernel(const AxpbyInfo &info, const void *x, void *y, float alpha, float beta, void *stream) {
+    constexpr size_t block = 256;
+    auto grid = (info.n + block - 1) / block;
+    axpbyKernel<Tdata><<<grid, block, 0, reinterpret_cast<hcStream_t>(stream)>>>(
+        info.n,
+        info.incx,
+        info.incy,
+        reinterpret_cast<const Tdata *>(x),
+        reinterpret_cast<Tdata *>(y),
+        alpha,
+        beta);
+    auto err = hcGetLastError();
+    if (err != hcSuccess) {
+        return INFINI_STATUS_INTERNAL_ERROR;
+    }
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t launchAxpby(const AxpbyInfo &info, const void *x, void *y, float alpha, float beta, void *stream) {
+    switch (info.dtype) {
+    case INFINI_DTYPE_F32:
+        return launchKernel<float>(info, x, y, alpha, beta, stream);
+    case INFINI_DTYPE_F64:
+        return launchKernel<double>(info, x, y, alpha, beta, stream);
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+} // namespace op::axpby::metax

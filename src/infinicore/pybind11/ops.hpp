@@ -20,6 +20,7 @@
 #include "ops/atanh.hpp"
 #include "ops/attention.hpp"
 #include "ops/avg_pool1d.hpp"
+#include "ops/axpby.hpp"
 #include "ops/axpy.hpp"
 #include "ops/baddbmm.hpp"
 #include "ops/bilinear.hpp"
@@ -96,6 +97,7 @@
 #include "ops/rotmg.hpp"
 #include "ops/scal.hpp"
 #include "ops/scatter.hpp"
+#include "ops/sddmm.hpp"
 #include "ops/selu.hpp"
 #include "ops/silu.hpp"
 #include "ops/silu_and_mul.hpp"
@@ -144,6 +146,7 @@ inline void bind(py::module &m) {
     bind_attention(m);
     bind_asinh(m);
     bind_asum(m);
+    bind_axpby(m);
     bind_axpy(m);
     bind_baddbmm(m);
     bind_bilinear(m);
@@ -221,6 +224,7 @@ inline void bind(py::module &m) {
     bind_broadcast_to(m);
     bind_softplus(m);
     bind_softsign(m);
+    bind_sddmm(m);
     bind_spmm(m);
     bind_spmv(m);
     bind_spvv(m);
