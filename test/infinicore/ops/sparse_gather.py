@@ -22,6 +22,26 @@ _TOLERANCE_MAP = {
 }
 
 
+def _use_dense_reference(device):
+    return device.type == "mlu"
+
+
+def sparse_gather_sparse_reference(x, *, size, indices):
+    values = torch.ones(len(indices), dtype=x.dtype, device=x.device)
+    pattern = torch.sparse_coo_tensor(
+        torch.tensor(indices, dtype=torch.int64, device=x.device).unsqueeze(0),
+        values,
+        size=(size,),
+        device=x.device,
+    ).coalesce()
+    return x[pattern.indices()[0]]
+
+
+def sparse_gather_dense_reference(x, *, size, indices):
+    del size
+    return x[torch.tensor(indices, dtype=torch.int64, device=x.device)]
+
+
 class CachedTensorSpec(TensorSpec):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -117,8 +137,11 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(self, values, pattern, x, *, size, indices, out=None):
-        del values, pattern, size
-        result = x[torch.tensor(indices, dtype=torch.int64, device=x.device)]
+        del values, pattern
+        if _use_dense_reference(x.device):
+            result = sparse_gather_dense_reference(x, size=size, indices=indices)
+        else:
+            result = sparse_gather_sparse_reference(x, size=size, indices=indices)
         if out is not None:
             out.copy_(result)
             return out

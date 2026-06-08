@@ -30,6 +30,24 @@ def sampled_mm(a, b, values, rows, crow, col, alpha, beta):
     return result
 
 
+def _use_dense_reference(device):
+    return device.type == "mlu"
+
+
+def sddmm_sparse_reference(values, a, b, *, rows, cols, crow, col, alpha, beta):
+    sparse = torch.sparse_csr_tensor(
+        torch.tensor(crow, dtype=torch.int64, device=values.device),
+        torch.tensor(col, dtype=torch.int64, device=values.device),
+        values,
+        size=(rows, cols),
+    )
+    return torch.sparse.sampled_addmm(sparse, a, b, beta=beta, alpha=alpha).values()
+
+
+def sddmm_dense_reference(values, a, b, *, rows, cols, crow, col, alpha, beta):
+    return sampled_mm(a, b, values, rows, crow, col, alpha, beta)
+
+
 class SparseTestCase(TestCase):
     def __str__(self):
         nnz = len(self.kwargs["col"])
@@ -144,7 +162,13 @@ class OpTest(BaseOperatorTest):
     ):
         del sparse
         del cols, k
-        return sampled_mm(a, b, values, rows, crow, col, alpha, beta)
+        if _use_dense_reference(values.device):
+            return sddmm_dense_reference(
+                values, a, b, rows=rows, cols=cols, crow=crow, col=col, alpha=alpha, beta=beta
+            )
+        return sddmm_sparse_reference(
+            values, a, b, rows=rows, cols=cols, crow=crow, col=col, alpha=alpha, beta=beta
+        )
 
     def infinicore_operator(
         self, values, sparse, a, b, *, rows, cols, k, crow, col, alpha, beta

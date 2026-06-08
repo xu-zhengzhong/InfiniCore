@@ -143,6 +143,35 @@ _TENSOR_DTYPES = [
 ]
 
 
+def _use_dense_reference(device):
+    return device.type == "mlu"
+
+
+def spmv_sparse_reference(values, x, *, rows, cols, crow, col):
+    sparse = torch.sparse_csr_tensor(
+        torch.tensor(crow, dtype=torch.int64, device=values.device),
+        torch.tensor(col, dtype=torch.int64, device=values.device),
+        values,
+        size=(rows, cols),
+    )
+    return torch.matmul(sparse, x)
+
+
+def spmv_dense_reference(values, x, *, rows, cols, crow, col):
+    dense = torch.zeros((rows, cols), dtype=values.dtype, device=values.device)
+    row_counts = torch.tensor(
+        [crow[i + 1] - crow[i] for i in range(rows)],
+        dtype=torch.int64,
+        device=values.device,
+    )
+    row_indices = torch.repeat_interleave(
+        torch.arange(rows, dtype=torch.int64, device=values.device), row_counts
+    )
+    col_indices = torch.tensor(col, dtype=torch.int64, device=values.device)
+    dense.index_put_((row_indices, col_indices), values, accumulate=True)
+    return torch.matmul(dense, x)
+
+
 def parse_test_cases():
     test_cases = []
     for rows, cols, crow, col in _TEST_CASES_DATA:
@@ -214,13 +243,14 @@ class OpTest(BaseOperatorTest):
 
     def torch_operator(self, values, sparse, x, *, rows, cols, crow, col, out=None):
         del sparse
-        sparse = torch.sparse_csr_tensor(
-            torch.tensor(crow, dtype=torch.int64, device=values.device),
-            torch.tensor(col, dtype=torch.int64, device=values.device),
-            values,
-            size=(rows, cols),
-        )
-        result = torch.matmul(sparse, x)
+        if _use_dense_reference(values.device):
+            result = spmv_dense_reference(
+                values, x, rows=rows, cols=cols, crow=crow, col=col
+            )
+        else:
+            result = spmv_sparse_reference(
+                values, x, rows=rows, cols=cols, crow=crow, col=col
+            )
         if out is not None:
             out.copy_(result)
             return out

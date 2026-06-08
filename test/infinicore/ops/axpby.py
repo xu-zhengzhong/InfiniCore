@@ -20,6 +20,18 @@ _TOLERANCE_MAP = {
 }
 
 
+def _use_dense_reference(device):
+    return device.type == "mlu"
+
+
+def axpby_sparse_reference(x, y, *, alpha, beta):
+    return alpha * x + beta * y
+
+
+def axpby_dense_reference(x, y, *, alpha, beta):
+    return alpha * x + beta * y
+
+
 def parse_test_cases():
     test_cases = []
     for shape, x_strides, y_strides, alpha, beta in _TEST_CASES_DATA:
@@ -48,7 +60,11 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(self, x, y, *, alpha, beta):
-        y.copy_(alpha * x + beta * y)
+        if _use_dense_reference(x.device):
+            result = axpby_dense_reference(x, y, alpha=alpha, beta=beta)
+        else:
+            result = axpby_sparse_reference(x, y, alpha=alpha, beta=beta)
+        y.copy_(result)
         return y
 
     def infinicore_operator(self, x, y, *, alpha, beta):

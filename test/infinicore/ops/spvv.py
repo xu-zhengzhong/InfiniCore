@@ -74,6 +74,27 @@ _TENSOR_DTYPES = [
 ]
 
 
+def _use_dense_reference(device):
+    return device.type == "mlu"
+
+
+def spvv_sparse_reference(values, x, *, size, indices):
+    indices_tensor = torch.tensor(indices, dtype=torch.int64, device=values.device)
+    sparse = torch.sparse_coo_tensor(
+        indices_tensor.unsqueeze(0),
+        values,
+        size=(size,),
+        device=values.device,
+    )
+    return torch.dot(sparse.to_dense(), x)
+
+
+def spvv_dense_reference(values, x, *, size, indices):
+    sparse_dense = torch.zeros(size, dtype=values.dtype, device=values.device)
+    sparse_dense[torch.tensor(indices, dtype=torch.int64, device=values.device)] = values
+    return torch.dot(sparse_dense, x)
+
+
 class SpVecSpec(TensorSpec):
     def __init__(self, *, values_spec, size, indices, name="sparse"):
         super().__init__(shape=(size,), dtype=values_spec.dtype, name=name)
@@ -193,9 +214,11 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(self, values, sparse, x, *, size, indices, out=None):
-        sparse_dense = torch.zeros(size, dtype=values.dtype, device=values.device)
-        sparse_dense[torch.tensor(indices, dtype=torch.int64, device=values.device)] = values
-        result = torch.dot(sparse_dense, x)
+        del sparse
+        if _use_dense_reference(values.device):
+            result = spvv_dense_reference(values, x, size=size, indices=indices)
+        else:
+            result = spvv_sparse_reference(values, x, size=size, indices=indices)
         if out is not None:
             out.copy_(result)
             return out
