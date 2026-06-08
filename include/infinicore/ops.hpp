@@ -59,6 +59,7 @@
 #include "ops/silu.hpp"
 #include "ops/silu_and_mul.hpp"
 #include "ops/softmax.hpp"
+#include "ops/sparse_gather.hpp"
 #include "ops/spmm.hpp"
 #include "ops/spmv.hpp"
 #include "ops/spvv.hpp"

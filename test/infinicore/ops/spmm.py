@@ -12,6 +12,7 @@ from framework import (
     TensorSpec,
     TestCase,
 )
+from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
 
 def _summarize_sparse_data(rows, cols, crow, col, limit=6):
@@ -53,14 +54,67 @@ class SparseTestCase(TestCase):
         )
 
 
+class CachedTensorSpec(TensorSpec):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._cache = {}
+
+    @classmethod
+    def from_tensor(cls, shape, strides=None, dtype=None, init_mode=None, **kwargs):
+        if init_mode is None:
+            return cls(shape=shape, dtype=dtype, strides=strides, **kwargs)
+        return cls(
+            shape=shape, dtype=dtype, strides=strides, init_mode=init_mode, **kwargs
+        )
+
+    def create_torch_tensor(self, device):
+        if device not in self._cache:
+            self._cache[device] = super().create_torch_tensor(device)
+        return self._cache[device]
+
+
+class CsrSpMatSpec(TensorSpec):
+    def __init__(self, *, values_spec, rows, cols, crow, col, name="sparse"):
+        super().__init__(shape=(rows, cols), dtype=values_spec.dtype, name=name)
+        self.values_spec = values_spec
+        self.rows = rows
+        self.cols = cols
+        self.crow = crow
+        self.col = col
+        self._cached_values = {}
+
+    def create_torch_tensor(self, device):
+        if device not in self._cached_values:
+            self._cached_values[device] = self.values_spec.create_torch_tensor(
+                device
+            ).clone()
+        values = self._cached_values[device]
+        infini_values = infinicore_tensor_from_torch(values)
+        infini_device = infini_values.device
+        crow_tensor = infinicore.from_list(
+            self.crow, dtype=infinicore.int64, device=infini_device
+        )
+        col_tensor = infinicore.from_list(
+            self.col, dtype=infinicore.int64, device=infini_device
+        )
+        return infinicore.csr_spmat(
+            crow_tensor, col_tensor, infini_values, (self.rows, self.cols)
+        )
+
+    def __str__(self):
+        nnz = len(self.col)
+        density = nnz / (self.rows * self.cols) if self.rows and self.cols else 0
+        return f"{self.name}: spmat(rows={self.rows}, cols={self.cols}, nnz={nnz}, density={density:.6f})"
+
+
 def _generate_spmm_cases():
     cases = []
     random.seed(42)
     # (rows, cols, n, density)
     configs = [
-        (3, 4, 2, 0.5),            # Baseline small test
-        (1024, 1024, 128, 0.01),   # 1K scale
-        (2048, 1024, 64, 0.005),   # 2K scale
+        (3, 4, 2, 0.5),  # Baseline small test
+        (1024, 1024, 128, 0.01),  # 1K scale
+        (2048, 1024, 64, 0.005),  # 2K scale
     ]
     for rows, cols, n, density in configs:
         crow = [0]
@@ -72,6 +126,7 @@ def _generate_spmm_cases():
             crow.append(len(col))
         cases.append((rows, cols, n, crow, col))
     return cases
+
 
 _TEST_CASES_DATA = _generate_spmm_cases()
 
@@ -112,10 +167,20 @@ def parse_test_cases():
     for rows, cols, n, crow, col in _TEST_CASES_DATA:
         nnz = len(col)
         for dtype in _TENSOR_DTYPES:
+            values_spec = CachedTensorSpec.from_tensor(
+                (nnz,), dtype=dtype, name="values"
+            )
             test_cases.append(
                 SparseTestCase(
                     inputs=[
-                        TensorSpec.from_tensor((nnz,), dtype=dtype, name="values"),
+                        values_spec,
+                        CsrSpMatSpec(
+                            values_spec=values_spec,
+                            rows=rows,
+                            cols=cols,
+                            crow=crow,
+                            col=col,
+                        ),
                         TensorSpec.from_tensor((cols, n), dtype=dtype, name="b"),
                     ],
                     kwargs={
@@ -128,10 +193,20 @@ def parse_test_cases():
                     description="SpMM - OUT_OF_PLACE",
                 )
             )
+            values_spec = CachedTensorSpec.from_tensor(
+                (nnz,), dtype=dtype, name="values"
+            )
             test_cases.append(
                 SparseTestCase(
                     inputs=[
-                        TensorSpec.from_tensor((nnz,), dtype=dtype, name="values"),
+                        values_spec,
+                        CsrSpMatSpec(
+                            values_spec=values_spec,
+                            rows=rows,
+                            cols=cols,
+                            crow=crow,
+                            col=col,
+                        ),
                         TensorSpec.from_tensor((cols, n), dtype=dtype, name="b"),
                     ],
                     kwargs={
@@ -158,7 +233,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, b, *, rows, cols, crow, col, out=None):
+    def torch_operator(self, values, sparse, b, *, rows, cols, crow, col, out=None):
+        del sparse
         sparse = csr_to_dense(values, rows, cols, crow, col)
         result = torch.matmul(sparse, b)
         if out is not None:
@@ -166,15 +242,12 @@ class OpTest(BaseOperatorTest):
             return out
         return result
 
-    def infinicore_operator(self, values, b, *, rows, cols, crow, col, out=None):
-        device = values.device
-        crow_tensor = infinicore.from_list(crow, dtype=infinicore.int64, device=device)
-        col_tensor = infinicore.from_list(col, dtype=infinicore.int64, device=device)
-        sparse = infinicore.csr_spmat(crow_tensor, col_tensor, values, (rows, cols))
+    def infinicore_operator(
+        self, _values, sparse, b, *, rows, cols, crow, col, out=None
+    ):
         return infinicore.spmm(sparse, b, out=out)
 
 
 if __name__ == "__main__":
     runner = GenericTestRunner(OpTest)
     runner.run_and_exit()
-    

@@ -117,6 +117,7 @@
 #include "infiniop/ops/softmax.h"
 #include "infiniop/ops/softplus.h"
 #include "infiniop/ops/softsign.h"
+#include "infiniop/ops/sparse_gather.h"
 #include "infiniop/ops/spmm.h"
 #include "infiniop/ops/spmv.h"
 #include "infiniop/ops/spvv.h"

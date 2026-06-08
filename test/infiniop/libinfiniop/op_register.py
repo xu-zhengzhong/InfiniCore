@@ -788,6 +788,39 @@ def sddmm_(lib):
 
 
 @OpRegister.operator
+def sparse_gather_(lib):
+    lib.infiniopCreateSparseGatherDescriptor.restype = c_int32
+    lib.infiniopCreateSparseGatherDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpVecDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSparseGatherWorkspaceSize.restype = c_int32
+    lib.infiniopGetSparseGatherWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSparseGather.restype = c_int32
+    lib.infiniopSparseGather.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySparseGatherDescriptor.restype = c_int32
+    lib.infiniopDestroySparseGatherDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def gemm_(lib):
     lib.infiniopCreateGemmDescriptor.restype = c_int32
     lib.infiniopCreateGemmDescriptor.argtypes = [

@@ -126,6 +126,7 @@ from infinicore.ops.sddmm import sddmm
 from infinicore.ops.spmm import spmm
 from infinicore.ops.spmv import spmv
 from infinicore.ops.spvv import spvv
+from infinicore.ops.sparse_gather import sparse_gather
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
 from infinicore.ops.swap import swap
@@ -236,6 +237,7 @@ __all__ = [
     "spmm",
     "spmv",
     "spvv",
+    "sparse_gather",
     "equal",
     "mul",
     "diff",
