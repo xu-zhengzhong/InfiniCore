@@ -59,6 +59,7 @@ target("infinicore_cpp_api")
 target_end()
 
 add_includedirs(MACA_ROOT .. "/include")
+add_includedirs(MACA_ROOT .. "/include/hcsparse")
 add_linkdirs(MACA_ROOT .. "/lib")
 if has_config("use-mc") then
     add_links("mcdnn", "mcblas", "mcsparse", "mcruntime")
