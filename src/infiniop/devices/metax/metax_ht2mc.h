@@ -162,6 +162,10 @@
 #define hcsparseDnMatSetValues mcsparseDnMatSetValues
 #define hcsparseSpMM_bufferSize mcsparseSpMM_bufferSize
 #define hcsparseSpMM mcsparseSpMM
+#define hcsparseSpMatSetValues mcsparseSpMatSetValues
+#define hcsparseSDDMM_bufferSize mcsparseSDDMM_bufferSize
+#define hcsparseSDDMM_preprocess mcsparseSDDMM_preprocess
+#define hcsparseSDDMM mcsparseSDDMM
 #define hcsparseCreateDnVec mcsparseCreateDnVec
 #define hcsparseDestroyDnVec mcsparseDestroyDnVec
 #define hcsparseCreateSpVec mcsparseCreateSpVec
@@ -179,6 +183,7 @@
 #define hcsparseSpMMAlg_t mcsparseSpMMAlg_t
 #define hcsparseSpMVAlg_t mcsparseSpMVAlg_t
 #define hcsparseSpVVAlg_t mcsparseSpVVAlg_t
+#define hcsparseSDDMMAlg_t mcsparseSDDMMAlg_t
 #define hcsparseIndexType_t mcsparseIndexType_t
 #define hcsparseOrder_t mcsparseOrder_t
 #define HCSPARSE_STATUS_SUCCESS MCSPARSE_STATUS_SUCCESS
@@ -186,6 +191,7 @@
 #define HCSPARSE_SPMM_ALG_DEFAULT MCSPARSE_SPMM_ALG_DEFAULT
 #define HCSPARSE_SPMV_ALG_DEFAULT MCSPARSE_SPMV_ALG_DEFAULT
 #define HCSPARSE_SPVV_ALG_DEFAULT MCSPARSE_SPVV_ALG_DEFAULT
+#define HCSPARSE_SDDMM_ALG_DEFAULT MCSPARSE_SDDMM_ALG_DEFAULT
 #define HCSPARSE_INDEX_32I MCSPARSE_INDEX_32I
 #define HCSPARSE_INDEX_64I MCSPARSE_INDEX_64I
 #define HCSPARSE_INDEX_BASE_ZERO MCSPARSE_INDEX_BASE_ZERO

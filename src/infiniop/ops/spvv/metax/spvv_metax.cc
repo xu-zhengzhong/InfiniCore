@@ -162,7 +162,33 @@ infiniStatus_t Descriptor::calculate(
             return INFINI_STATUS_SUCCESS;
         }));
 
-    CHECK_STATUS(launchApplyAlphaBeta(y, dot, alpha, beta, stream));
+    CHECK_STATUS(_opaque->internal->useMcblas(
+        reinterpret_cast<hcStream_t>(stream),
+        [&](hcblasHandle_t blas_handle) {
+            CHECK_MCBLAS(hcblasSetPointerMode(blas_handle, HCBLAS_POINTER_MODE_HOST));
+            CHECK_MCBLAS(hcblasScalEx(
+                blas_handle,
+                1,
+                &beta,
+                HPCC_R_32F,
+                y,
+                HPCC_R_32F,
+                1,
+                HPCC_R_32F));
+            CHECK_MCBLAS(hcblasAxpyEx(
+                blas_handle,
+                1,
+                &alpha,
+                HPCC_R_32F,
+                dot,
+                HPCC_R_32F,
+                1,
+                y,
+                HPCC_R_32F,
+                1,
+                HPCC_R_32F));
+            return INFINI_STATUS_SUCCESS;
+        }));
 
     return INFINI_STATUS_SUCCESS;
 }
