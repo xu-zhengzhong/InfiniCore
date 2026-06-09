@@ -1,227 +1,83 @@
 #include "../../../devices/bang/common_bang.h"
+#include "../../gemm/info.h"
 #include "trmm_bang.h"
-#include "trmm_bang_kernel.mlu"
 
 #include <algorithm>
-#include <cstdlib>
+#include <cnnl_extra.h>
+#include <vector>
 
-namespace {
-
-struct TrmmTileConfig {
-    int rows;
-    int cols;
-};
-
-bool betterEnoughTile(
-    int rows,
-    int cols,
-    int m,
-    int n,
-    int tile_count,
-    const TrmmTileConfig &best) {
-
-    const int effective_area = std::min(rows, m) * std::min(cols, n);
-    const int best_effective_area = std::min(best.rows, m) * std::min(best.cols, n);
-    if (effective_area != best_effective_area) {
-        return effective_area > best_effective_area;
-    }
-
-    const int waste = rows * cols - effective_area;
-    const int best_waste = best.rows * best.cols - best_effective_area;
-    if (waste != best_waste) {
-        return waste < best_waste;
-    }
-
-    const int aspect_delta = std::abs(rows * n - cols * m);
-    const int best_aspect_delta = std::abs(best.rows * n - best.cols * m);
-    if (aspect_delta != best_aspect_delta) {
-        return aspect_delta < best_aspect_delta;
-    }
-
-    const int best_tile_count = CEIL_DIV(m, best.rows) * CEIL_DIV(n, best.cols);
-    return tile_count < best_tile_count;
-}
-
-bool betterParallelTile(
-    int rows,
-    int cols,
-    int m,
-    int n,
-    int tile_count,
-    const TrmmTileConfig &best) {
-
-    const int best_tile_count = CEIL_DIV(m, best.rows) * CEIL_DIV(n, best.cols);
-    if (tile_count != best_tile_count) {
-        return tile_count > best_tile_count;
-    }
-
-    const int effective_area = std::min(rows, m) * std::min(cols, n);
-    const int best_effective_area = std::min(best.rows, m) * std::min(best.cols, n);
-    if (effective_area != best_effective_area) {
-        return effective_area > best_effective_area;
-    }
-
-    const int waste = rows * cols - effective_area;
-    const int best_waste = best.rows * best.cols - best_effective_area;
-    return waste < best_waste;
-}
-
-TrmmTileConfig chooseTrmmTile(int m, int n, int task_count) {
-    const TrmmTileConfig candidates[] = {
-        {4, 4},
-        {4, 8},
-        {8, 4},
-        {8, 8},
-        {8, 16},
-        {16, 8},
-        {16, 16},
-        {16, 32},
-        {32, 16},
-        {32, 32},
-        {32, 64},
-        {64, 32},
-        {64, 64},
-    };
-    const int candidate_count = sizeof(candidates) / sizeof(candidates[0]);
-    const int target_tiles = task_count > 0 ? task_count : 1;
-
-    TrmmTileConfig best = candidates[0];
-    bool has_enough_tiles = false;
-
-    for (int candidate_idx = 0; candidate_idx < candidate_count; ++candidate_idx) {
-        const int rows = candidates[candidate_idx].rows;
-        const int cols = candidates[candidate_idx].cols;
-        const int tile_count = CEIL_DIV(m, rows) * CEIL_DIV(n, cols);
-        const bool enough_tiles = tile_count >= target_tiles;
-
-        if (enough_tiles) {
-            if (!has_enough_tiles || betterEnoughTile(rows, cols, m, n, tile_count, best)) {
-                best = candidates[candidate_idx];
-            }
-            has_enough_tiles = true;
-        } else if (!has_enough_tiles && betterParallelTile(rows, cols, m, n, tile_count, best)) {
-            best = candidates[candidate_idx];
-        }
-    }
-
-    return best;
-}
+#define CHECK_BANGRT(API) CHECK_INTERNAL(API, cnrtSuccess)
 
 template <typename Tdata>
-void dispatchTrmmKernel(
-    int task_count,
-    cnrtDim3_t k_dim,
-    cnrtFunctionType_t k_type,
-    cnrtQueue_t queue,
-    infiniopBlasSideMode_t side,
+__mlu_global__ void trmmToDenseKernel(
     infiniopBlasFillMode_t uplo,
     infiniopBlasOperation_t trans,
     infiniopBlasDiagType_t diag,
+    int n,
+    const Tdata *A,
+    int A_row_stride,
+    int A_col_stride,
+    Tdata *dense_A) {
+
+    const int total = n * n;
+    for (int idx = taskId; idx < total; idx += taskDim) {
+        const int row = idx / n;
+        const int col = idx - row * n;
+        const int src_row = trans == INFINIOP_BLAS_OP_T ? col : row;
+        const int src_col = trans == INFINIOP_BLAS_OP_T ? row : col;
+
+        if (src_row == src_col && diag == INFINIOP_BLAS_DIAG_UNIT) {
+            dense_A[idx] = static_cast<Tdata>(1);
+            continue;
+        }
+
+        const bool in_stored_triangle = uplo == INFINIOP_BLAS_FILL_MODE_UPPER ? src_row <= src_col : src_row >= src_col;
+        dense_A[idx] = in_stored_triangle
+                         ? A[src_row * A_row_stride + src_col * A_col_stride]
+                         : static_cast<Tdata>(0);
+    }
+}
+
+template <typename Tdata>
+__mlu_global__ void trmmCopyBKernel(
     int m,
     int n,
-    const Tdata *alpha,
-    const Tdata *A,
-    int lda,
-    const Tdata *B_copy,
-    Tdata *B,
-    int ldb) {
+    const Tdata *B,
+    int B_row_stride,
+    int B_col_stride,
+    Tdata *B_copy) {
 
-    const TrmmTileConfig tile = chooseTrmmTile(m, n, task_count);
-
-#define LAUNCH_TRMM_TILE(TILE_ROWS, TILE_COLS) \
-    trmmKernel<Tdata, TILE_ROWS, TILE_COLS><<<k_dim, k_type, queue>>>(side, uplo, trans, diag, m, n, alpha, A, lda, B_copy, B, ldb)
-
-#define DISPATCH_TRMM_ROW_4()   \
-    switch (tile.cols) {        \
-    case 4:                     \
-        LAUNCH_TRMM_TILE(4, 4); \
-        break;                  \
-    case 8:                     \
-    default:                    \
-        LAUNCH_TRMM_TILE(4, 8); \
-        break;                  \
+    const int total = m * n;
+    for (int idx = taskId; idx < total; idx += taskDim) {
+        const int row = idx / n;
+        const int col = idx - row * n;
+        B_copy[idx] = B[row * B_row_stride + col * B_col_stride];
     }
+}
 
-#define DISPATCH_TRMM_ROW_8()    \
-    switch (tile.cols) {         \
-    case 4:                      \
-        LAUNCH_TRMM_TILE(8, 4);  \
-        break;                   \
-    case 8:                      \
-        LAUNCH_TRMM_TILE(8, 8);  \
-        break;                   \
-    case 16:                     \
-    default:                     \
-        LAUNCH_TRMM_TILE(8, 16); \
-        break;                   \
-    }
+namespace {
 
-#define DISPATCH_TRMM_ROW_16()    \
-    switch (tile.cols) {          \
-    case 8:                       \
-        LAUNCH_TRMM_TILE(16, 8);  \
-        break;                    \
-    case 16:                      \
-        LAUNCH_TRMM_TILE(16, 16); \
-        break;                    \
-    case 32:                      \
-    default:                      \
-        LAUNCH_TRMM_TILE(16, 32); \
-        break;                    \
-    }
+infiniStatus_t setMatrixTensorEx(
+    cnnlTensorDescriptor_t desc,
+    const op::gemm::BlasMatrix &matrix,
+    infiniDtype_t dtype) {
 
-#define DISPATCH_TRMM_ROW_32()    \
-    switch (tile.cols) {          \
-    case 16:                      \
-        LAUNCH_TRMM_TILE(32, 16); \
-        break;                    \
-    case 32:                      \
-        LAUNCH_TRMM_TILE(32, 32); \
-        break;                    \
-    case 64:                      \
-    default:                      \
-        LAUNCH_TRMM_TILE(32, 64); \
-        break;                    \
-    }
-
-#define DISPATCH_TRMM_ROW_64()    \
-    switch (tile.cols) {          \
-    case 32:                      \
-        LAUNCH_TRMM_TILE(64, 32); \
-        break;                    \
-    case 64:                      \
-    default:                      \
-        LAUNCH_TRMM_TILE(64, 64); \
-        break;                    \
-    }
-
-    switch (tile.rows) {
-    case 4:
-        DISPATCH_TRMM_ROW_4();
-        break;
-    case 8:
-        DISPATCH_TRMM_ROW_8();
-        break;
-    case 16:
-        DISPATCH_TRMM_ROW_16();
-        break;
-    case 32:
-        DISPATCH_TRMM_ROW_32();
-        break;
-    case 64:
-        DISPATCH_TRMM_ROW_64();
-        break;
-    default:
-        DISPATCH_TRMM_ROW_32();
-        break;
-    }
-
-#undef DISPATCH_TRMM_ROW_64
-#undef DISPATCH_TRMM_ROW_32
-#undef DISPATCH_TRMM_ROW_16
-#undef DISPATCH_TRMM_ROW_8
-#undef DISPATCH_TRMM_ROW_4
-#undef LAUNCH_TRMM_TILE
+    std::vector<int> dim_size = {
+        static_cast<int>(matrix.rows),
+        static_cast<int>(matrix.cols),
+    };
+    std::vector<int> dim_stride = {
+        static_cast<int>(matrix.row_stride),
+        static_cast<int>(matrix.col_stride),
+    };
+    CHECK_BANG(cnnlSetTensorDescriptorEx(
+        desc,
+        CNNL_LAYOUT_ARRAY,
+        device::bang::getCnnlDtype(dtype),
+        dim_size.size(),
+        dim_size.data(),
+        dim_stride.data()));
+    return INFINI_STATUS_SUCCESS;
 }
 
 } // namespace
@@ -229,7 +85,26 @@ void dispatchTrmmKernel(
 namespace op::trmm::bang {
 
 struct Descriptor::Opaque {
+    cnnlMatMulDescriptor_t op;
+    cnnlMatMulAlgo_t algo;
+    cnnlMatMulHeuristicResult_t algo_result;
+    cnnlTensorDescriptor_t a;
+    cnnlTensorDescriptor_t b;
+    cnnlTensorDescriptor_t c;
+    op::gemm::MatmulInfo matmul_info;
     std::shared_ptr<device::bang::Handle::Internal> internal;
+    size_t dense_a_workspace_size;
+    size_t b_copy_workspace_size;
+    size_t gemm_workspace_size;
+
+    ~Opaque() {
+        cnnlDestroyTensorDescriptor(a);
+        cnnlDestroyTensorDescriptor(b);
+        cnnlDestroyTensorDescriptor(c);
+        cnnlDestroyMatMulDescriptor(op);
+        cnnlDestroyMatMulAlgo(algo);
+        cnnlDestroyMatMulHeuristicResult(algo_result);
+    }
 };
 
 Descriptor::~Descriptor() {
@@ -252,104 +127,107 @@ infiniStatus_t Descriptor::create(
     CHECK_RESULT(result);
     auto info = result.take();
 
+    CHECK_DTYPE(info.data_type, INFINI_DTYPE_F32);
+
+    const size_t dense_a_dim = side == INFINIOP_BLAS_SIDE_LEFT ? info.m : info.n;
+    const size_t dense_a_shape[] = {dense_a_dim, dense_a_dim};
+    const ptrdiff_t dense_a_strides[] = {
+        static_cast<ptrdiff_t>(dense_a_dim),
+        1,
+    };
+    InfiniopTensorDescriptor dense_a_desc(
+        info.data_type,
+        2,
+        dense_a_shape,
+        dense_a_strides);
+
+    const size_t b_copy_shape[] = {info.m, info.n};
+    const ptrdiff_t b_copy_strides[] = {
+        static_cast<ptrdiff_t>(info.n),
+        1,
+    };
+    InfiniopTensorDescriptor b_copy_desc(
+        info.data_type,
+        2,
+        b_copy_shape,
+        b_copy_strides);
+
+    auto matmul_result = side == INFINIOP_BLAS_SIDE_LEFT
+                           ? op::gemm::MatmulInfo::create(B_desc, &dense_a_desc, &b_copy_desc, op::gemm::MatrixLayout::ROW_MAJOR)
+                           : op::gemm::MatmulInfo::create(B_desc, &b_copy_desc, &dense_a_desc, op::gemm::MatrixLayout::ROW_MAJOR);
+    CHECK_RESULT(matmul_result);
+    auto matmul_info = matmul_result.take();
+
+    cnnlTensorDescriptor_t a;
+    cnnlTensorDescriptor_t b;
+    cnnlTensorDescriptor_t c;
+    CHECK_BANG(cnnlCreateTensorDescriptor(&a));
+    CHECK_BANG(cnnlCreateTensorDescriptor(&b));
+    CHECK_BANG(cnnlCreateTensorDescriptor(&c));
+
+    CHECK_STATUS(setMatrixTensorEx(a, matmul_info.a_matrix, info.data_type));
+    CHECK_STATUS(setMatrixTensorEx(b, matmul_info.b_matrix, info.data_type));
+    CHECK_STATUS(setMatrixTensorEx(c, matmul_info.c_matrix, info.data_type));
+
+    cnnlMatMulDescriptor_t op;
+    cnnlMatMulAlgo_t algo;
+    cnnlMatMulHeuristicResult_t algo_result;
+    CHECK_BANG(cnnlCreateMatMulDescriptor(&op));
+    CHECK_BANG(cnnlCreateMatMulAlgo(&algo));
+    CHECK_BANG(cnnlCreateMatMulHeuristicResult(&algo_result));
+
+    int32_t use_stride = true;
+    CHECK_BANG(cnnlSetMatMulDescAttr(
+        op,
+        CNNL_MATMUL_USE_STRIDE,
+        &use_stride,
+        sizeof(int32_t)));
+
+    int count = 0;
+    CHECK_STATUS(
+        handle->internal()->useCnnl(
+            (cnrtQueue_t) nullptr,
+            [&](cnnlHandle_t cnnl_handle) {
+                CHECK_BANG(cnnlGetBatchMatMulExAlgoHeuristic(
+                    cnnl_handle,
+                    op,
+                    a,
+                    b,
+                    c,
+                    nullptr,
+                    1,
+                    &algo_result,
+                    &count));
+                return INFINI_STATUS_SUCCESS;
+            }));
+
+    size_t gemm_workspace_size = 0;
+    CHECK_BANG(cnnlGetBatchMatMulExHeuristicResult(algo_result, algo, &gemm_workspace_size));
+
+    const size_t dense_a_workspace_size = utils::align(dense_a_dim * dense_a_dim * infiniSizeOf(info.data_type), ALIGN_SIZE);
+    const size_t b_copy_workspace_size = utils::align(info.m * info.n * infiniSizeOf(info.data_type), ALIGN_SIZE);
+    const size_t workspace_size = dense_a_workspace_size + b_copy_workspace_size + gemm_workspace_size;
+
     *desc_ptr = new Descriptor(
         info,
-        info.m * info.n * infiniSizeOf(info.data_type),
-        new Descriptor::Opaque{handle->internal()},
+        workspace_size,
+        new Descriptor::Opaque{
+            op,
+            algo,
+            algo_result,
+            a,
+            b,
+            c,
+            matmul_info,
+            handle->internal(),
+            dense_a_workspace_size,
+            b_copy_workspace_size,
+            gemm_workspace_size},
         handle->device,
         handle->device_id);
 
     return INFINI_STATUS_SUCCESS;
 }
-
-template <typename Tdata>
-infiniStatus_t calculateTrmm(
-    const TrmmInfo &info,
-    void *workspace,
-    size_t workspace_size,
-    const Tdata *alpha,
-    const Tdata *A,
-    Tdata *B,
-    int core_per_cluster,
-    int cluster_count,
-    cnrtQueue_t queue) {
-
-    CHECK_OR_RETURN(workspace_size >= info.m * info.n * sizeof(Tdata), INFINI_STATUS_INSUFFICIENT_WORKSPACE);
-
-    int m = utils::cast<int>(info.m);
-    int n = utils::cast<int>(info.n);
-    auto side = info.side;
-    auto uplo = info.uplo;
-    auto trans = info.trans;
-
-    int lda = utils::cast<int>(info.A_col_stride);
-    if (info.A_col_stride == 1) {
-        lda = utils::cast<int>(info.A_row_stride);
-        uplo = info.uplo == INFINIOP_BLAS_FILL_MODE_UPPER
-                 ? INFINIOP_BLAS_FILL_MODE_LOWER
-                 : INFINIOP_BLAS_FILL_MODE_UPPER;
-        trans = info.trans == INFINIOP_BLAS_OP_N ? INFINIOP_BLAS_OP_T : INFINIOP_BLAS_OP_N;
-    }
-
-    const bool direct_layout = info.B_row_stride == 1;
-    const bool transposed_layout = !direct_layout && info.B_col_stride == 1;
-    CHECK_OR_RETURN(direct_layout || transposed_layout, INFINI_STATUS_BAD_TENSOR_STRIDES);
-
-    int ldb = 0;
-    if (direct_layout) {
-        ldb = utils::cast<int>(info.B_col_stride);
-    } else {
-        ldb = utils::cast<int>(info.B_row_stride);
-        side = info.side == INFINIOP_BLAS_SIDE_LEFT ? INFINIOP_BLAS_SIDE_RIGHT : INFINIOP_BLAS_SIDE_LEFT;
-        trans = trans == INFINIOP_BLAS_OP_N ? INFINIOP_BLAS_OP_T : INFINIOP_BLAS_OP_N;
-        const int tmp = m;
-        m = n;
-        n = tmp;
-    }
-
-    cnrtDim3_t k_dim;
-    cnrtFunctionType_t k_type;
-
-    k_dim.x = core_per_cluster;
-    k_dim.y = cluster_count;
-    k_dim.z = 1;
-    k_type = cnrtFuncTypeUnion1;
-
-    auto B_copy = reinterpret_cast<Tdata *>(workspace);
-    trmmCopyBKernel<Tdata><<<k_dim, k_type, queue>>>(m, n, B, ldb, B_copy);
-    dispatchTrmmKernel<Tdata>(
-        core_per_cluster * cluster_count,
-        k_dim,
-        k_type,
-        queue,
-        side,
-        uplo,
-        trans,
-        info.diag,
-        m,
-        n,
-        alpha,
-        A,
-        lda,
-        B_copy,
-        B,
-        ldb);
-
-    cnrtQueueSync(queue);
-
-    return INFINI_STATUS_SUCCESS;
-}
-
-#define CALCULATE_TRMM(TDATA)           \
-    calculateTrmm(_info,                \
-                  workspace,            \
-                  workspace_size,       \
-                  (const TDATA *)alpha, \
-                  (const TDATA *)A,     \
-                  (TDATA *)B,           \
-                  core_per_cluster,     \
-                  cluster_count,        \
-                  (cnrtQueue_t)stream)
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
@@ -362,14 +240,91 @@ infiniStatus_t Descriptor::calculate(
     int core_per_cluster = _opaque->internal->getCorePerCluster();
     int cluster_count = _opaque->internal->getClusterCount();
 
-    switch (_info.data_type) {
-    case INFINI_DTYPE_F32:
-        return CALCULATE_TRMM(float);
-    default:
+    if (_info.data_type != INFINI_DTYPE_F32) {
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
+
+    const size_t required_workspace = _opaque->dense_a_workspace_size + _opaque->b_copy_workspace_size + _opaque->gemm_workspace_size;
+    CHECK_OR_RETURN(workspace_size >= required_workspace, INFINI_STATUS_INSUFFICIENT_WORKSPACE);
+    CHECK_OR_RETURN(workspace != nullptr || required_workspace == 0, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(alpha != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(A != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(B != nullptr, INFINI_STATUS_NULL_POINTER);
+
+    float alpha_value = 0;
+    CHECK_BANGRT(cnrtMemcpy(&alpha_value, (void *)alpha, sizeof(float), cnrtMemcpyDevToHost));
+    const float beta_value = 0.0f;
+
+    const int m = utils::cast<int>(_info.m);
+    const int n = utils::cast<int>(_info.n);
+    const int dense_a_dim = utils::cast<int>(_info.side == INFINIOP_BLAS_SIDE_LEFT ? _info.m : _info.n);
+
+    cnrtDim3_t k_dim;
+    k_dim.x = core_per_cluster;
+    k_dim.y = cluster_count;
+    k_dim.z = 1;
+    const cnrtFunctionType_t k_type = cnrtFuncTypeUnion1;
+
+    auto dense_A = reinterpret_cast<float *>(workspace);
+    auto B_copy = reinterpret_cast<float *>(reinterpret_cast<char *>(workspace) + _opaque->dense_a_workspace_size);
+
+    trmmToDenseKernel<float><<<k_dim, k_type, (cnrtQueue_t)stream>>>(
+        _info.uplo,
+        _info.trans,
+        _info.diag,
+        dense_a_dim,
+        (const float *)A,
+        utils::cast<int>(_info.A_row_stride),
+        utils::cast<int>(_info.A_col_stride),
+        dense_A);
+    trmmCopyBKernel<float><<<k_dim, k_type, (cnrtQueue_t)stream>>>(
+        m,
+        n,
+        (const float *)B,
+        utils::cast<int>(_info.B_row_stride),
+        utils::cast<int>(_info.B_col_stride),
+        B_copy);
+
+    const void *gemm_a = nullptr;
+    const void *gemm_b = nullptr;
+    if (_info.side == INFINIOP_BLAS_SIDE_LEFT) {
+        gemm_a = dense_A;
+        gemm_b = B_copy;
+    } else {
+        gemm_a = B_copy;
+        gemm_b = dense_A;
+    }
+    if (_opaque->matmul_info.is_transed) {
+        std::swap(gemm_a, gemm_b);
+    }
+
+    void *gemm_workspace = reinterpret_cast<char *>(B_copy) + _opaque->b_copy_workspace_size;
+    const size_t available_gemm_workspace = workspace_size - _opaque->dense_a_workspace_size - _opaque->b_copy_workspace_size;
+
+    CHECK_STATUS(_opaque->internal->useCnnl(
+        (cnrtQueue_t)stream,
+        [&](cnnlHandle_t cnnl_handle) {
+            CHECK_BANG(cnnlBatchMatMulEx(
+                cnnl_handle,
+                _opaque->op,
+                _opaque->algo,
+                &alpha_value,
+                _opaque->a,
+                gemm_a,
+                _opaque->b,
+                gemm_b,
+                &beta_value,
+                _opaque->c,
+                B,
+                gemm_workspace,
+                available_gemm_workspace));
+            return INFINI_STATUS_SUCCESS;
+        }));
+    CHECK_BANGRT(cnrtQueueSync((cnrtQueue_t)stream));
+
+    return INFINI_STATUS_SUCCESS;
 }
 
-#undef CALCULATE_TRMM
+#undef CHECK_BANGRT
 
 } // namespace op::trmm::bang

@@ -5,7 +5,14 @@
 #include <algorithm>
 #include <cstdlib>
 
+#define CHECK_BANGRT(API) CHECK_INTERNAL(API, cnrtSuccess)
+
 namespace {
+
+constexpr int HEMM_MAX_K_PER_LAUNCH = 1024;
+constexpr int HEMM_MIN_K_PER_LAUNCH = 128;
+constexpr int HEMM_REFERENCE_TILE_WORK = 32 * 64 * HEMM_MAX_K_PER_LAUNCH;
+constexpr int HEMM_REFERENCE_TILE_EXTENT = 1024;
 
 struct HemmTileConfig {
     int rows;
@@ -107,7 +114,18 @@ HemmTileConfig chooseHemmTile(int m, int n, int task_count) {
     return best;
 }
 
-void dispatchHemmKernel(
+int maxHemmTilesPerLaunch(const HemmTileConfig &tile) {
+    return CEIL_DIV(HEMM_REFERENCE_TILE_EXTENT, tile.rows)
+         * CEIL_DIV(HEMM_REFERENCE_TILE_EXTENT, tile.cols);
+}
+
+int maxHemmKPerLaunch(const HemmTileConfig &tile) {
+    const int tile_area = tile.rows * tile.cols;
+    const int max_k = HEMM_REFERENCE_TILE_WORK / tile_area;
+    return std::max(HEMM_MIN_K_PER_LAUNCH, std::min(HEMM_MAX_K_PER_LAUNCH, max_k));
+}
+
+infiniStatus_t dispatchHemmKernel(
     int task_count,
     cnrtDim3_t k_dim,
     cnrtFunctionType_t k_type,
@@ -123,12 +141,16 @@ void dispatchHemmKernel(
     int ldb,
     const device::bang::FloatComplex *beta,
     device::bang::FloatComplex *C,
-    int ldc) {
+    int ldc,
+    int k_start,
+    int k_count,
+    int tile_start,
+    int tile_count) {
 
     const HemmTileConfig tile = chooseHemmTile(m, n, task_count);
 
 #define LAUNCH_HEMM_TILE(TILE_ROWS, TILE_COLS) \
-    hemmKernel<TILE_ROWS, TILE_COLS><<<k_dim, k_type, queue>>>(side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc)
+    hemmKernel<TILE_ROWS, TILE_COLS><<<k_dim, k_type, queue>>>(side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc, k_start, k_count, tile_start, tile_count)
 
 #define DISPATCH_HEMM_ROW_4()   \
     switch (tile.cols) {        \
@@ -221,6 +243,9 @@ void dispatchHemmKernel(
 #undef DISPATCH_HEMM_ROW_8
 #undef DISPATCH_HEMM_ROW_4
 #undef LAUNCH_HEMM_TILE
+
+    CHECK_BANGRT(cnrtQueueSync(queue));
+    return INFINI_STATUS_SUCCESS;
 }
 
 } // namespace
@@ -276,6 +301,7 @@ infiniStatus_t calculateHemm(
     const int lda = utils::cast<int>(info.A_col_stride);
     const int ldb = utils::cast<int>(info.B_col_stride);
     const int ldc = utils::cast<int>(info.C_col_stride);
+    const int k_total = info.side == INFINIOP_BLAS_SIDE_LEFT ? m : n;
 
     cnrtDim3_t k_dim;
     cnrtFunctionType_t k_type;
@@ -285,25 +311,37 @@ infiniStatus_t calculateHemm(
     k_dim.z = 1;
     k_type = cnrtFuncTypeUnion1;
 
-    dispatchHemmKernel(
-        core_per_cluster * cluster_count,
-        k_dim,
-        k_type,
-        queue,
-        info.side,
-        info.uplo,
-        m,
-        n,
-        alpha,
-        A,
-        lda,
-        B,
-        ldb,
-        beta,
-        C,
-        ldc);
-
-    cnrtQueueSync(queue);
+    const HemmTileConfig tile = chooseHemmTile(m, n, core_per_cluster * cluster_count);
+    const int tile_count_total = CEIL_DIV(m, tile.rows) * CEIL_DIV(n, tile.cols);
+    const int max_tiles_per_launch = maxHemmTilesPerLaunch(tile);
+    const int max_k_per_launch = maxHemmKPerLaunch(tile);
+    for (int k_start = 0; k_start < k_total; k_start += max_k_per_launch) {
+        const int k_count = std::min(max_k_per_launch, k_total - k_start);
+        for (int tile_start = 0; tile_start < tile_count_total; tile_start += max_tiles_per_launch) {
+            const int active_tiles = std::min(max_tiles_per_launch, tile_count_total - tile_start);
+            CHECK_STATUS(dispatchHemmKernel(
+                core_per_cluster * cluster_count,
+                k_dim,
+                k_type,
+                queue,
+                info.side,
+                info.uplo,
+                m,
+                n,
+                alpha,
+                A,
+                lda,
+                B,
+                ldb,
+                beta,
+                C,
+                ldc,
+                k_start,
+                k_count,
+                tile_start,
+                active_tiles));
+        }
+    }
 
     return INFINI_STATUS_SUCCESS;
 }
@@ -346,5 +384,6 @@ infiniStatus_t Descriptor::calculate(
 }
 
 #undef CALCULATE_HEMM
+#undef CHECK_BANGRT
 
 } // namespace op::hemm::bang

@@ -129,11 +129,14 @@ __mlu_global__ void hemmKernel(
     int ldb,
     const device::bang::FloatComplex *beta,
     device::bang::FloatComplex *C,
-    int ldc) {
+    int ldc,
+    int k_start,
+    int k_count,
+    int tile_start,
+    int active_tiles) {
 
     const auto alpha_v = alpha[0];
     const auto beta_v = beta[0];
-    const int k_dim = side == INFINIOP_BLAS_SIDE_LEFT ? m : n;
 
     char *nram_aligned = (char *)(((size_t)nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
     const size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - nram_buffer);
@@ -161,8 +164,16 @@ __mlu_global__ void hemmKernel(
     const int tile_rows = (m + TILE_ROWS - 1) / TILE_ROWS;
     const int tile_cols = (n + TILE_COLS - 1) / TILE_COLS;
     const int total_tiles = tile_rows * tile_cols;
+    if (tile_start >= total_tiles || active_tiles <= 0) {
+        return;
+    }
 
-    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+    if (tile_start + active_tiles > total_tiles) {
+        active_tiles = total_tiles - tile_start;
+    }
+
+    for (int local_tile = taskId; local_tile < active_tiles; local_tile += taskDim) {
+        const int tile = tile_start + local_tile;
         const int tile_row = (tile % tile_rows) * TILE_ROWS;
         const int tile_col = (tile / tile_rows) * TILE_COLS;
         const int rows = m - tile_row < TILE_ROWS ? m - tile_row : TILE_ROWS;
@@ -178,8 +189,9 @@ __mlu_global__ void hemmKernel(
         }
 
         if (!device::bang::cIsZero(alpha_v)) {
-            for (int k0 = 0; k0 < k_dim; k0 += chunk_size) {
-                const int chunk_elements = k_dim - k0 < chunk_size ? k_dim - k0 : chunk_size;
+            for (int k0 = 0; k0 < k_count; k0 += chunk_size) {
+                const int chunk_elements = k_count - k0 < chunk_size ? k_count - k0 : chunk_size;
+                const int k_offset = k_start + k0;
 
                 if (side == INFINIOP_BLAS_SIDE_LEFT) {
                     for (int r = 0; r < rows; ++r) {
@@ -190,7 +202,7 @@ __mlu_global__ void hemmKernel(
                             A,
                             lda,
                             tile_row + r,
-                            k0,
+                            k_offset,
                             chunk_elements);
                     }
 
@@ -201,7 +213,7 @@ __mlu_global__ void hemmKernel(
                             B,
                             ldb,
                             tile_col + c,
-                            k0,
+                            k_offset,
                             chunk_elements);
                     }
 
@@ -227,7 +239,7 @@ __mlu_global__ void hemmKernel(
                             A,
                             lda,
                             tile_col + c,
-                            k0,
+                            k_offset,
                             chunk_elements);
                     }
 
@@ -238,7 +250,7 @@ __mlu_global__ void hemmKernel(
                             B,
                             ldb,
                             tile_row + r,
-                            k0,
+                            k_offset,
                             chunk_elements);
                     }
 
@@ -264,7 +276,9 @@ __mlu_global__ void hemmKernel(
                 const int c_idx = tile_row + r + (tile_col + c) * ldc;
                 const auto sum_v = device::bang::makeFloatComplex(sums_real[r][c], sums_imag[r][c]);
                 const auto alpha_sum = device::bang::cMul(alpha_v, sum_v);
-                if (device::bang::cIsZero(beta_v)) {
+                if (k_start != 0) {
+                    C[c_idx] = device::bang::cAdd(C[c_idx], alpha_sum);
+                } else if (device::bang::cIsZero(beta_v)) {
                     C[c_idx] = alpha_sum;
                 } else {
                     C[c_idx] = device::bang::cAdd(alpha_sum, device::bang::cMul(beta_v, C[c_idx]));

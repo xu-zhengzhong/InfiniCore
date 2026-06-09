@@ -1,227 +1,56 @@
 #include "../../../devices/bang/common_bang.h"
+#include "../../gemm/info.h"
 #include "symm_bang.h"
-#include "symm_bang_kernel.mlu"
 
 #include <algorithm>
-#include <cstdlib>
+#include <cnnl_extra.h>
+#include <vector>
+
+#define CHECK_BANGRT(API) CHECK_INTERNAL(API, cnrtSuccess)
+
+template <typename Tdata>
+__mlu_global__ void symmToDenseKernel(
+    infiniopBlasFillMode_t uplo,
+    int n,
+    const Tdata *A,
+    int A_row_stride,
+    int A_col_stride,
+    Tdata *dense_A) {
+
+    const int total = n * n;
+    for (int idx = taskId; idx < total; idx += taskDim) {
+        const int row = idx / n;
+        const int col = idx - row * n;
+        const bool in_stored_triangle = uplo == INFINIOP_BLAS_FILL_MODE_UPPER ? row <= col : row >= col;
+        const int src_row = in_stored_triangle ? row : col;
+        const int src_col = in_stored_triangle ? col : row;
+        dense_A[row * n + col] = A[src_row * A_row_stride + src_col * A_col_stride];
+    }
+}
 
 namespace {
 
-struct SymmTileConfig {
-    int rows;
-    int cols;
-};
+infiniStatus_t setMatrixTensorEx(
+    cnnlTensorDescriptor_t desc,
+    const op::gemm::BlasMatrix &matrix,
+    infiniDtype_t dtype) {
 
-bool betterEnoughTile(
-    int rows,
-    int cols,
-    int m,
-    int n,
-    int tile_count,
-    const SymmTileConfig &best) {
-
-    const int effective_area = std::min(rows, m) * std::min(cols, n);
-    const int best_effective_area = std::min(best.rows, m) * std::min(best.cols, n);
-    if (effective_area != best_effective_area) {
-        return effective_area > best_effective_area;
-    }
-
-    const int waste = rows * cols - effective_area;
-    const int best_waste = best.rows * best.cols - best_effective_area;
-    if (waste != best_waste) {
-        return waste < best_waste;
-    }
-
-    const int aspect_delta = std::abs(rows * n - cols * m);
-    const int best_aspect_delta = std::abs(best.rows * n - best.cols * m);
-    if (aspect_delta != best_aspect_delta) {
-        return aspect_delta < best_aspect_delta;
-    }
-
-    const int best_tile_count = CEIL_DIV(m, best.rows) * CEIL_DIV(n, best.cols);
-    return tile_count < best_tile_count;
-}
-
-bool betterParallelTile(
-    int rows,
-    int cols,
-    int m,
-    int n,
-    int tile_count,
-    const SymmTileConfig &best) {
-
-    const int best_tile_count = CEIL_DIV(m, best.rows) * CEIL_DIV(n, best.cols);
-    if (tile_count != best_tile_count) {
-        return tile_count > best_tile_count;
-    }
-
-    const int effective_area = std::min(rows, m) * std::min(cols, n);
-    const int best_effective_area = std::min(best.rows, m) * std::min(best.cols, n);
-    if (effective_area != best_effective_area) {
-        return effective_area > best_effective_area;
-    }
-
-    const int waste = rows * cols - effective_area;
-    const int best_waste = best.rows * best.cols - best_effective_area;
-    return waste < best_waste;
-}
-
-SymmTileConfig chooseSymmTile(int m, int n, int task_count) {
-    const SymmTileConfig candidates[] = {
-        {4, 4},
-        {4, 8},
-        {8, 4},
-        {8, 8},
-        {8, 16},
-        {16, 8},
-        {16, 16},
-        {16, 32},
-        {32, 16},
-        {32, 32},
-        {32, 64},
-        {64, 32},
-        {64, 64},
+    std::vector<int> dim_size = {
+        static_cast<int>(matrix.rows),
+        static_cast<int>(matrix.cols),
     };
-    const int candidate_count = sizeof(candidates) / sizeof(candidates[0]);
-    const int target_tiles = task_count > 0 ? task_count : 1;
-
-    SymmTileConfig best = candidates[0];
-    bool has_enough_tiles = false;
-
-    for (int candidate_idx = 0; candidate_idx < candidate_count; ++candidate_idx) {
-        const int rows = candidates[candidate_idx].rows;
-        const int cols = candidates[candidate_idx].cols;
-        const int tile_count = CEIL_DIV(m, rows) * CEIL_DIV(n, cols);
-        const bool enough_tiles = tile_count >= target_tiles;
-
-        if (enough_tiles) {
-            if (!has_enough_tiles || betterEnoughTile(rows, cols, m, n, tile_count, best)) {
-                best = candidates[candidate_idx];
-            }
-            has_enough_tiles = true;
-        } else if (!has_enough_tiles && betterParallelTile(rows, cols, m, n, tile_count, best)) {
-            best = candidates[candidate_idx];
-        }
-    }
-
-    return best;
-}
-
-template <typename Tdata>
-void dispatchSymmKernel(
-    int task_count,
-    cnrtDim3_t k_dim,
-    cnrtFunctionType_t k_type,
-    cnrtQueue_t queue,
-    infiniopBlasSideMode_t side,
-    infiniopBlasFillMode_t uplo,
-    int m,
-    int n,
-    const Tdata *alpha,
-    const Tdata *A,
-    int lda,
-    const Tdata *B,
-    int ldb,
-    const Tdata *beta,
-    Tdata *C,
-    int ldc) {
-
-    const SymmTileConfig tile = chooseSymmTile(m, n, task_count);
-
-#define LAUNCH_SYMM_TILE(TILE_ROWS, TILE_COLS) \
-    symmKernel<Tdata, TILE_ROWS, TILE_COLS><<<k_dim, k_type, queue>>>(side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc)
-
-#define DISPATCH_SYMM_ROW_4()   \
-    switch (tile.cols) {        \
-    case 4:                     \
-        LAUNCH_SYMM_TILE(4, 4); \
-        break;                  \
-    case 8:                     \
-    default:                    \
-        LAUNCH_SYMM_TILE(4, 8); \
-        break;                  \
-    }
-
-#define DISPATCH_SYMM_ROW_8()    \
-    switch (tile.cols) {         \
-    case 4:                      \
-        LAUNCH_SYMM_TILE(8, 4);  \
-        break;                   \
-    case 8:                      \
-        LAUNCH_SYMM_TILE(8, 8);  \
-        break;                   \
-    case 16:                     \
-    default:                     \
-        LAUNCH_SYMM_TILE(8, 16); \
-        break;                   \
-    }
-
-#define DISPATCH_SYMM_ROW_16()    \
-    switch (tile.cols) {          \
-    case 8:                       \
-        LAUNCH_SYMM_TILE(16, 8);  \
-        break;                    \
-    case 16:                      \
-        LAUNCH_SYMM_TILE(16, 16); \
-        break;                    \
-    case 32:                      \
-    default:                      \
-        LAUNCH_SYMM_TILE(16, 32); \
-        break;                    \
-    }
-
-#define DISPATCH_SYMM_ROW_32()    \
-    switch (tile.cols) {          \
-    case 16:                      \
-        LAUNCH_SYMM_TILE(32, 16); \
-        break;                    \
-    case 32:                      \
-        LAUNCH_SYMM_TILE(32, 32); \
-        break;                    \
-    case 64:                      \
-    default:                      \
-        LAUNCH_SYMM_TILE(32, 64); \
-        break;                    \
-    }
-
-#define DISPATCH_SYMM_ROW_64()    \
-    switch (tile.cols) {          \
-    case 32:                      \
-        LAUNCH_SYMM_TILE(64, 32); \
-        break;                    \
-    case 64:                      \
-    default:                      \
-        LAUNCH_SYMM_TILE(64, 64); \
-        break;                    \
-    }
-
-    switch (tile.rows) {
-    case 4:
-        DISPATCH_SYMM_ROW_4();
-        break;
-    case 8:
-        DISPATCH_SYMM_ROW_8();
-        break;
-    case 16:
-        DISPATCH_SYMM_ROW_16();
-        break;
-    case 32:
-        DISPATCH_SYMM_ROW_32();
-        break;
-    case 64:
-        DISPATCH_SYMM_ROW_64();
-        break;
-    default:
-        DISPATCH_SYMM_ROW_32();
-        break;
-    }
-
-#undef DISPATCH_SYMM_ROW_64
-#undef DISPATCH_SYMM_ROW_32
-#undef DISPATCH_SYMM_ROW_16
-#undef DISPATCH_SYMM_ROW_8
-#undef DISPATCH_SYMM_ROW_4
-#undef LAUNCH_SYMM_TILE
+    std::vector<int> dim_stride = {
+        static_cast<int>(matrix.row_stride),
+        static_cast<int>(matrix.col_stride),
+    };
+    CHECK_BANG(cnnlSetTensorDescriptorEx(
+        desc,
+        CNNL_LAYOUT_ARRAY,
+        device::bang::getCnnlDtype(dtype),
+        dim_size.size(),
+        dim_size.data(),
+        dim_stride.data()));
+    return INFINI_STATUS_SUCCESS;
 }
 
 } // namespace
@@ -229,7 +58,25 @@ void dispatchSymmKernel(
 namespace op::symm::bang {
 
 struct Descriptor::Opaque {
+    cnnlMatMulDescriptor_t op;
+    cnnlMatMulAlgo_t algo;
+    cnnlMatMulHeuristicResult_t algo_result;
+    cnnlTensorDescriptor_t a;
+    cnnlTensorDescriptor_t b;
+    cnnlTensorDescriptor_t c;
+    op::gemm::MatmulInfo matmul_info;
     std::shared_ptr<device::bang::Handle::Internal> internal;
+    size_t dense_a_workspace_size;
+    size_t gemm_workspace_size;
+
+    ~Opaque() {
+        cnnlDestroyTensorDescriptor(a);
+        cnnlDestroyTensorDescriptor(b);
+        cnnlDestroyTensorDescriptor(c);
+        cnnlDestroyMatMulDescriptor(op);
+        cnnlDestroyMatMulAlgo(algo);
+        cnnlDestroyMatMulHeuristicResult(algo_result);
+    }
 };
 
 Descriptor::~Descriptor() {
@@ -250,106 +97,96 @@ infiniStatus_t Descriptor::create(
     auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
     auto result = SymmInfo::createSymmInfo(side, uplo, alpha_desc, A_desc, B_desc, beta_desc, C_desc);
     CHECK_RESULT(result);
+    auto info = result.take();
+
+    CHECK_DTYPE(info.data_type, INFINI_DTYPE_F32);
+
+    const size_t dense_a_dim = side == INFINIOP_BLAS_SIDE_LEFT ? info.m : info.n;
+    const size_t dense_a_shape[] = {dense_a_dim, dense_a_dim};
+    const ptrdiff_t dense_a_strides[] = {
+        static_cast<ptrdiff_t>(dense_a_dim),
+        1,
+    };
+    InfiniopTensorDescriptor dense_a_desc(
+        info.data_type,
+        2,
+        dense_a_shape,
+        dense_a_strides);
+
+    auto matmul_result = side == INFINIOP_BLAS_SIDE_LEFT
+                           ? op::gemm::MatmulInfo::create(C_desc, &dense_a_desc, B_desc, op::gemm::MatrixLayout::ROW_MAJOR)
+                           : op::gemm::MatmulInfo::create(C_desc, B_desc, &dense_a_desc, op::gemm::MatrixLayout::ROW_MAJOR);
+    CHECK_RESULT(matmul_result);
+    auto matmul_info = matmul_result.take();
+
+    cnnlTensorDescriptor_t a;
+    cnnlTensorDescriptor_t b;
+    cnnlTensorDescriptor_t c;
+    CHECK_BANG(cnnlCreateTensorDescriptor(&a));
+    CHECK_BANG(cnnlCreateTensorDescriptor(&b));
+    CHECK_BANG(cnnlCreateTensorDescriptor(&c));
+
+    CHECK_STATUS(setMatrixTensorEx(a, matmul_info.a_matrix, info.data_type));
+    CHECK_STATUS(setMatrixTensorEx(b, matmul_info.b_matrix, info.data_type));
+    CHECK_STATUS(setMatrixTensorEx(c, matmul_info.c_matrix, info.data_type));
+
+    cnnlMatMulDescriptor_t op;
+    cnnlMatMulAlgo_t algo;
+    cnnlMatMulHeuristicResult_t algo_result;
+    CHECK_BANG(cnnlCreateMatMulDescriptor(&op));
+    CHECK_BANG(cnnlCreateMatMulAlgo(&algo));
+    CHECK_BANG(cnnlCreateMatMulHeuristicResult(&algo_result));
+
+    int32_t use_stride = true;
+    CHECK_BANG(cnnlSetMatMulDescAttr(
+        op,
+        CNNL_MATMUL_USE_STRIDE,
+        &use_stride,
+        sizeof(int32_t)));
+
+    int count = 0;
+    CHECK_STATUS(
+        handle->internal()->useCnnl(
+            (cnrtQueue_t) nullptr,
+            [&](cnnlHandle_t cnnl_handle) {
+                CHECK_BANG(cnnlGetBatchMatMulExAlgoHeuristic(
+                    cnnl_handle,
+                    op,
+                    a,
+                    b,
+                    c,
+                    nullptr,
+                    1,
+                    &algo_result,
+                    &count));
+                return INFINI_STATUS_SUCCESS;
+            }));
+
+    size_t gemm_workspace_size = 0;
+    CHECK_BANG(cnnlGetBatchMatMulExHeuristicResult(algo_result, algo, &gemm_workspace_size));
+
+    const size_t dense_a_workspace_size = utils::align(dense_a_dim * dense_a_dim * infiniSizeOf(info.data_type), ALIGN_SIZE);
+    const size_t workspace_size = dense_a_workspace_size + gemm_workspace_size;
 
     *desc_ptr = new Descriptor(
-        result.take(),
-        0,
-        new Descriptor::Opaque{handle->internal()},
+        info,
+        workspace_size,
+        new Descriptor::Opaque{
+            op,
+            algo,
+            algo_result,
+            a,
+            b,
+            c,
+            matmul_info,
+            handle->internal(),
+            dense_a_workspace_size,
+            gemm_workspace_size},
         handle->device,
         handle->device_id);
 
     return INFINI_STATUS_SUCCESS;
 }
-
-template <typename Tdata>
-infiniStatus_t calculateSymm(
-    const SymmInfo &info,
-    const Tdata *alpha,
-    const Tdata *A,
-    const Tdata *B,
-    const Tdata *beta,
-    Tdata *C,
-    int core_per_cluster,
-    int cluster_count,
-    cnrtQueue_t queue) {
-
-    int m = utils::cast<int>(info.m);
-    int n = utils::cast<int>(info.n);
-    auto side = info.side;
-    auto uplo = info.uplo;
-
-    int lda = 0;
-    if (info.A_row_stride == 1) {
-        lda = utils::cast<int>(info.A_col_stride);
-    } else {
-        lda = utils::cast<int>(info.A_row_stride);
-        uplo = info.uplo == INFINIOP_BLAS_FILL_MODE_UPPER
-                 ? INFINIOP_BLAS_FILL_MODE_LOWER
-                 : INFINIOP_BLAS_FILL_MODE_UPPER;
-    }
-
-    const bool direct_layout = info.C_row_stride == 1 && info.B_row_stride == 1;
-    const bool transposed_layout = !direct_layout && info.C_col_stride == 1 && info.B_col_stride == 1;
-
-    if (!direct_layout && !transposed_layout) {
-        return INFINI_STATUS_BAD_TENSOR_STRIDES;
-    }
-
-    int ldb = 0;
-    int ldc = 0;
-    if (direct_layout) {
-        ldb = utils::cast<int>(info.B_col_stride);
-        ldc = utils::cast<int>(info.C_col_stride);
-    } else {
-        ldb = utils::cast<int>(info.B_row_stride);
-        ldc = utils::cast<int>(info.C_row_stride);
-        side = info.side == INFINIOP_BLAS_SIDE_LEFT ? INFINIOP_BLAS_SIDE_RIGHT : INFINIOP_BLAS_SIDE_LEFT;
-        const int tmp = m;
-        m = n;
-        n = tmp;
-    }
-
-    cnrtDim3_t k_dim;
-    cnrtFunctionType_t k_type;
-
-    k_dim.x = core_per_cluster;
-    k_dim.y = cluster_count;
-    k_dim.z = 1;
-    k_type = cnrtFuncTypeUnion1;
-
-    dispatchSymmKernel<Tdata>(
-        core_per_cluster * cluster_count,
-        k_dim,
-        k_type,
-        queue,
-        side,
-        uplo,
-        m,
-        n,
-        alpha,
-        A,
-        lda,
-        B,
-        ldb,
-        beta,
-        C,
-        ldc);
-
-    cnrtQueueSync(queue);
-
-    return INFINI_STATUS_SUCCESS;
-}
-
-#define CALCULATE_SYMM(TDATA)           \
-    calculateSymm(_info,                \
-                  (const TDATA *)alpha, \
-                  (const TDATA *)A,     \
-                  (const TDATA *)B,     \
-                  (const TDATA *)beta,  \
-                  (TDATA *)C,           \
-                  core_per_cluster,     \
-                  cluster_count,        \
-                  (cnrtQueue_t)stream)
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
@@ -361,20 +198,84 @@ infiniStatus_t Descriptor::calculate(
     void *C,
     void *stream) const {
 
-    (void)workspace;
-    (void)workspace_size;
-
     int core_per_cluster = _opaque->internal->getCorePerCluster();
     int cluster_count = _opaque->internal->getClusterCount();
 
-    switch (_info.data_type) {
-    case INFINI_DTYPE_F32:
-        return CALCULATE_SYMM(float);
-    default:
+    if (_info.data_type != INFINI_DTYPE_F32) {
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
+
+    const size_t required_workspace = _opaque->dense_a_workspace_size + _opaque->gemm_workspace_size;
+    CHECK_OR_RETURN(workspace_size >= required_workspace, INFINI_STATUS_INSUFFICIENT_WORKSPACE);
+    CHECK_OR_RETURN(workspace != nullptr || required_workspace == 0, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(alpha != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(A != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(B != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(beta != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(C != nullptr, INFINI_STATUS_NULL_POINTER);
+
+    float alpha_value = 0;
+    float beta_value = 0;
+    CHECK_BANGRT(cnrtMemcpy(&alpha_value, (void *)alpha, sizeof(float), cnrtMemcpyDevToHost));
+    CHECK_BANGRT(cnrtMemcpy(&beta_value, (void *)beta, sizeof(float), cnrtMemcpyDevToHost));
+
+    const int dense_a_dim = utils::cast<int>(_info.side == INFINIOP_BLAS_SIDE_LEFT ? _info.m : _info.n);
+
+    cnrtDim3_t k_dim;
+    k_dim.x = core_per_cluster;
+    k_dim.y = cluster_count;
+    k_dim.z = 1;
+    const cnrtFunctionType_t k_type = cnrtFuncTypeUnion1;
+
+    auto dense_A = reinterpret_cast<float *>(workspace);
+    symmToDenseKernel<float><<<k_dim, k_type, (cnrtQueue_t)stream>>>(
+        _info.uplo,
+        dense_a_dim,
+        (const float *)A,
+        utils::cast<int>(_info.A_row_stride),
+        utils::cast<int>(_info.A_col_stride),
+        dense_A);
+
+    const void *gemm_a = nullptr;
+    const void *gemm_b = nullptr;
+    if (_info.side == INFINIOP_BLAS_SIDE_LEFT) {
+        gemm_a = dense_A;
+        gemm_b = B;
+    } else {
+        gemm_a = B;
+        gemm_b = dense_A;
+    }
+    if (_opaque->matmul_info.is_transed) {
+        std::swap(gemm_a, gemm_b);
+    }
+
+    void *gemm_workspace = reinterpret_cast<char *>(workspace) + _opaque->dense_a_workspace_size;
+    const size_t available_gemm_workspace = workspace_size - _opaque->dense_a_workspace_size;
+
+    CHECK_STATUS(_opaque->internal->useCnnl(
+        (cnrtQueue_t)stream,
+        [&](cnnlHandle_t cnnl_handle) {
+            CHECK_BANG(cnnlBatchMatMulEx(
+                cnnl_handle,
+                _opaque->op,
+                _opaque->algo,
+                &alpha_value,
+                _opaque->a,
+                gemm_a,
+                _opaque->b,
+                gemm_b,
+                &beta_value,
+                _opaque->c,
+                C,
+                gemm_workspace,
+                available_gemm_workspace));
+            return INFINI_STATUS_SUCCESS;
+        }));
+    CHECK_BANGRT(cnrtQueueSync((cnrtQueue_t)stream));
+
+    return INFINI_STATUS_SUCCESS;
 }
 
-#undef CALCULATE_SYMM
+#undef CHECK_BANGRT
 
 } // namespace op::symm::bang
