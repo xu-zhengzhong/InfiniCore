@@ -162,33 +162,18 @@ infiniStatus_t Descriptor::calculate(
             return INFINI_STATUS_SUCCESS;
         }));
 
-    CHECK_STATUS(_opaque->internal->useMcblas(
-        reinterpret_cast<hcStream_t>(stream),
-        [&](hcblasHandle_t blas_handle) {
-            CHECK_MCBLAS(hcblasSetPointerMode(blas_handle, HCBLAS_POINTER_MODE_HOST));
-            CHECK_MCBLAS(hcblasScalEx(
-                blas_handle,
-                1,
-                &beta,
-                HPCC_R_32F,
-                y,
-                HPCC_R_32F,
-                1,
-                HPCC_R_32F));
-            CHECK_MCBLAS(hcblasAxpyEx(
-                blas_handle,
-                1,
-                &alpha,
-                HPCC_R_32F,
-                dot,
-                HPCC_R_32F,
-                1,
-                y,
-                HPCC_R_32F,
-                1,
-                HPCC_R_32F));
-            return INFINI_STATUS_SUCCESS;
-        }));
+    if (stream != nullptr) {
+        CHECK_HC(hcStreamSynchronize(reinterpret_cast<hcStream_t>(stream)));
+    } else {
+        CHECK_HC(hcDeviceSynchronize());
+    }
+
+    float host_dot = 0.0f;
+    float host_y = 0.0f;
+    CHECK_HC(hcMemcpy(&host_dot, dot, sizeof(float), hcMemcpyDeviceToHost));
+    CHECK_HC(hcMemcpy(&host_y, y, sizeof(float), hcMemcpyDeviceToHost));
+    host_y = alpha * host_dot + beta * host_y;
+    CHECK_HC(hcMemcpy(y, &host_y, sizeof(float), hcMemcpyHostToDevice));
 
     return INFINI_STATUS_SUCCESS;
 }
