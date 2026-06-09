@@ -18,7 +18,7 @@
 __INFINI_C infiniStatus_t infiniopCreateAxpbyDescriptor(
     infiniopHandle_t handle,
     infiniopAxpbyDescriptor_t *desc_ptr,
-    infiniopTensorDescriptor_t x_desc,
+    infiniopSpVecDescriptor_t x_desc,
     infiniopTensorDescriptor_t y_desc) {
 
 #define CREATE(CASE, NAMESPACE)                                              \
@@ -78,7 +78,6 @@ __INFINI_C infiniStatus_t infiniopAxpby(
     infiniopAxpbyDescriptor_t desc,
     void *workspace,
     size_t workspace_size,
-    void const *x,
     void *y,
     float alpha,
     float beta,
@@ -87,7 +86,7 @@ __INFINI_C infiniStatus_t infiniopAxpby(
 #define CALCULATE(CASE, NAMESPACE)                                              \
     case CASE:                                                                  \
         return reinterpret_cast<const op::axpby::NAMESPACE::Descriptor *>(desc) \
-            ->calculate(workspace, workspace_size, x, y, alpha, beta, stream)
+            ->calculate(workspace, workspace_size, y, alpha, beta, stream)
 
     switch (desc->device_type) {
 #ifdef ENABLE_CPU_API

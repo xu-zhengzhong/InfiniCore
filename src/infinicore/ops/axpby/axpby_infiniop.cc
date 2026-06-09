@@ -4,29 +4,45 @@
 
 namespace infinicore::op::axpby_impl::infiniop {
 
-INFINIOP_CACHABLE_DESCRIPTOR(Descriptor, Axpby, 100);
+struct Descriptor {
+    infiniopAxpbyDescriptor_t desc = nullptr;
+    SpVec x;
+
+    Descriptor(infiniopAxpbyDescriptor_t desc, SpVec x)
+        : desc(desc), x(std::move(x)) {}
+
+    Descriptor(const Descriptor &) = delete;
+    Descriptor &operator=(const Descriptor &) = delete;
+
+    ~Descriptor() {
+        if (desc != nullptr) {
+            infiniopDestroyAxpbyDescriptor(desc);
+        }
+    }
+};
 
 struct PlannedMeta {
     std::shared_ptr<Descriptor> descriptor;
-    graph::GraphTensor workspace, x, y;
+    graph::GraphTensor workspace, y;
+    SpVec x;
     float alpha, beta;
 };
 
-void *plan(const Tensor &x, Tensor y, float alpha, float beta) {
-    size_t seed = hash_combine(y, x);
-
-    INFINIOP_CACHABLE_DESCRIPTOR_GET_OR_CREATE(
-        Descriptor, descriptor, Axpby,
-        seed,
-        x->desc(), y->desc());
-
+void *plan(const SpVec &x, Tensor y, float alpha, float beta) {
+    infiniopAxpbyDescriptor_t raw_descriptor = nullptr;
+    INFINICORE_CHECK_ERROR(infiniopCreateAxpbyDescriptor(
+        context::getInfiniopHandle(context::getDevice()),
+        &raw_descriptor,
+        x->desc(),
+        y->desc()));
+    auto descriptor = std::make_shared<Descriptor>(raw_descriptor, x);
     INFINIOP_WORKSPACE_TENSOR(workspace, Axpby, descriptor);
 
     return new PlannedMeta{
         descriptor,
         graph::GraphTensor(workspace),
-        graph::GraphTensor(x),
         graph::GraphTensor(y),
+        x,
         alpha,
         beta};
 }
@@ -38,7 +54,6 @@ void run(void *planned_meta) {
         planned->descriptor->desc,
         planned->workspace->data(),
         planned->workspace->numel(),
-        planned->x->data(),
         planned->y->data(),
         planned->alpha,
         planned->beta,

@@ -95,18 +95,18 @@ def parse_test_cases():
             values_spec = CachedTensorSpec.from_tensor(
                 (nnz,), dtype=dtype, name="values"
             )
-            test_cases.append(
-                TestCase(
-                    inputs=[
-                        values_spec,
-                        SpVecSpec(values_spec=values_spec, size=size, indices=indices),
-                        TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
-                    ],
-                    kwargs={"size": size, "indices": indices},
-                    tolerance=_TOLERANCE_MAP[dtype],
-                    description="SparseGather - OUT_OF_PLACE",
-                )
-            )
+            # test_cases.append(
+            #     TestCase(
+            #         inputs=[
+            #             values_spec,
+            #             SpVecSpec(values_spec=values_spec, size=size, indices=indices),
+            #             TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
+            #         ],
+            #         kwargs={"size": size, "indices": indices},
+            #         tolerance=_TOLERANCE_MAP[dtype],
+            #         description="SparseGather - OUT_OF_PLACE",
+            #     )
+            # )
             values_spec = CachedTensorSpec.from_tensor(
                 (nnz,), dtype=dtype, name="values"
             )

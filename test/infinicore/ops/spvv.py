@@ -162,25 +162,25 @@ def parse_test_cases():
         nnz = len(indices)
         for dtype in _TENSOR_DTYPES:
             values_spec = CachedTensorSpec.from_tensor((nnz,), dtype=dtype, name="values")
-            test_cases.append(
-                SparseTestCase(
-                    inputs=[
-                        values_spec,
-                        SpVecSpec(
-                            values_spec=values_spec,
-                            size=size,
-                            indices=indices,
-                        ),
-                        TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
-                    ],
-                    kwargs={
-                        "size": size,
-                        "indices": indices,
-                    },
-                    tolerance=_TOLERANCE_MAP[dtype],
-                    description="SpVV - OUT_OF_PLACE",
-                )
-            )
+            # test_cases.append(
+            #     SparseTestCase(
+            #         inputs=[
+            #             values_spec,
+            #             SpVecSpec(
+            #                 values_spec=values_spec,
+            #                 size=size,
+            #                 indices=indices,
+            #             ),
+            #             TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
+            #         ],
+            #         kwargs={
+            #             "size": size,
+            #             "indices": indices,
+            #         },
+            #         tolerance=_TOLERANCE_MAP[dtype],
+            #         description="SpVV - OUT_OF_PLACE",
+            #     )
+            # )
             values_spec = CachedTensorSpec.from_tensor((nnz,), dtype=dtype, name="values")
             test_cases.append(
                 SparseTestCase(

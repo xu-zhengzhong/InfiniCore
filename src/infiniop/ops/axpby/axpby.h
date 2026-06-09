@@ -10,10 +10,12 @@
         struct Opaque;                                           \
         Opaque *_opaque;                                         \
         AxpbyInfo _info;                                         \
+        infiniopSpVecDescriptor_t _x_desc;                       \
         size_t _workspace_size;                                  \
                                                                  \
         Descriptor(                                              \
             AxpbyInfo info,                                      \
+            infiniopSpVecDescriptor_t x_desc,                    \
             size_t workspace_size,                               \
             Opaque *opaque,                                      \
             infiniDevice_t device_type,                          \
@@ -21,6 +23,7 @@
             : InfiniopDescriptor{device_type, device_id},        \
               _opaque(opaque),                                   \
               _info(std::move(info)),                            \
+              _x_desc(x_desc),                                   \
               _workspace_size(workspace_size) {}                 \
                                                                  \
     public:                                                      \
@@ -29,12 +32,11 @@
         static infiniStatus_t create(                            \
             infiniopHandle_t handle,                             \
             Descriptor **desc_ptr,                               \
-            infiniopTensorDescriptor_t x_desc,                   \
+            infiniopSpVecDescriptor_t x_desc,                    \
             infiniopTensorDescriptor_t y_desc);                  \
         infiniStatus_t calculate(                                \
             void *workspace,                                     \
             size_t workspace_size,                               \
-            const void *x,                                       \
             void *y,                                             \
             float alpha,                                         \
             float beta,                                          \

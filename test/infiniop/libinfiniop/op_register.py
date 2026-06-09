@@ -2474,7 +2474,7 @@ def axpby_(lib):
     lib.infiniopCreateAxpbyDescriptor.argtypes = [
         infiniopHandle_t,
         POINTER(infiniopOperatorDescriptor_t),
-        infiniopTensorDescriptor_t,
+        infiniopSpVecDescriptor_t,
         infiniopTensorDescriptor_t,
     ]
 
@@ -2489,7 +2489,6 @@ def axpby_(lib):
         infiniopOperatorDescriptor_t,
         c_void_p,
         c_size_t,
-        c_void_p,
         c_void_p,
         c_float,
         c_float,

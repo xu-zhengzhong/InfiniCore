@@ -15,16 +15,18 @@ Descriptor::~Descriptor() {
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
     Descriptor **desc_ptr,
-    infiniopTensorDescriptor_t x_desc,
+    infiniopSpVecDescriptor_t x_desc,
     infiniopTensorDescriptor_t y_desc) {
     auto handle = reinterpret_cast<device::bang::cambricon::Handle *>(handle_);
-    CHECK_DTYPE(x_desc->dtype(), INFINI_DTYPE_F32);
+    CHECK_DTYPE(x_desc->valuesDesc()->dtype(), INFINI_DTYPE_F32);
+    CHECK_DTYPE(x_desc->indicesDesc()->dtype(), INFINI_DTYPE_I32, INFINI_DTYPE_I64);
 
     auto result = AxpbyInfo::create(x_desc, y_desc);
     CHECK_RESULT(result);
 
     *desc_ptr = new Descriptor(
         result.take(),
+        x_desc,
         0,
         new Opaque{handle->internal()},
         handle->device,
@@ -35,7 +37,6 @@ infiniStatus_t Descriptor::create(
 infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
-    const void *x,
     void *y,
     float alpha,
     float beta,
@@ -50,14 +51,33 @@ infiniStatus_t Descriptor::calculate(
 
     cnrtDim3_t dim = {16, 1, 1};
     cnrtFunctionType_t type = cnrtFuncTypeUnion1;
-    axpbyF32Kernel<<<dim, type, reinterpret_cast<cnrtQueue_t>(stream)>>>(
+    axpbyScaleF32Kernel<<<dim, type, reinterpret_cast<cnrtQueue_t>(stream)>>>(
         utils::cast<int>(_info.n),
-        utils::cast<int>(_info.incx),
         utils::cast<int>(_info.incy),
-        reinterpret_cast<const float *>(x),
         reinterpret_cast<float *>(y),
-        alpha,
         beta);
+    switch (_x_desc->indicesDesc()->dtype()) {
+    case INFINI_DTYPE_I32:
+        axpbyAddF32Kernel<int32_t><<<dim, type, reinterpret_cast<cnrtQueue_t>(stream)>>>(
+            utils::cast<int>(_info.nnz),
+            reinterpret_cast<const int32_t *>(_x_desc->indices()),
+            reinterpret_cast<const float *>(_x_desc->values()),
+            reinterpret_cast<float *>(y),
+            utils::cast<int>(_info.incy),
+            alpha);
+        break;
+    case INFINI_DTYPE_I64:
+        axpbyAddF32Kernel<int64_t><<<dim, type, reinterpret_cast<cnrtQueue_t>(stream)>>>(
+            utils::cast<int>(_info.nnz),
+            reinterpret_cast<const int64_t *>(_x_desc->indices()),
+            reinterpret_cast<const float *>(_x_desc->values()),
+            reinterpret_cast<float *>(y),
+            utils::cast<int>(_info.incy),
+            alpha);
+        break;
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
     cnrtQueueSync(reinterpret_cast<cnrtQueue_t>(stream));
     return INFINI_STATUS_SUCCESS;
 }

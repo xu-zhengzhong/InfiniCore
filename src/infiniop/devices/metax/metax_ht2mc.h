@@ -171,6 +171,7 @@
 #define hcsparseCreateSpVec mcsparseCreateSpVec
 #define hcsparseDestroySpVec mcsparseDestroySpVec
 #define hcsparseDnVecSetValues mcsparseDnVecSetValues
+#define hcsparseAxpby mcsparseAxpby
 #define hcsparseSpVV_bufferSize mcsparseSpVV_bufferSize
 #define hcsparseSpVV mcsparseSpVV
 #define hcsparseSpMV_bufferSize mcsparseSpMV_bufferSize

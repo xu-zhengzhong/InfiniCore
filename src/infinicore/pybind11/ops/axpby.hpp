@@ -15,7 +15,7 @@ inline void bind_axpby(py::module &m) {
           py::arg("y"),
           py::arg("alpha") = 1.0f,
           py::arg("beta") = 1.0f,
-          R"doc(Out-of-place axpby, returning alpha * x + beta * y.)doc");
+          R"doc(Out-of-place sparse axpby, returning alpha * x_sparse + beta * y.)doc");
 
     m.def("axpby_",
           &op::axpby_,
@@ -23,7 +23,7 @@ inline void bind_axpby(py::module &m) {
           py::arg("y"),
           py::arg("alpha") = 1.0f,
           py::arg("beta") = 1.0f,
-          R"doc(In-place axpby, updating y to alpha * x + beta * y.)doc");
+          R"doc(In-place sparse axpby, updating y to alpha * x_sparse + beta * y.)doc");
 }
 
 } // namespace infinicore::ops

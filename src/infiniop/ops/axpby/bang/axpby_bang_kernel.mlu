@@ -1,16 +1,27 @@
 #include "../../../devices/bang/common_bang.h"
 
-__mlu_global__ void axpbyF32Kernel(
+__mlu_global__ void axpbyScaleF32Kernel(
     int n,
-    int incx,
     int incy,
-    const float *x,
     float *y,
-    float alpha,
     float beta) {
     for (int i = taskId; i < n; i += taskDim) {
-        int x_offset = i * incx;
         int y_offset = i * incy;
-        y[y_offset] = alpha * x[x_offset] + beta * y[y_offset];
+        y[y_offset] = beta * y[y_offset];
+    }
+}
+
+template <typename Tindex>
+__mlu_global__ void axpbyAddF32Kernel(
+    int nnz,
+    const Tindex *indices,
+    const float *values,
+    float *y,
+    int incy,
+    float alpha) {
+    for (int i = taskId; i < nnz; i += taskDim) {
+        Tindex index = indices[i];
+        int y_offset = static_cast<int>(index) * incy;
+        y[y_offset] += alpha * values[i];
     }
 }

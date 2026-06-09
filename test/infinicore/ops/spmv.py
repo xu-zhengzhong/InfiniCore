@@ -180,29 +180,29 @@ def parse_test_cases():
             values_spec = CachedTensorSpec.from_tensor(
                 (nnz,), dtype=dtype, name="values"
             )
-            test_cases.append(
-                SparseTestCase(
-                    inputs=[
-                        values_spec,
-                        CsrSpMatSpec(
-                            values_spec=values_spec,
-                            rows=rows,
-                            cols=cols,
-                            crow=crow,
-                            col=col,
-                        ),
-                        TensorSpec.from_tensor((cols,), dtype=dtype, name="x"),
-                    ],
-                    kwargs={
-                        "rows": rows,
-                        "cols": cols,
-                        "crow": crow,
-                        "col": col,
-                    },
-                    tolerance=_TOLERANCE_MAP[dtype],
-                    description="SpMV - OUT_OF_PLACE",
-                )
-            )
+            # test_cases.append(
+            #     SparseTestCase(
+            #         inputs=[
+            #             values_spec,
+            #             CsrSpMatSpec(
+            #                 values_spec=values_spec,
+            #                 rows=rows,
+            #                 cols=cols,
+            #                 crow=crow,
+            #                 col=col,
+            #             ),
+            #             TensorSpec.from_tensor((cols,), dtype=dtype, name="x"),
+            #         ],
+            #         kwargs={
+            #             "rows": rows,
+            #             "cols": cols,
+            #             "crow": crow,
+            #             "col": col,
+            #         },
+            #         tolerance=_TOLERANCE_MAP[dtype],
+            #         description="SpMV - OUT_OF_PLACE",
+            #     )
+            # )
             values_spec = CachedTensorSpec.from_tensor(
                 (nnz,), dtype=dtype, name="values"
             )

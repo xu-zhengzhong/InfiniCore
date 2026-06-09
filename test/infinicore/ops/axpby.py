@@ -1,4 +1,5 @@
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -6,45 +7,108 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
+from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
-_TEST_CASES_DATA = [
-    ((3,), None, None, 1.0, 0.0),
-    ((257,), (2,), None, 0.5, 1.0),
-    ((4096,), None, (2,), -1.25, 0.25),
-]
 
+class SparseTestCase(TestCase):
+    def __str__(self):
+        size = self.kwargs["size"]
+        indices = self.kwargs["indices"]
+        density = len(indices) / size if size else 0
+        return (
+            f"TestCase({self.description} - size={size}; nnz={len(indices)}; "
+            f"density={density:.6f}; alpha={self.kwargs['alpha']}; beta={self.kwargs['beta']})"
+        )
+
+
+def _generate_cases():
+    random.seed(42)
+    configs = [
+        (256, 0.03, 1.0, 0.0),
+        (4096, 0.01, 0.5, 1.0),
+        (10000, 0.002, -1.25, 0.25),
+    ]
+    cases = []
+    for size, density, alpha, beta in configs:
+        nnz = max(1, int(size * density))
+        indices = sorted(random.sample(range(size), nnz))
+        cases.append((size, density, indices, alpha, beta))
+    return cases
+
+
+_TEST_CASES_DATA = _generate_cases()
 _TENSOR_DTYPES = [infinicore.float32]
-
 _TOLERANCE_MAP = {
     infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
 }
 
 
-def _use_dense_reference(device):
-    return device.type == "mlu"
+class CachedTensorSpec(TensorSpec):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._cache = {}
+
+    @classmethod
+    def from_tensor(cls, shape, strides=None, dtype=None, init_mode=None, **kwargs):
+        if init_mode is None:
+            return cls(shape=shape, dtype=dtype, strides=strides, **kwargs)
+        return cls(
+            shape=shape, dtype=dtype, strides=strides, init_mode=init_mode, **kwargs
+        )
+
+    def create_torch_tensor(self, device):
+        if device not in self._cache:
+            self._cache[device] = super().create_torch_tensor(device)
+        return self._cache[device]
 
 
-def axpby_sparse_reference(x, y, *, alpha, beta):
-    return alpha * x + beta * y
+class SpVecSpec(TensorSpec):
+    def __init__(self, *, values_spec, size, indices, name="sparse"):
+        super().__init__(shape=(size,), dtype=values_spec.dtype, name=name)
+        self.values_spec = values_spec
+        self.size = size
+        self.indices = indices
+        self._cached_values = {}
 
+    def create_torch_tensor(self, device):
+        if device not in self._cached_values:
+            self._cached_values[device] = self.values_spec.create_torch_tensor(device)
+        values = self._cached_values[device]
+        infini_values = infinicore_tensor_from_torch(values)
+        indices_tensor = infinicore.from_list(
+            self.indices, dtype=infinicore.int32, device=infini_values.device
+        )
+        return infinicore.coo_spvec(indices_tensor, infini_values, self.size)
 
-def axpby_dense_reference(x, y, *, alpha, beta):
-    return alpha * x + beta * y
+    def __str__(self):
+        density = len(self.indices) / self.size if self.size else 0
+        return (
+            f"{self.name}: spvec(size={self.size}, nnz={len(self.indices)}, "
+            f"density={density:.6f})"
+        )
 
 
 def parse_test_cases():
     test_cases = []
-    for shape, x_strides, y_strides, alpha, beta in _TEST_CASES_DATA:
+    for size, density, indices, alpha, beta in _TEST_CASES_DATA:
+        nnz = len(indices)
         for dtype in _TENSOR_DTYPES:
+            values_spec = CachedTensorSpec.from_tensor((nnz,), dtype=dtype, name="values")
             test_cases.append(
-                TestCase(
+                SparseTestCase(
                     inputs=[
-                        TensorSpec.from_tensor(shape, x_strides, dtype, name="x"),
-                        TensorSpec.from_tensor(shape, y_strides, dtype, name="y"),
+                        values_spec,
+                        SpVecSpec(values_spec=values_spec, size=size, indices=indices),
+                        TensorSpec.from_tensor((size,), dtype=dtype, name="y"),
                     ],
-                    kwargs={"alpha": alpha, "beta": beta},
-                    output_spec=None,
-                    comparison_target=1,
+                    kwargs={
+                        "size": size,
+                        "density": density,
+                        "indices": indices,
+                        "alpha": alpha,
+                        "beta": beta,
+                    },
+                    comparison_target=2,
                     tolerance=_TOLERANCE_MAP[dtype],
                     description="Axpby - INPLACE",
                 )
@@ -59,16 +123,19 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, x, y, *, alpha, beta):
-        if _use_dense_reference(x.device):
-            result = axpby_dense_reference(x, y, alpha=alpha, beta=beta)
-        else:
-            result = axpby_sparse_reference(x, y, alpha=alpha, beta=beta)
+    def torch_operator(self, values, sparse, y, *, size, density, indices, alpha, beta):
+        del sparse
+        del density
+        result = beta * y.clone()
+        result[torch.tensor(indices, dtype=torch.int64, device=values.device)] += alpha * values
         y.copy_(result)
         return y
 
-    def infinicore_operator(self, x, y, *, alpha, beta):
-        return infinicore.axpby(x, y, alpha=alpha, beta=beta, out=y)
+    def infinicore_operator(self, _values, sparse, y, *, size, density, indices, alpha, beta):
+        del size
+        del density
+        del indices
+        return infinicore.axpby(sparse, y, alpha=alpha, beta=beta, out=y)
 
 
 if __name__ == "__main__":

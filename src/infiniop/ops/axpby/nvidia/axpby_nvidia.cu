@@ -1,12 +1,49 @@
 #include "../../../devices/nvidia/nvidia_handle.cuh"
-#include "../../../devices/nvidia/nvidia_kernel_common.cuh"
 #include "axpby_nvidia.cuh"
 
-#include <cuda_fp16.h>
+#include <cusparse.h>
 
 namespace op::axpby::nvidia {
 
-struct Descriptor::Opaque {};
+struct Descriptor::Opaque {
+    std::shared_ptr<device::nvidia::Handle::Internal> internal;
+    cusparseSpVecDescr_t vec_x = nullptr;
+    cusparseDnVecDescr_t vec_y = nullptr;
+    cudaDataType data_type = CUDA_R_32F;
+    cusparseIndexType_t index_type = CUSPARSE_INDEX_64I;
+
+    explicit Opaque(std::shared_ptr<device::nvidia::Handle::Internal> internal)
+        : internal(std::move(internal)) {}
+
+    ~Opaque() {
+        if (vec_x != nullptr) {
+            cusparseDestroySpVec(vec_x);
+        }
+        if (vec_y != nullptr) {
+            cusparseDestroyDnVec(vec_y);
+        }
+    }
+};
+
+static cudaDataType cudaDataTypeOf(infiniDtype_t dtype) {
+    switch (dtype) {
+    case INFINI_DTYPE_F32:
+        return CUDA_R_32F;
+    default:
+        return CUDA_R_32F;
+    }
+}
+
+static cusparseIndexType_t indexTypeOf(infiniDtype_t dtype) {
+    switch (dtype) {
+    case INFINI_DTYPE_I32:
+        return CUSPARSE_INDEX_32I;
+    case INFINI_DTYPE_I64:
+        return CUSPARSE_INDEX_64I;
+    default:
+        return CUSPARSE_INDEX_64I;
+    }
+}
 
 Descriptor::~Descriptor() {
     delete _opaque;
@@ -15,92 +52,76 @@ Descriptor::~Descriptor() {
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
     Descriptor **desc_ptr,
-    infiniopTensorDescriptor_t x_desc,
+    infiniopSpVecDescriptor_t x_desc,
     infiniopTensorDescriptor_t y_desc) {
     auto handle = reinterpret_cast<device::nvidia::Handle *>(handle_);
-    CHECK_DTYPE(x_desc->dtype(), INFINI_DTYPE_F16, INFINI_DTYPE_F32, INFINI_DTYPE_F64);
+    CHECK_DTYPE(x_desc->valuesDesc()->dtype(), INFINI_DTYPE_F32);
     auto result = AxpbyInfo::create(x_desc, y_desc);
     CHECK_RESULT(result);
+    CHECK_OR_RETURN(result->incy == 1, INFINI_STATUS_BAD_TENSOR_STRIDES);
+
+    auto opaque = new Opaque(handle->internal());
+    opaque->data_type = cudaDataTypeOf(y_desc->dtype());
+    opaque->index_type = indexTypeOf(x_desc->indicesDesc()->dtype());
+
+    auto status = cusparseCreateSpVec(
+        &opaque->vec_x,
+        static_cast<int64_t>(result->n),
+        static_cast<int64_t>(result->nnz),
+        const_cast<void *>(x_desc->indices()),
+        const_cast<void *>(x_desc->values()),
+        opaque->index_type,
+        CUSPARSE_INDEX_BASE_ZERO,
+        opaque->data_type);
+    CHECK_API_OR(status, CUSPARSE_STATUS_SUCCESS, {
+        delete opaque;
+        return INFINI_STATUS_INTERNAL_ERROR;
+    });
+
+    status = cusparseCreateDnVec(
+        &opaque->vec_y,
+        static_cast<int64_t>(result->n),
+        const_cast<void *>(x_desc->values()),
+        opaque->data_type);
+    CHECK_API_OR(status, CUSPARSE_STATUS_SUCCESS, {
+        delete opaque;
+        return INFINI_STATUS_INTERNAL_ERROR;
+    });
 
     *desc_ptr = new Descriptor(
         result.take(),
+        x_desc,
         0,
-        new Opaque(),
+        opaque,
         handle->device,
         handle->device_id);
-    return INFINI_STATUS_SUCCESS;
-}
-
-template <typename Tdata>
-INFINIOP_CUDA_KERNEL axpbyKernel(
-    size_t n,
-    ptrdiff_t incx,
-    ptrdiff_t incy,
-    const Tdata *x,
-    Tdata *y,
-    float alpha,
-    float beta) {
-    auto i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) {
-        return;
-    }
-    auto result = alpha * static_cast<float>(x[i * incx]) + beta * static_cast<float>(y[i * incy]);
-    y[i * incy] = static_cast<Tdata>(result);
-}
-
-template <>
-INFINIOP_CUDA_KERNEL axpbyKernel<__half>(
-    size_t n,
-    ptrdiff_t incx,
-    ptrdiff_t incy,
-    const __half *x,
-    __half *y,
-    float alpha,
-    float beta) {
-    auto i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) {
-        return;
-    }
-    auto result = alpha * __half2float(x[i * incx]) + beta * __half2float(y[i * incy]);
-    y[i * incy] = __float2half(result);
-}
-
-template <typename Tdata>
-static infiniStatus_t launch(const AxpbyInfo &info, const void *x, void *y, float alpha, float beta, void *stream) {
-    constexpr size_t block = 256;
-    auto grid = (info.n + block - 1) / block;
-    axpbyKernel<Tdata><<<grid, block, 0, reinterpret_cast<cudaStream_t>(stream)>>>(
-        info.n,
-        info.incx,
-        info.incy,
-        reinterpret_cast<const Tdata *>(x),
-        reinterpret_cast<Tdata *>(y),
-        alpha,
-        beta);
-    CHECK_CUDA(cudaGetLastError());
     return INFINI_STATUS_SUCCESS;
 }
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
-    const void *x,
     void *y,
     float alpha,
     float beta,
     void *stream) const {
     (void)workspace;
-    (void)workspace_size;
-    switch (_info.dtype) {
-    case INFINI_DTYPE_F16:
-        return launch<__half>(_info, x, y, alpha, beta, stream);
-    case INFINI_DTYPE_F32:
-        return launch<float>(_info, x, y, alpha, beta, stream);
-    case INFINI_DTYPE_F64:
-        return launch<double>(_info, x, y, alpha, beta, stream);
-    default:
-        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    if (workspace_size < _workspace_size) {
+        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
+    CHECK_CUSPARSE(cusparseDnVecSetValues(_opaque->vec_y, y));
+    CHECK_STATUS(_opaque->internal->useCusparse(
+        reinterpret_cast<cudaStream_t>(stream),
+        [&](cusparseHandle_t sparse_handle) {
+            CHECK_CUSPARSE(cusparseAxpby(
+                sparse_handle,
+                &alpha,
+                _opaque->vec_x,
+                &beta,
+                _opaque->vec_y));
+            return INFINI_STATUS_SUCCESS;
+        }));
+    return INFINI_STATUS_SUCCESS;
 }
 
 } // namespace op::axpby::nvidia

@@ -1,4 +1,5 @@
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -14,11 +15,31 @@ from framework import (
 )
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
-_TEST_CASES_DATA = [
-    # rows, cols, k, crow, col, alpha, beta
-    (3, 4, 2, [0, 2, 3, 5], [0, 2, 1, 0, 3], 1.0, 0.0),
-    (4, 5, 3, [0, 1, 1, 3, 4], [2, 0, 4, 1], 0.5, 1.0),
-]
+def _generate_sddmm_cases():
+    cases = []
+    random.seed(42)
+    # (rows, cols, k, density, alpha, beta)
+    configs = [
+        (128, 128, 128, 0.01, 1.0, 0.0),
+        (1024, 1024, 1024, 0.01, 0.5, 1.0),
+    ]
+    for rows, cols, k, density, alpha, beta in configs:
+        total = rows * cols
+        nnz = min(total, max(1, int(round(total * density))))
+        positions = sorted(random.sample(range(total), nnz))
+        crow = [0] * (rows + 1)
+        col = []
+        for pos in positions:
+            row = pos // cols
+            col.append(pos % cols)
+            crow[row + 1] += 1
+        for row in range(rows):
+            crow[row + 1] += crow[row]
+        cases.append((rows, cols, k, density, crow, col, alpha, beta))
+    return cases
+
+
+_TEST_CASES_DATA = _generate_sddmm_cases()
 
 _TENSOR_DTYPES = [infinicore.float32]
 
@@ -60,8 +81,8 @@ class SparseTestCase(TestCase):
         return (
             f"TestCase({self.description} - "
             f"rows={self.kwargs['rows']}; cols={self.kwargs['cols']}; "
-            f"k={self.kwargs['k']}; nnz={nnz}; alpha={self.kwargs['alpha']}; "
-            f"beta={self.kwargs['beta']})"
+            f"k={self.kwargs['k']}; nnz={nnz}; density={self.kwargs['density']:.6f}; "
+            f"alpha={self.kwargs['alpha']}; beta={self.kwargs['beta']})"
         )
 
 
@@ -120,7 +141,7 @@ class CsrSpMatSpec(TensorSpec):
 
 def parse_test_cases():
     test_cases = []
-    for rows, cols, k, crow, col, alpha, beta in _TEST_CASES_DATA:
+    for rows, cols, k, density, crow, col, alpha, beta in _TEST_CASES_DATA:
         nnz = len(col)
         for dtype in _TENSOR_DTYPES:
             values_spec = CachedTensorSpec.from_tensor(
@@ -144,6 +165,7 @@ def parse_test_cases():
                         "rows": rows,
                         "cols": cols,
                         "k": k,
+                        "density": density,
                         "crow": crow,
                         "col": col,
                         "alpha": alpha,
@@ -172,10 +194,11 @@ class OpTest(BaseOperatorTest):
             self._target_device = None
 
     def torch_operator(
-        self, values, sparse, a, b, *, rows, cols, k, crow, col, alpha, beta
+        self, values, sparse, a, b, *, rows, cols, k, density, crow, col, alpha, beta
     ):
         del sparse
         del k
+        del density
         if _use_dense_reference(values.device, self._target_device):
             return sddmm_dense_reference(
                 values,
@@ -201,8 +224,15 @@ class OpTest(BaseOperatorTest):
         )
 
     def infinicore_operator(
-        self, values, sparse, a, b, *, rows, cols, k, crow, col, alpha, beta
+        self, values, sparse, a, b, *, rows, cols, k, density, crow, col, alpha, beta
     ):
+        del values
+        del rows
+        del cols
+        del k
+        del density
+        del crow
+        del col
         return infinicore.sddmm(sparse, a, b, alpha=alpha, beta=beta).values
 
 

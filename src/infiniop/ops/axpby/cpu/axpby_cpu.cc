@@ -8,7 +8,7 @@ Descriptor::~Descriptor() = default;
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
     Descriptor **desc_ptr,
-    infiniopTensorDescriptor_t x_desc,
+    infiniopSpVecDescriptor_t x_desc,
     infiniopTensorDescriptor_t y_desc) {
     auto handle = reinterpret_cast<device::cpu::Handle *>(handle_);
     auto result = AxpbyInfo::create(x_desc, y_desc);
@@ -16,6 +16,7 @@ infiniStatus_t Descriptor::create(
 
     *desc_ptr = new Descriptor(
         result.take(),
+        x_desc,
         0,
         nullptr,
         handle->device,
@@ -23,28 +24,54 @@ infiniStatus_t Descriptor::create(
     return INFINI_STATUS_SUCCESS;
 }
 
-template <typename Tdata>
+template <typename Tdata, typename Tindex>
 static void calculateAxpby(
     const AxpbyInfo &info,
-    const void *x,
+    infiniopSpVecDescriptor_t x_desc,
     void *y,
     float alpha,
     float beta) {
-    auto x_data = reinterpret_cast<const Tdata *>(x);
+    auto x_values = reinterpret_cast<const Tdata *>(x_desc->values());
+    auto x_indices = reinterpret_cast<const Tindex *>(x_desc->indices());
     auto y_data = reinterpret_cast<Tdata *>(y);
+
 #pragma omp parallel for
     for (ptrdiff_t i = 0; i < static_cast<ptrdiff_t>(info.n); ++i) {
-        auto x_offset = i * info.incx;
         auto y_offset = i * info.incy;
-        auto result = alpha * utils::cast<float>(x_data[x_offset]) + beta * utils::cast<float>(y_data[y_offset]);
+        y_data[y_offset] = utils::cast<Tdata>(beta * utils::cast<float>(y_data[y_offset]));
+    }
+
+    for (size_t i = 0; i < info.nnz; ++i) {
+        auto index = static_cast<size_t>(x_indices[i]);
+        auto y_offset = static_cast<ptrdiff_t>(index) * info.incy;
+        auto result = utils::cast<float>(y_data[y_offset]) + alpha * utils::cast<float>(x_values[i]);
         y_data[y_offset] = utils::cast<Tdata>(result);
+    }
+}
+
+template <typename Tdata>
+static infiniStatus_t calculateByIndex(
+    infiniDtype_t index_dtype,
+    const AxpbyInfo &info,
+    infiniopSpVecDescriptor_t x_desc,
+    void *y,
+    float alpha,
+    float beta) {
+    switch (index_dtype) {
+    case INFINI_DTYPE_I32:
+        calculateAxpby<Tdata, int32_t>(info, x_desc, y, alpha, beta);
+        return INFINI_STATUS_SUCCESS;
+    case INFINI_DTYPE_I64:
+        calculateAxpby<Tdata, int64_t>(info, x_desc, y, alpha, beta);
+        return INFINI_STATUS_SUCCESS;
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
 }
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
-    const void *x,
     void *y,
     float alpha,
     float beta,
@@ -55,17 +82,13 @@ infiniStatus_t Descriptor::calculate(
 
     switch (_info.dtype) {
     case INFINI_DTYPE_F16:
-        calculateAxpby<fp16_t>(_info, x, y, alpha, beta);
-        return INFINI_STATUS_SUCCESS;
+        return calculateByIndex<fp16_t>(_x_desc->indicesDesc()->dtype(), _info, _x_desc, y, alpha, beta);
     case INFINI_DTYPE_BF16:
-        calculateAxpby<bf16_t>(_info, x, y, alpha, beta);
-        return INFINI_STATUS_SUCCESS;
+        return calculateByIndex<bf16_t>(_x_desc->indicesDesc()->dtype(), _info, _x_desc, y, alpha, beta);
     case INFINI_DTYPE_F32:
-        calculateAxpby<float>(_info, x, y, alpha, beta);
-        return INFINI_STATUS_SUCCESS;
+        return calculateByIndex<float>(_x_desc->indicesDesc()->dtype(), _info, _x_desc, y, alpha, beta);
     case INFINI_DTYPE_F64:
-        calculateAxpby<double>(_info, x, y, alpha, beta);
-        return INFINI_STATUS_SUCCESS;
+        return calculateByIndex<double>(_x_desc->indicesDesc()->dtype(), _info, _x_desc, y, alpha, beta);
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
