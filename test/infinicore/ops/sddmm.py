@@ -5,7 +5,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import infinicore
 import torch
-from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
+from framework import (
+    BaseOperatorTest,
+    GenericTestRunner,
+    InfiniDeviceEnum,
+    TensorSpec,
+    TestCase,
+)
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
 _TEST_CASES_DATA = [
@@ -30,8 +36,8 @@ def sampled_mm(a, b, values, rows, crow, col, alpha, beta):
     return result
 
 
-def _use_dense_reference(device):
-    return device.type == "mlu"
+def _use_dense_reference(device, target_device):
+    return device.type == "mlu" or target_device == InfiniDeviceEnum.METAX
 
 
 def sddmm_sparse_reference(values, a, b, *, rows, cols, crow, col, alpha, beta):
@@ -153,21 +159,45 @@ def parse_test_cases():
 class OpTest(BaseOperatorTest):
     def __init__(self):
         super().__init__("SDDMM")
+        self._target_device = None
 
     def get_test_cases(self):
         return parse_test_cases()
+
+    def run_test(self, device, test_case, config):
+        self._target_device = device
+        try:
+            return super().run_test(device, test_case, config)
+        finally:
+            self._target_device = None
 
     def torch_operator(
         self, values, sparse, a, b, *, rows, cols, k, crow, col, alpha, beta
     ):
         del sparse
         del k
-        if _use_dense_reference(values.device):
+        if _use_dense_reference(values.device, self._target_device):
             return sddmm_dense_reference(
-                values, a, b, rows=rows, cols=cols, crow=crow, col=col, alpha=alpha, beta=beta
+                values,
+                a,
+                b,
+                rows=rows,
+                cols=cols,
+                crow=crow,
+                col=col,
+                alpha=alpha,
+                beta=beta,
             )
         return sddmm_sparse_reference(
-            values, a, b, rows=rows, cols=cols, crow=crow, col=col, alpha=alpha, beta=beta
+            values,
+            a,
+            b,
+            rows=rows,
+            cols=cols,
+            crow=crow,
+            col=col,
+            alpha=alpha,
+            beta=beta,
         )
 
     def infinicore_operator(
