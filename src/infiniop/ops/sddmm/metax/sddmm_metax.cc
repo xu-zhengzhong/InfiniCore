@@ -211,6 +211,18 @@ infiniStatus_t Descriptor::calculate(
     CHECK_STATUS(_opaque->internal->useMcsparse(
         reinterpret_cast<hcStream_t>(stream),
         [&](hcsparseHandle_t sparse_handle) {
+            CHECK_MCSPARSE(hcsparseSDDMM_preprocess(
+                sparse_handle,
+                _opaque->op_a,
+                _opaque->op_b,
+                &alpha,
+                _opaque->mat_a,
+                _opaque->mat_b,
+                &beta,
+                _opaque->mat_c,
+                HPCC_R_32F,
+                _opaque->alg,
+                workspace));
             CHECK_MCSPARSE(hcsparseSDDMM(
                 sparse_handle,
                 _opaque->op_a,
