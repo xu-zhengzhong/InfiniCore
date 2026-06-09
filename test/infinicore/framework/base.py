@@ -15,6 +15,7 @@ from .tensor import TensorSpec, TensorInitializer
 from .utils.tensor_utils import (
     clone_torch_tensor,
     infinicore_tensor_from_torch,
+    synchronize_device,
 )
 from .utils.compare_utils import create_test_comparator
 from .benchmark import BenchmarkUtils
@@ -428,6 +429,7 @@ class BaseOperatorTest(ABC):
         infini_inputs, infini_kwargs, cloned_tensors = (
             self.prepare_infinicore_inputs_and_kwargs(inputs, kwargs, comparison_target)
         )
+        synchronize_device(device_str)
 
         # Check operator implementations
         torch_implemented = True
@@ -456,6 +458,7 @@ class BaseOperatorTest(ABC):
             infini_implemented = False
             infini_result = None
             infini_error_msg = str(e)
+        synchronize_device(device_str)
 
         if not torch_error_msg:
             torch_error_msg = "unimplemented test function"
