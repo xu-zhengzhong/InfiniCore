@@ -52,7 +52,7 @@ def _packed_to_full(ap, uplo, n):
     return matrix
 
 
-def torch_spmv(alpha, ap, x, beta, out, *, uplo=0):
+def torch_blas_spmv(alpha, ap, x, beta, out, *, uplo=0):
     matrix = _packed_to_full(ap, uplo, x.shape[0])
     result = alpha * torch.mv(matrix, x) + beta * out
     out.copy_(result)
@@ -85,7 +85,7 @@ def parse_test_cases():
                     output_spec=None,
                     comparison_target=4,
                     tolerance=tol,
-                    description="spmv - INPLACE",
+                    description="blas_spmv - INPLACE",
                 )
             )
 
@@ -93,19 +93,19 @@ def parse_test_cases():
 
 
 class OpTest(BaseOperatorTest):
-    """BLAS Level-2 spmv operator test"""
+    """BLAS Level-2 blas_spmv operator test"""
 
     def __init__(self):
-        super().__init__("Spmv")
+        super().__init__("BlasSpmv")
 
     def get_test_cases(self):
         return parse_test_cases()
 
     def torch_operator(self, *args, **kwargs):
-        return torch_spmv(*args, **kwargs)
+        return torch_blas_spmv(*args, **kwargs)
 
     def infinicore_operator(self, *args, **kwargs):
-        return infinicore.spmv(*args, **kwargs)
+        return infinicore.blas_spmv(*args, **kwargs)
 
 
 def main():

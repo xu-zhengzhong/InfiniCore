@@ -1,6 +1,6 @@
 #include "../../operator.h"
 #include "../../handle.h"
-#include "infiniop/ops/spmv.h"
+#include "infiniop/ops/blas_spmv.h"
 
 #ifdef ENABLE_CPU_API
 #include "cpu/spmv_cpu.h"
@@ -12,9 +12,9 @@
 #include "bang/spmv_bang.h"
 #endif
 
-__INFINI_C infiniStatus_t infiniopCreateSpmvDescriptor(
+__INFINI_C infiniStatus_t infiniopCreateBlasSpmvDescriptor(
     infiniopHandle_t handle,
-    infiniopSpmvDescriptor_t *desc_ptr,
+    infiniopBlasSpmvDescriptor_t *desc_ptr,
     infiniopBlasFillMode_t uplo,
     infiniopTensorDescriptor_t alpha_desc,
     infiniopTensorDescriptor_t AP_desc,
@@ -51,7 +51,7 @@ __INFINI_C infiniStatus_t infiniopCreateSpmvDescriptor(
 #undef CREATE
 }
 
-__INFINI_C infiniStatus_t infiniopGetSpmvWorkspaceSize(infiniopSpmvDescriptor_t desc, size_t *size) {
+__INFINI_C infiniStatus_t infiniopGetBlasSpmvWorkspaceSize(infiniopBlasSpmvDescriptor_t desc, size_t *size) {
 
 #define GET(CASE, NAMESPACE)                                                                      \
     case CASE:                                                                                    \
@@ -75,8 +75,8 @@ __INFINI_C infiniStatus_t infiniopGetSpmvWorkspaceSize(infiniopSpmvDescriptor_t 
 #undef GET
 }
 
-__INFINI_C infiniStatus_t infiniopSpmv(
-    infiniopSpmvDescriptor_t desc,
+__INFINI_C infiniStatus_t infiniopBlasSpmv(
+    infiniopBlasSpmvDescriptor_t desc,
     void *workspace,
     size_t workspace_size,
     const void *alpha,
@@ -108,7 +108,7 @@ __INFINI_C infiniStatus_t infiniopSpmv(
 #undef CALCULATE
 }
 
-__INFINI_C infiniStatus_t infiniopDestroySpmvDescriptor(infiniopSpmvDescriptor_t desc) {
+__INFINI_C infiniStatus_t infiniopDestroyBlasSpmvDescriptor(infiniopBlasSpmvDescriptor_t desc) {
 
 #define DELETE(CASE, NAMESPACE)                                                 \
     case CASE:                                                                  \

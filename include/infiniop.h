@@ -129,7 +129,7 @@
 #include "infiniop/ops/softmax.h"
 #include "infiniop/ops/softplus.h"
 #include "infiniop/ops/softsign.h"
-#include "infiniop/ops/spmv.h"
+#include "infiniop/ops/blas_spmv.h"
 #include "infiniop/ops/spr.h"
 #include "infiniop/ops/spr2.h"
 #include "infiniop/ops/sub.h"

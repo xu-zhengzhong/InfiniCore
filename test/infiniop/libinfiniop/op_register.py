@@ -3194,9 +3194,9 @@ def hpr2_(lib):
 
 
 @OpRegister.operator
-def spmv_(lib):
-    lib.infiniopCreateSpmvDescriptor.restype = c_int32
-    lib.infiniopCreateSpmvDescriptor.argtypes = [
+def blas_spmv_(lib):
+    lib.infiniopCreateBlasSpmvDescriptor.restype = c_int32
+    lib.infiniopCreateBlasSpmvDescriptor.argtypes = [
         infiniopHandle_t,
         POINTER(infiniopOperatorDescriptor_t),
         c_int32,
@@ -3207,14 +3207,14 @@ def spmv_(lib):
         infiniopTensorDescriptor_t,
     ]
 
-    lib.infiniopGetSpmvWorkspaceSize.restype = c_int32
-    lib.infiniopGetSpmvWorkspaceSize.argtypes = [
+    lib.infiniopGetBlasSpmvWorkspaceSize.restype = c_int32
+    lib.infiniopGetBlasSpmvWorkspaceSize.argtypes = [
         infiniopOperatorDescriptor_t,
         POINTER(c_size_t),
     ]
 
-    lib.infiniopSpmv.restype = c_int32
-    lib.infiniopSpmv.argtypes = [
+    lib.infiniopBlasSpmv.restype = c_int32
+    lib.infiniopBlasSpmv.argtypes = [
         infiniopOperatorDescriptor_t,
         c_void_p,
         c_size_t,
@@ -3226,8 +3226,8 @@ def spmv_(lib):
         c_void_p,
     ]
 
-    lib.infiniopDestroySpmvDescriptor.restype = c_int32
-    lib.infiniopDestroySpmvDescriptor.argtypes = [
+    lib.infiniopDestroyBlasSpmvDescriptor.restype = c_int32
+    lib.infiniopDestroyBlasSpmvDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
 

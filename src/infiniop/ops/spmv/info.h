@@ -3,7 +3,7 @@
 
 #include "../../../utils.h"
 #include "../../tensor.h"
-#include "infiniop/ops/spmv.h"
+#include "infiniop/ops/blas_spmv.h"
 
 struct SpmvInfo {
 private:

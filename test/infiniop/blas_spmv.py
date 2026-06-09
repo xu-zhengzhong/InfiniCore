@@ -77,7 +77,7 @@ def test(
     sync=None,
 ):
     print(
-        f"Testing Spmv on {InfiniDeviceNames[device]} with uplo:{uplo} n:{n} "
+        f"Testing BlasSpmv on {InfiniDeviceNames[device]} with uplo:{uplo} n:{n} "
         f"x_stride:{x_stride} y_stride:{y_stride} dtype:{InfiniDtypeNames[dtype]}"
     )
 
@@ -102,7 +102,7 @@ def test(
 
     descriptor = infiniopOperatorDescriptor_t()
     check_error(
-        LIBINFINIOP.infiniopCreateSpmvDescriptor(
+        LIBINFINIOP.infiniopCreateBlasSpmvDescriptor(
             handle,
             ctypes.byref(descriptor),
             uplo,
@@ -119,15 +119,15 @@ def test(
 
     workspace_size = c_uint64(0)
     check_error(
-        LIBINFINIOP.infiniopGetSpmvWorkspaceSize(
+        LIBINFINIOP.infiniopGetBlasSpmvWorkspaceSize(
             descriptor, ctypes.byref(workspace_size)
         )
     )
     workspace = TestWorkspace(workspace_size.value, device)
 
-    def lib_spmv():
+    def lib_blas_spmv():
         check_error(
-            LIBINFINIOP.infiniopSpmv(
+            LIBINFINIOP.infiniopBlasSpmv(
                 descriptor,
                 workspace.data(),
                 workspace_size.value,
@@ -140,7 +140,7 @@ def test(
             )
         )
 
-    lib_spmv()
+    lib_blas_spmv()
 
     atol, rtol = get_tolerance(_TOLERANCE_MAP, dtype)
     if DEBUG:
@@ -158,10 +158,10 @@ def test(
             NUM_ITERATIONS,
         )
         profile_operation(
-            "    lib", lambda: lib_spmv(), device, NUM_PRERUN, NUM_ITERATIONS
+            "    lib", lambda: lib_blas_spmv(), device, NUM_PRERUN, NUM_ITERATIONS
         )
 
-    check_error(LIBINFINIOP.infiniopDestroySpmvDescriptor(descriptor))
+    check_error(LIBINFINIOP.infiniopDestroyBlasSpmvDescriptor(descriptor))
 
 
 if __name__ == "__main__":
