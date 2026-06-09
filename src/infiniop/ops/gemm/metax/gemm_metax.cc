@@ -74,6 +74,8 @@ infiniStatus_t Descriptor::calculate(
     CHECK_STATUS(_opaque->internal->useMcblas(
         (hcStream_t)stream,
         [&](hcblasHandle_t handle) {
+            CHECK_MCBLAS(hcblasSetPointerMode(handle, HCBLAS_POINTER_MODE_HOST));
+
             CHECK_MCBLAS(
                 hcblasGemmStridedBatchedEx(
                     handle,
