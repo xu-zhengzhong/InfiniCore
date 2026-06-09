@@ -60,16 +60,18 @@ struct DenseLayout {
     int64_t cols;
     int64_t ld;
     hcsparseOrder_t order;
+    hcsparseOperation_t op;
 };
 
 static utils::Result<DenseLayout> denseLayoutOf(const DenseMatrix &matrix) {
     if (matrix.col_stride == 1) {
         CHECK_OR_RETURN(matrix.row_stride > 0, INFINI_STATUS_BAD_TENSOR_STRIDES);
         return utils::Result<DenseLayout>(DenseLayout{
-            static_cast<int64_t>(matrix.rows),
             static_cast<int64_t>(matrix.cols),
+            static_cast<int64_t>(matrix.rows),
             static_cast<int64_t>(matrix.row_stride),
-            HCSPARSE_ORDER_ROW});
+            HCSPARSE_ORDER_COL,
+            HCSPARSE_OPERATION_TRANSPOSE});
     }
 
     if (matrix.row_stride == 1) {
@@ -78,7 +80,8 @@ static utils::Result<DenseLayout> denseLayoutOf(const DenseMatrix &matrix) {
             static_cast<int64_t>(matrix.rows),
             static_cast<int64_t>(matrix.cols),
             static_cast<int64_t>(matrix.col_stride),
-            HCSPARSE_ORDER_COL});
+            HCSPARSE_ORDER_COL,
+            HCSPARSE_OPERATION_NON_TRANSPOSE});
     }
 
     return INFINI_STATUS_BAD_TENSOR_STRIDES;
@@ -112,6 +115,8 @@ infiniStatus_t Descriptor::create(
     auto opaque = new Opaque(handle->internal());
     opaque->data_type = dataTypeOf(dtype);
     opaque->index_type = indexTypeOf(index_dtype);
+    opaque->op_a = a_layout->op;
+    opaque->op_b = b_layout->op;
 
     auto status = hcsparseCreateCsr(
         &opaque->mat_c,

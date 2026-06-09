@@ -15,6 +15,7 @@ from framework import (
 )
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
+
 def _generate_sddmm_cases():
     cases = []
     random.seed(42)
@@ -48,13 +49,18 @@ _TOLERANCE_MAP = {
 }
 
 
-def sampled_mm(a, b, values, rows, crow, col, alpha, beta):
+def sampled_mm(a, b, values, rows, crow, col, alpha, beta, *, force_cpu=False):
+    output_device = values.device
+    if force_cpu:
+        a = a.cpu()
+        b = b.cpu()
+        values = values.cpu()
     mm = torch.matmul(a, b)
     result = values.clone()
     for row in range(rows):
         for ptr in range(crow[row], crow[row + 1]):
             result[ptr] = alpha * mm[row, col[ptr]] + beta * values[ptr]
-    return result
+    return result.to(output_device)
 
 
 def _use_dense_reference(device, target_device):
@@ -71,8 +77,10 @@ def sddmm_sparse_reference(values, a, b, *, rows, cols, crow, col, alpha, beta):
     return torch.sparse.sampled_addmm(sparse, a, b, beta=beta, alpha=alpha).values()
 
 
-def sddmm_dense_reference(values, a, b, *, rows, cols, crow, col, alpha, beta):
-    return sampled_mm(a, b, values, rows, crow, col, alpha, beta)
+def sddmm_dense_reference(
+    values, a, b, *, rows, cols, crow, col, alpha, beta, force_cpu=False
+):
+    return sampled_mm(a, b, values, rows, crow, col, alpha, beta, force_cpu=force_cpu)
 
 
 class SparseTestCase(TestCase):
@@ -207,6 +215,7 @@ class OpTest(BaseOperatorTest):
                 col=col,
                 alpha=alpha,
                 beta=beta,
+                force_cpu=True,
             )
         return sddmm_sparse_reference(
             values,
