@@ -112,9 +112,9 @@ def _generate_spmm_cases():
     random.seed(42)
     # (rows, cols, n, density)
     configs = [
-        (3, 4, 2, 0.5),  # Baseline small test
+        (128, 128, 128, 0.01),  # Baseline small test
         (1024, 1024, 128, 0.01),  # 1K scale
-        (2048, 1024, 64, 0.005),  # 2K scale
+        (4096, 4096, 4096, 0.01),  # 2K scale
     ]
     for rows, cols, n, density in configs:
         crow = [0]

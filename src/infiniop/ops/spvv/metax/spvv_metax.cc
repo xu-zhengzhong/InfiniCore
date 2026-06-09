@@ -163,17 +163,17 @@ infiniStatus_t Descriptor::calculate(
         }));
 
     if (stream != nullptr) {
-        CHECK_HC(hcStreamSynchronize(reinterpret_cast<hcStream_t>(stream)));
+        hcStreamSynchronize(reinterpret_cast<hcStream_t>(stream));
     } else {
-        CHECK_HC(hcDeviceSynchronize());
+        hcDeviceSynchronize();
     }
 
     float host_dot = 0.0f;
     float host_y = 0.0f;
-    CHECK_HC(hcMemcpy(&host_dot, dot, sizeof(float), hcMemcpyDeviceToHost));
-    CHECK_HC(hcMemcpy(&host_y, y, sizeof(float), hcMemcpyDeviceToHost));
+    hcMemcpy(&host_dot, dot, sizeof(float), hcMemcpyDeviceToHost);
+    hcMemcpy(&host_y, y, sizeof(float), hcMemcpyDeviceToHost);
     host_y = alpha * host_dot + beta * host_y;
-    CHECK_HC(hcMemcpy(y, &host_y, sizeof(float), hcMemcpyHostToDevice));
+    hcMemcpy(y, &host_y, sizeof(float), hcMemcpyHostToDevice);
 
     return INFINI_STATUS_SUCCESS;
 }

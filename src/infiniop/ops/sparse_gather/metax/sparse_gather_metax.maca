@@ -1,5 +1,7 @@
 #include "../../../devices/metax/metax_handle.h"
 #include "../../../devices/metax/metax_ht2mc.h"
+#include "../../../devices/metax/metax_common.h"
+#include "../../../devices/metax/metax_kernel_common.h"
 #include "sparse_gather_metax.h"
 
 namespace op::sparse_gather::metax {
