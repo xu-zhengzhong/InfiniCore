@@ -1,10 +1,10 @@
-#include "infinicore/ops/spmv.hpp"
+#include "infinicore/ops/blas_spmv.hpp"
 
 #include "../infiniop_impl.hpp"
 
-namespace infinicore::op::spmv_impl::infiniop {
+namespace infinicore::op::blas_spmv_impl::infiniop {
 
-INFINIOP_CACHABLE_DESCRIPTOR(Descriptor, Spmv, 100);
+INFINIOP_CACHABLE_DESCRIPTOR(Descriptor, BlasSpmv, 100);
 
 struct PlannedMeta {
     std::shared_ptr<Descriptor> descriptor;
@@ -15,12 +15,12 @@ void *plan(const Tensor &alpha, const Tensor &ap, const Tensor &x, const Tensor 
     size_t seed = hash_combine(y, alpha, ap, x, beta, uplo);
 
     INFINIOP_CACHABLE_DESCRIPTOR_GET_OR_CREATE(
-        Descriptor, descriptor, Spmv,
+        Descriptor, descriptor, BlasSpmv,
         seed,
         static_cast<infiniopBlasFillMode_t>(uplo),
         alpha->desc(), ap->desc(), x->desc(), beta->desc(), y->desc());
 
-    INFINIOP_WORKSPACE_TENSOR(workspace, Spmv, descriptor);
+    INFINIOP_WORKSPACE_TENSOR(workspace, BlasSpmv, descriptor);
 
     return new PlannedMeta{
         descriptor,
@@ -35,7 +35,7 @@ void *plan(const Tensor &alpha, const Tensor &ap, const Tensor &x, const Tensor 
 void run(void *planned_meta) {
     auto planned = reinterpret_cast<PlannedMeta *>(planned_meta);
 
-    INFINICORE_CHECK_ERROR(infiniopSpmv(
+    INFINICORE_CHECK_ERROR(infiniopBlasSpmv(
         planned->descriptor->desc,
         planned->workspace->data(),
         planned->workspace->numel(),
@@ -52,6 +52,6 @@ void cleanup(void **planned_meta_ptr) {
     *planned_meta_ptr = nullptr;
 }
 
-INFINICORE_GRAPH_OP_REGISTER_ALLDEVICE(Spmv, &plan, &run, &cleanup);
+INFINICORE_GRAPH_OP_REGISTER_ALLDEVICE(BlasSpmv, &plan, &run, &cleanup);
 
-} // namespace infinicore::op::spmv_impl::infiniop
+} // namespace infinicore::op::blas_spmv_impl::infiniop

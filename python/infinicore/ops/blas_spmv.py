@@ -2,7 +2,7 @@ from infinicore.lib import _infinicore
 from infinicore.tensor import Tensor
 
 
-def spmv(
+def blas_spmv(
     alpha: Tensor,
     ap: Tensor,
     x: Tensor,
@@ -11,7 +11,7 @@ def spmv(
     *,
     uplo: int = 0,
 ):
-    _infinicore.spmv_(
+    _infinicore.blas_spmv_(
         alpha._underlying,
         ap._underlying,
         x._underlying,

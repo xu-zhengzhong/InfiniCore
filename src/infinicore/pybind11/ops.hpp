@@ -120,7 +120,7 @@
 #include "ops/smooth_l1_loss.hpp"
 #include "ops/softplus.hpp"
 #include "ops/softsign.hpp"
-#include "ops/spmv.hpp"
+#include "ops/blas_spmv.hpp"
 #include "ops/spr.hpp"
 #include "ops/spr2.hpp"
 #include "ops/sum.hpp"
@@ -266,7 +266,7 @@ inline void bind(py::module &m) {
     bind_broadcast_to(m);
     bind_softplus(m);
     bind_softsign(m);
-    bind_spmv(m);
+    bind_blas_spmv(m);
     bind_spr(m);
     bind_spr2(m);
     bind_linear(m);

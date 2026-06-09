@@ -138,7 +138,7 @@ from infinicore.ops.scal import scal
 from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
 from infinicore.ops.squeeze import squeeze
-from infinicore.ops.spmv import spmv
+from infinicore.ops.blas_spmv import blas_spmv
 from infinicore.ops.spr import spr
 from infinicore.ops.spr2 import spr2
 from infinicore.ops.sum import sum
@@ -279,7 +279,7 @@ __all__ = [
     "kthvalue",
     "squeeze",
     "unsqueeze",
-    "spmv",
+    "blas_spmv",
     "spr",
     "spr2",
     "rearrange",
