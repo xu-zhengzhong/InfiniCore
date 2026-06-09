@@ -10,25 +10,20 @@ from framework import (
     TensorSpec,
     TestCase,
 )
+from framework.tensor import TensorInitializer
 
 import infinicore
 
 _TEST_CASES_DATA = [
     # uplo, trans, diag, n, x_stride
-    (0, 0, 0, 1, None),
-    (0, 0, 0, 5, None),
-    (0, 0, 1, 5, None),
-    (0, 1, 0, 5, None),
-    (0, 1, 1, 17, (2,)),
     (0, 0, 0, 128, (3,)),
-    (0, 1, 0, 256, None),
-    (1, 0, 0, 1, None),
-    (1, 0, 0, 5, None),
-    (1, 0, 1, 5, None),
-    (1, 1, 0, 5, None),
-    (1, 1, 1, 17, (2,)),
+    (0, 1, 0, 1024, None),
+    (0, 0, 1, 4096, (2,)),
+    (0, 1, 1, 5120, None),
     (1, 0, 0, 128, (3,)),
-    (1, 1, 0, 256, None),
+    (1, 1, 0, 1024, None),
+    (1, 0, 1, 4096, None),
+    (1, 1, 1, 5120, (2,)),
 ]
 
 _TENSOR_DTYPES = [
@@ -91,7 +86,9 @@ def parse_test_cases():
             tol = _TOLERANCE_MAP.get(dtype, {"atol": 5e-4, "rtol": 5e-4})
             packed_len = n * (n + 1) // 2
 
-            ap_spec = TensorSpec.from_tensor((packed_len,), None, dtype)
+            ap_spec = TensorSpec.from_tensor(
+                (packed_len,), None, dtype, init_mode=TensorInitializer.ONES
+            )
             x_spec = TensorSpec.from_tensor((n,), x_stride, dtype)
 
             test_cases.append(

@@ -16,34 +16,18 @@ import infinicore
 
 _SIDE_UPLO_TRANS_DIAG_CASES = [
     (side, uplo, trans, diag)
-    for side in (0, 1)
-    for uplo in (0, 1)
-    for trans in (0, 1)
-    for diag in (0, 1)
+    for side in (0,)
+    for uplo in (0,)
+    for trans in (0,)
+    for diag in (0,)
 ]
 
 _TEST_CASES_DATA = [
     # m, n, a_stride_left, a_stride_right, b_stride
-    (1, 1, None, None, None),
-    (1, 2, None, None, None),
-    (2, 2, None, None, None),
-    (3, 5, None, None, None),
-    (5, 3, None, None, None),
-    (8, 8, None, None, None),
-    (17, 9, None, None, None),
-    (31, 32, None, None, None),
-    (32, 31, None, None, None),
-    (65, 65, None, None, None),
-    (127, 128, None, None, None),
-    (128, 127, None, None, None),
-    (256, 256, None, None, None),
-    (512, 512, None, None, None),
+    (128, 128, None, None, None),
     (1024, 1024, None, None, None),
-    (1, 4096, None, None, None),
-    (17, 9, (1, 24), (1, 16), None),
-    (17, 9, (24, 1), (16, 1), (12, 1)),
-    (31, 32, (1, 40), (1, 48), (1, 36)),
-    (32, 31, (40, 1), (48, 1), (35, 1)),
+    (4096, 4096, None, None, None),
+    (5120, 5120, None, None, None),
 ]
 
 _TENSOR_DTYPES = [

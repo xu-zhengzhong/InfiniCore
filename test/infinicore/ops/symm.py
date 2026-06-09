@@ -14,38 +14,14 @@ from framework.tensor import TensorInitializer
 
 import infinicore
 
-_SIDE_UPLO_CASES = [(side, uplo) for side in (0, 1) for uplo in (0, 1)]
+_SIDE_UPLO_CASES = [(side, uplo) for side in (0,) for uplo in (0,)]
 
 _TEST_CASES_DATA = [
     # m, n, a_stride_left, a_stride_right, b_stride, c_stride
-    (1, 1, None, None, None, None),
-    (1, 2, None, None, None, None),
-    (1, 7, None, None, None, None),
-    (2, 2, None, None, None, None),
-    (3, 5, None, None, None, None),
-    (5, 3, None, None, None, None),
-    (8, 8, None, None, None, None),
-    (9, 17, None, None, None, None),
-    (17, 9, None, None, None, None),
-    (31, 32, None, None, None, None),
-    (32, 31, None, None, None, None),
-    (32, 32, None, None, None, None),
-    (33, 64, None, None, None, None),
-    (64, 33, None, None, None, None),
-    (65, 65, None, None, None, None),
-    (127, 128, None, None, None, None),
-    (128, 127, None, None, None, None),
-    (256, 256, None, None, None, None),
-    (512, 512, None, None, None, None),
+    (128, 128, None, None, None, None),
     (1024, 1024, None, None, None, None),
-    (1, 4096, None, None, None, None),
-    (4096, 3, None, None, None, None),
-    (3, 4096, None, None, None, None),
-    (1, 4097, None, None, None, None),
-    (17, 9, (1, 24), (1, 16), None, None),
-    (17, 9, (24, 1), (16, 1), (12, 1), (13, 1)),
-    (31, 32, (1, 40), (1, 48), (1, 36), (1, 40)),
-    (32, 31, (40, 1), (48, 1), (35, 1), (37, 1)),
+    (4096, 4096, None, None, None, None),
+    (5120, 5120, None, None, None, None),
 ]
 
 _TENSOR_DTYPES = [

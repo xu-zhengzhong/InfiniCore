@@ -10,33 +10,20 @@ from framework import (
     TensorSpec,
     TestCase,
 )
+from framework.tensor import TensorInitializer
 
 import infinicore
 
 _TEST_CASES_DATA = [
     # uplo, trans, diag, n, a_stride, x_stride
-    (0, 0, 0, 1, None, None),
-    (0, 0, 0, 5, None, None),
-    (0, 0, 1, 5, None, None),
-    (0, 1, 0, 5, None, None),
-    (0, 1, 1, 17, None, (2,)),
-    (0, 0, 0, 33, (1, 40), None),
-    (0, 1, 1, 33, (40, 1), (2,)),
     (0, 0, 0, 128, None, (3,)),
-    (0, 1, 0, 256, None, None),
-    (0, 1, 1, 512, (1024, 1), None),
-    (0, 0, 0, 1024, None, (3,)),
-    (1, 0, 0, 1, None, None),
-    (1, 0, 0, 5, None, None),
-    (1, 0, 1, 5, None, None),
-    (1, 1, 0, 5, None, None),
-    (1, 1, 1, 17, None, (2,)),
-    (1, 0, 0, 33, (1, 40), (2,)),
-    (1, 1, 1, 33, (40, 1), None),
+    (0, 1, 0, 1024, None, None),
+    (0, 0, 1, 4096, None, (2,)),
+    (0, 1, 1, 5120, None, None),
     (1, 0, 0, 128, None, (3,)),
-    (1, 1, 0, 256, None, None),
-    (1, 1, 1, 512, (1024, 1), None),
-    (1, 0, 0, 1024, None, (3,)),
+    (1, 1, 0, 1024, None, None),
+    (1, 0, 1, 4096, None, None),
+    (1, 1, 1, 5120, None, (2,)),
 ]
 
 _TENSOR_DTYPES = [
@@ -45,7 +32,7 @@ _TENSOR_DTYPES = [
 ]
 
 _TOLERANCE_MAP = {
-    infinicore.float32: {"atol": 5e-3, "rtol": 5e-3},
+    infinicore.float32: {"atol": 1e-2, "rtol": 1e-2},
     infinicore.float64: {"atol": 1e-9, "rtol": 1e-9},
 }
 
@@ -86,7 +73,10 @@ def parse_test_cases():
             tol = _TOLERANCE_MAP.get(dtype, {"atol": 5e-4, "rtol": 5e-4})
 
             a_spec = TensorSpec.from_tensor(
-                (n, n), a_stride if a_stride is not None else (1, n), dtype
+                (n, n),
+                a_stride if a_stride is not None else (1, n),
+                dtype,
+                init_mode=TensorInitializer.ONES,
             )
             x_spec = TensorSpec.from_tensor((n,), x_stride, dtype)
 

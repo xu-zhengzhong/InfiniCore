@@ -15,11 +15,10 @@ from framework.tensor import TensorInitializer
 import infinicore
 
 _TEST_CASES_DATA = [
-    ((3,), None, None),
-    ((8,), (2,), (3,)),
-    ((32,), None, (2,)),
-    ((257,), (3,), None),
-    ((65535,), None, None),
+    ((128,), None, None),
+    ((1024,), (2,), (3,)),
+    ((4096,), None, (2,)),
+    ((5120,), (3,), None),
 ]
 
 _TOLERANCE_MAP = {

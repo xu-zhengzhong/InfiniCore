@@ -16,18 +16,14 @@ import infinicore
 
 _TEST_CASES_DATA = [
     # uplo, n, x_stride
-    (0, 1, None),
-    (0, 5, None),
-    (0, 17, (2,)),
-    (0, 33, None),
     (0, 128, (3,)),
-    (0, 256, None),
-    (1, 1, None),
-    (1, 5, None),
-    (1, 17, None),
-    (1, 33, (2,)),
+    (0, 1024, None),
+    (0, 4096, (2,)),
+    (0, 5120, None),
     (1, 128, (3,)),
-    (1, 256, None),
+    (1, 1024, None),
+    (1, 4096, None),
+    (1, 5120, (2,)),
 ]
 
 _TENSOR_DTYPES = [

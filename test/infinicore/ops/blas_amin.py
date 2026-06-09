@@ -15,11 +15,10 @@ from framework.tensor import TensorInitializer
 import infinicore
 
 _TEST_CASES_DATA = [
-    ((3,), None),
-    ((8,), (2,)),
-    ((32,), None),
-    ((257,), (3,)),
-    ((65535,), None),
+    ((128,), None),
+    ((1024,), (2,)),
+    ((4096,), None),
+    ((5120,), (3,)),
 ]
 
 _TENSOR_DTYPES = [

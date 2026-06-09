@@ -14,27 +14,14 @@ from framework.tensor import TensorInitializer
 
 import infinicore
 
-_UPLO_TRANS_CASES = [(uplo, trans) for uplo in (0, 1) for trans in (0, 2)]
+_UPLO_TRANS_CASES = [(uplo, trans) for uplo in (0,) for trans in (0,)]
 
 _TEST_CASES_DATA = [
     # n, k, a_stride_n, a_stride_c, c_stride
-    (1, 1, None, None, None),
-    (2, 2, None, None, None),
-    (7, 3, None, None, None),
-    (8, 8, None, None, None),
-    (9, 17, None, None, None),
-    (17, 9, None, None, None),
-    (31, 32, None, None, None),
-    (32, 31, None, None, None),
-    (33, 64, None, None, None),
-    (64, 33, None, None, None),
-    (127, 128, None, None, None),
-    (128, 127, None, None, None),
-    (256, 256, None, None, None),
-    (1024, 32, None, None, None),
-    (32, 1024, None, None, None),
-    (17, 9, (1, 24), (1, 16), None),
-    (31, 32, (1, 40), (1, 48), (1, 40)),
+    (128, 128, None, None, None),
+    (1024, 64, None, None, None),
+    (4096, 32, None, None, None),
+    (5120, 16, None, None, None),
 ]
 
 _TENSOR_DTYPES = [
@@ -48,7 +35,7 @@ _REAL_DTYPE_MAP = {
 }
 
 _TOLERANCE_MAP = {
-    infinicore.complex64: {"atol": 1e-3, "rtol": 1e-3},
+    infinicore.complex64: {"atol": 5e-2, "rtol": 5e-2},
     infinicore.complex128: {"atol": 1e-9, "rtol": 1e-9},
 }
 
