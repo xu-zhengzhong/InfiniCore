@@ -77,11 +77,10 @@ def sddmm_dense_reference(values, a, b, *, rows, cols, crow, col, alpha, beta):
 
 class SparseTestCase(TestCase):
     def __str__(self):
-        nnz = len(self.kwargs["col"])
         return (
             f"TestCase({self.description} - "
             f"rows={self.kwargs['rows']}; cols={self.kwargs['cols']}; "
-            f"k={self.kwargs['k']}; nnz={nnz}; density={self.kwargs['density']:.6f}; "
+            f"k={self.kwargs['k']}; "
             f"alpha={self.kwargs['alpha']}; beta={self.kwargs['beta']})"
         )
 
@@ -134,9 +133,7 @@ class CsrSpMatSpec(TensorSpec):
         )
 
     def __str__(self):
-        nnz = len(self.col)
-        density = nnz / (self.rows * self.cols) if self.rows and self.cols else 0
-        return f"{self.name}: spmat(rows={self.rows}, cols={self.cols}, nnz={nnz}, density={density:.6f})"
+        return f"{self.name}: spmat(rows={self.rows}, cols={self.cols})"
 
 
 def parse_test_cases():

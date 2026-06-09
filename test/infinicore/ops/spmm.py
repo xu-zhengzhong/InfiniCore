@@ -16,9 +16,6 @@ from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
 
 def _summarize_sparse_data(rows, cols, crow, col, limit=6):
-    nnz = len(col)
-    density = nnz / (rows * cols) if rows and cols else 0
-
     def preview(values):
         if len(values) <= limit:
             return str(values)
@@ -29,8 +26,6 @@ def _summarize_sparse_data(rows, cols, crow, col, limit=6):
     return [
         f"rows={rows}",
         f"cols={cols}",
-        f"nnz={nnz}",
-        f"density={density:.6f}",
         f"crow={preview(crow)}",
         f"col={preview(col)}",
     ]
@@ -102,9 +97,7 @@ class CsrSpMatSpec(TensorSpec):
         )
 
     def __str__(self):
-        nnz = len(self.col)
-        density = nnz / (self.rows * self.cols) if self.rows and self.cols else 0
-        return f"{self.name}: spmat(rows={self.rows}, cols={self.cols}, nnz={nnz}, density={density:.6f})"
+        return f"{self.name}: spmat(rows={self.rows}, cols={self.cols})"
 
 
 def _generate_spmm_cases():

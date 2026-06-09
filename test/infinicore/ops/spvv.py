@@ -23,11 +23,8 @@ class SparseTestCase(TestCase):
         input_str = "; ".join(str(inp) for inp in self.inputs)
         size = self.kwargs["size"]
         indices = self.kwargs["indices"]
-        density = len(indices) / size if size else 0
         kwargs_strs = [
             f"size={size}",
-            f"nnz={len(indices)}",
-            f"density={density:.6f}",
             f"indices={_summarize_indices(indices)}",
         ]
         out = self.kwargs.get("out")
@@ -119,11 +116,7 @@ class SpVecSpec(TensorSpec):
         )
 
     def __str__(self):
-        density = len(self.indices) / self.size if self.size else 0
-        return (
-            f"{self.name}: spvec(size={self.size}, nnz={len(self.indices)}, "
-            f"density={density:.6f})"
-        )
+        return f"{self.name}: spvec(size={self.size})"
 
 
 class CachedTensorSpec(TensorSpec):

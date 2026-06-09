@@ -84,7 +84,7 @@
 
 #     def __str__(self):
 #         density = len(self.indices) / self.size if self.size else 0
-#         return f"{self.name}: spvec(size={self.size}, nnz={len(self.indices)}, density={density:.6f})"
+#         return f"{self.name}: spvec(size={self.size})"
 
 
 # def parse_test_cases():
@@ -268,8 +268,7 @@ class SpVecSpec(TensorSpec):
         return infinicore.coo_spvec(indices_tensor, infini_values, self.size)
 
     def __str__(self):
-        density = len(self.indices) / self.size if self.size else 0
-        return f"{self.name}: spvec(size={self.size}, nnz={len(self.indices)}, density={density:.6f})"
+        return f"{self.name}: spvec(size={self.size})"
 
 
 def parse_test_cases():
@@ -292,7 +291,7 @@ def parse_test_cases():
                     ],
                     kwargs={"size": size, "indices": indices},
                     tolerance=_TOLERANCE_MAP[dtype],
-                    description=f"SparseGather - OUT_OF_PLACE (size={size}, density={density})",
+                    description=f"SparseGather - OUT_OF_PLACE (size={size})",
                 )
             )
             values_spec = CachedTensorSpec.from_tensor(
@@ -312,7 +311,7 @@ def parse_test_cases():
                     },
                     comparison_target="out",
                     tolerance=_TOLERANCE_MAP[dtype],
-                    description=f"SparseGather - OUT(out) (size={size}, density={density})",
+                    description=f"SparseGather - OUT(out) (size={size})",
                 )
             )
     return test_cases

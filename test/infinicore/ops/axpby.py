@@ -13,11 +13,9 @@ from framework.utils.tensor_utils import infinicore_tensor_from_torch
 class SparseTestCase(TestCase):
     def __str__(self):
         size = self.kwargs["size"]
-        indices = self.kwargs["indices"]
-        density = len(indices) / size if size else 0
         return (
-            f"TestCase({self.description} - size={size}; nnz={len(indices)}; "
-            f"density={density:.6f}; alpha={self.kwargs['alpha']}; beta={self.kwargs['beta']})"
+            f"TestCase({self.description} - size={size}; "
+            f"alpha={self.kwargs['alpha']}; beta={self.kwargs['beta']})"
         )
 
 
@@ -81,11 +79,7 @@ class SpVecSpec(TensorSpec):
         return infinicore.coo_spvec(indices_tensor, infini_values, self.size)
 
     def __str__(self):
-        density = len(self.indices) / self.size if self.size else 0
-        return (
-            f"{self.name}: spvec(size={self.size}, nnz={len(self.indices)}, "
-            f"density={density:.6f})"
-        )
+        return f"{self.name}: spvec(size={self.size})"
 
 
 def parse_test_cases():
