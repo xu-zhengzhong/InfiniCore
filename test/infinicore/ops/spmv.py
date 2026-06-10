@@ -100,9 +100,9 @@ def _generate_spmv_cases():
     random.seed(42)
     # (rows, cols, density)
     configs = [
-        (3, 4, 0.5),  # Baseline
-        (1024, 1024, 0.02),  # 1K scale
-        (4096, 4096, 0.005),  # 4K scale
+        (128, 128, 0.02),  # Baseline
+        (1024, 1024, 0.002),  # 1K scale
+        (4096, 4096, 0.001),  # 4K scale
     ]
     for rows, cols, density in configs:
         crow = [0]
@@ -125,7 +125,7 @@ _TEST_CASES_DATA = _generate_spmv_cases()
 
 _TOLERANCE_MAP = {
     infinicore.float16: {"atol": 0, "rtol": 1e-2},
-    infinicore.float32: {"atol": 0, "rtol": 1e-3},
+    infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
     infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
 }
 

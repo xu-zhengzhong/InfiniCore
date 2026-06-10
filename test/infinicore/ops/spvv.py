@@ -41,9 +41,10 @@ def _generate_spvv_cases():
     random.seed(42)
     # (size, density)
     configs = [
-        (23456, 0.03),
-        (5898192, 0.007),
-        (4578447, 0.0095)
+        (128, 0.01),
+        (1024, 0.01),
+        (4096, 0.01),
+        (48192, 0.01)
     ]
     for size, density in configs:
         nnz = int(size * density)
@@ -60,7 +61,7 @@ _TEST_CASES_DATA = _generate_spvv_cases()
 
 _TOLERANCE_MAP = {
     infinicore.float16: {"atol": 0, "rtol": 1e-2},
-    infinicore.float32: {"atol": 0, "rtol": 1e-3},
+    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
     infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
 }
 

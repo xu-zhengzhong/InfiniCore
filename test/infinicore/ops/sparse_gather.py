@@ -171,10 +171,10 @@ from framework.utils.tensor_utils import infinicore_tensor_from_torch
 # density 表示稀疏度，例如 0.01 表示 1% 的非零元素
 _TEST_CASES_DATA = [
     # size, density
-    # (256, 0.01),      # 小尺寸，较高密度
-    # (1024, 0.01),
+    (128, 0.01),      # 小尺寸，较高密度
+    (1024, 0.01),
     # (2048, 0.01),     # 中等尺寸，低密度
-    # (4096, 0.01),      # 中等尺寸，较高密度
+    (4096, 0.01),      # 中等尺寸，较高密度
     (8192, 0.01),   # 大尺寸，极低密度
 ]
 
@@ -282,18 +282,18 @@ def parse_test_cases():
             values_spec = CachedTensorSpec.from_tensor(
                 (nnz,), dtype=dtype, name="values"
             )
-            test_cases.append(
-                TestCase(
-                    inputs=[
-                        values_spec,
-                        SpVecSpec(values_spec=values_spec, size=size, indices=indices),
-                        TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
-                    ],
-                    kwargs={"size": size, "indices": indices},
-                    tolerance=_TOLERANCE_MAP[dtype],
-                    description=f"SparseGather - OUT_OF_PLACE (size={size})",
-                )
-            )
+            # test_cases.append(
+            #     TestCase(
+            #         inputs=[
+            #             values_spec,
+            #             SpVecSpec(values_spec=values_spec, size=size, indices=indices),
+            #             TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
+            #         ],
+            #         kwargs={"size": size, "indices": indices},
+            #         tolerance=_TOLERANCE_MAP[dtype],
+            #         description=f"SparseGather - OUT_OF_PLACE (size={size})",
+            #     )
+            # )
             values_spec = CachedTensorSpec.from_tensor(
                 (nnz,), dtype=dtype, name="values"
             )

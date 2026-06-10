@@ -22,9 +22,10 @@ class SparseTestCase(TestCase):
 def _generate_cases():
     random.seed(42)
     configs = [
-        (256, 0.03, 1.0, 0.0),
+        (128, 0.03, 1.0, 0.0),
         (4096, 0.01, 0.5, 1.0),
-        (10000, 0.002, -1.25, 0.25),
+        (1024, 0.01, -1.25, 0.25),
+        (8884096, 0.01, 1.0, 0.0),
     ]
     cases = []
     for size, density, alpha, beta in configs:
