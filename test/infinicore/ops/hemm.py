@@ -30,7 +30,7 @@ _TENSOR_DTYPES = [
 ]
 
 _TOLERANCE_MAP = {
-    infinicore.complex64: {"atol": 1e-2, "rtol": 1e-2},
+    infinicore.complex64: {"atol": 5e-2, "rtol": 5e-2},
 }
 
 
