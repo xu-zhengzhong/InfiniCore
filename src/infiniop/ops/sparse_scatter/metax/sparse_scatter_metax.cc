@@ -1,7 +1,7 @@
 #include "sparse_scatter_metax.h"
 #include "../../../devices/metax/metax_common.h"
 #include "../../../devices/metax/metax_handle.h"
-#include "../../../utils.h"
+#include "../../../../utils.h"
 
 #include <cstdint>
 
