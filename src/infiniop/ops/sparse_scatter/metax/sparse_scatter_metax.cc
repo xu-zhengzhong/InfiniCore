@@ -7,7 +7,6 @@ namespace op::sparse_scatter::metax {
 struct Descriptor::Opaque {
     std::shared_ptr<device::metax::Handle::Internal> internal;
     hcsparseSpVecDescr_t vec_x = nullptr;
-    hcsparseDnVecDescr_t vec_y = nullptr;
     hpccDataType data_type = HPCC_R_32F;
     hcsparseIndexType_t index_type = HCSPARSE_INDEX_64I;
 
@@ -17,9 +16,6 @@ struct Descriptor::Opaque {
     ~Opaque() {
         if (vec_x != nullptr) {
             hcsparseDestroySpVec(vec_x);
-        }
-        if (vec_y != nullptr) {
-            hcsparseDestroyDnVec(vec_y);
         }
     }
 };
@@ -82,16 +78,6 @@ infiniStatus_t Descriptor::create(
         return INFINI_STATUS_INTERNAL_ERROR;
     });
 
-    status = hcsparseCreateDnVec(
-        &opaque->vec_y,
-        static_cast<int64_t>(result->output_vector.size),
-        const_cast<void *>(input_desc->values()),
-        opaque->data_type);
-    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
-        delete opaque;
-        return INFINI_STATUS_INTERNAL_ERROR;
-    });
-
     *desc_ptr = new Descriptor(
         output_desc->dtype(),
         input_desc->indicesDesc()->dtype(),
@@ -114,16 +100,24 @@ infiniStatus_t Descriptor::calculate(
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
 
-    CHECK_MCSPARSE(hcsparseDnVecSetValues(_opaque->vec_y, output));
-    CHECK_STATUS(_opaque->internal->useMcsparse(
+    hcsparseDnVecDescr_t vec_y = nullptr;
+    CHECK_MCSPARSE(hcsparseCreateDnVec(
+        &vec_y,
+        static_cast<int64_t>(_info.output_vector.size),
+        output,
+        _opaque->data_type));
+
+    auto ret = _opaque->internal->useMcsparse(
         reinterpret_cast<hcStream_t>(stream),
         [&](hcsparseHandle_t sparse_handle) {
             CHECK_MCSPARSE(hcsparseScatter(
                 sparse_handle,
                 _opaque->vec_x,
-                _opaque->vec_y));
+                vec_y));
             return INFINI_STATUS_SUCCESS;
-        }));
+        });
+    CHECK_MCSPARSE(hcsparseDestroyDnVec(vec_y));
+    CHECK_STATUS(ret);
     return INFINI_STATUS_SUCCESS;
 }
 
