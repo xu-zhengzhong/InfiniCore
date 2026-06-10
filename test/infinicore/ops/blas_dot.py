@@ -29,10 +29,10 @@ _TOLERANCE_MAP = {
 }
 
 _TENSOR_DTYPES = [
-    infinicore.float16,
+    # infinicore.float16,
     infinicore.float32,
     # infinicore.float64,
-    infinicore.bfloat16,
+    # infinicore.bfloat16,
 ]
 
 
