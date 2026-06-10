@@ -36,7 +36,7 @@ _TENSOR_DTYPES = [
 ]
 
 _TOLERANCE_MAP = {
-    infinicore.float32: {"atol": 5e-2, "rtol": 5e-2},
+    infinicore.float32: {"atol": 1e-2, "rtol": 1e-2},
     infinicore.float64: {"atol": 1e-9, "rtol": 1e-9},
 }
 
@@ -145,6 +145,7 @@ class OpTest(BaseOperatorTest):
 
 
 def main():
+    torch.manual_seed(0)
     runner = GenericTestRunner(OpTest)
     runner.run_and_exit()
 

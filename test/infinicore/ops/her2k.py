@@ -35,7 +35,7 @@ _REAL_DTYPE_MAP = {
 }
 
 _TOLERANCE_MAP = {
-    infinicore.complex64: {"atol": 5e-2, "rtol": 5e-2},
+    infinicore.complex64: {"atol": 1e-2, "rtol": 1e-2},
     infinicore.complex128: {"atol": 1e-9, "rtol": 1e-9},
 }
 
@@ -187,6 +187,7 @@ class OpTest(BaseOperatorTest):
 
 
 def main():
+    torch.manual_seed(0)
     runner = GenericTestRunner(OpTest)
     runner.run_and_exit()
 
