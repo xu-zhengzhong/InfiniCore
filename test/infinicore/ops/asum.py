@@ -104,6 +104,7 @@ class OpTest(BaseOperatorTest):
 
 def main():
     """Main entry point"""
+    torch.manual_seed(0)
     runner = GenericTestRunner(OpTest)
     runner.run_and_exit()
 
