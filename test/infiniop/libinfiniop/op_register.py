@@ -821,6 +821,37 @@ def sparse_gather_(lib):
 
 
 @OpRegister.operator
+def sparse_scatter_(lib):
+    lib.infiniopCreateSparseScatterDescriptor.restype = c_int32
+    lib.infiniopCreateSparseScatterDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpVecDescriptor_t,
+    ]
+
+    lib.infiniopGetSparseScatterWorkspaceSize.restype = c_int32
+    lib.infiniopGetSparseScatterWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSparseScatter.restype = c_int32
+    lib.infiniopSparseScatter.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySparseScatterDescriptor.restype = c_int32
+    lib.infiniopDestroySparseScatterDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
 def gemm_(lib):
     lib.infiniopCreateGemmDescriptor.restype = c_int32
     lib.infiniopCreateGemmDescriptor.argtypes = [

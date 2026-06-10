@@ -106,6 +106,7 @@
 #include "ops/softplus.hpp"
 #include "ops/softsign.hpp"
 #include "ops/sparse_gather.hpp"
+#include "ops/sparse_scatter.hpp"
 #include "ops/spmm.hpp"
 #include "ops/spmv.hpp"
 #include "ops/spvv.hpp"
@@ -230,6 +231,7 @@ inline void bind(py::module &m) {
     bind_spmv(m);
     bind_spvv(m);
     bind_sparse_gather(m);
+    bind_sparse_scatter(m);
     bind_linear(m);
     bind_huber_loss(m);
     bind_triplet_margin_with_distance_loss(m);

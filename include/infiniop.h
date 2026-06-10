@@ -118,6 +118,7 @@
 #include "infiniop/ops/softplus.h"
 #include "infiniop/ops/softsign.h"
 #include "infiniop/ops/sparse_gather.h"
+#include "infiniop/ops/sparse_scatter.h"
 #include "infiniop/ops/spmm.h"
 #include "infiniop/ops/spmv.h"
 #include "infiniop/ops/spvv.h"
