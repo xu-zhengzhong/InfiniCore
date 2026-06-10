@@ -48,7 +48,7 @@ static bool isAligned16(const void *ptr) {
     return (reinterpret_cast<uintptr_t>(ptr) & 0xf) == 0;
 }
 
-static size_t workspaceSize(
+static size_t calculateWorkspaceSize(
     infiniopSpVecDescriptor_t input_desc,
     size_t nnz,
     infiniDtype_t dtype,
@@ -82,7 +82,7 @@ infiniStatus_t Descriptor::create(
     auto opaque = new Opaque(handle->internal());
     opaque->data_type = dataTypeOf(output_desc->dtype());
     opaque->index_type = indexTypeOf(input_desc->indicesDesc()->dtype());
-    auto workspace_size = workspaceSize(
+    auto workspace_size = calculateWorkspaceSize(
         input_desc,
         result->nnz,
         output_desc->dtype(),
