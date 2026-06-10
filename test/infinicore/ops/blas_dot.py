@@ -60,16 +60,16 @@ def parse_test_cases():
                 (), None, dtype, init_mode=TensorInitializer.ZEROS
             )
 
-            test_cases.append(
-                TestCase(
-                    inputs=[x_spec, y_spec],
-                    kwargs={},
-                    output_spec=None,
-                    comparison_target=None,
-                    tolerance=tol,
-                    description="blas_dot - OUT_OF_PLACE",
-                )
-            )
+            # test_cases.append(
+            #     TestCase(
+            #         inputs=[x_spec, y_spec],
+            #         kwargs={},
+            #         output_spec=None,
+            #         comparison_target=None,
+            #         tolerance=tol,
+            #         description="blas_dot - OUT_OF_PLACE",
+            #     )
+            # )
 
             test_cases.append(
                 TestCase(

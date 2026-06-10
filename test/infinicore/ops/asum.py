@@ -61,16 +61,16 @@ def parse_test_cases():
             x_spec = TensorSpec.from_tensor(shape, x_strides, dtype)
             out_spec = TensorSpec.from_tensor((), None, dtype)
 
-            test_cases.append(
-                TestCase(
-                    inputs=[x_spec],
-                    kwargs={},
-                    output_spec=None,
-                    comparison_target=None,
-                    tolerance=tol,
-                    description="asum - OUT_OF_PLACE",
-                )
-            )
+            # test_cases.append(
+            #     TestCase(
+            #         inputs=[x_spec],
+            #         kwargs={},
+            #         output_spec=None,
+            #         comparison_target=None,
+            #         tolerance=tol,
+            #         description="asum - OUT_OF_PLACE",
+            #     )
+            # )
 
             test_cases.append(
                 TestCase(

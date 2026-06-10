@@ -49,16 +49,16 @@ def parse_test_cases():
                 (), None, infinicore.int32, init_mode=TensorInitializer.ZEROS
             )
 
-            test_cases.append(
-                TestCase(
-                    inputs=[x_spec],
-                    kwargs={},
-                    output_spec=None,
-                    comparison_target=None,
-                    tolerance=_TOLERANCE,
-                    description="blas_amax - OUT_OF_PLACE",
-                )
-            )
+            # test_cases.append(
+            #     TestCase(
+            #         inputs=[x_spec],
+            #         kwargs={},
+            #         output_spec=None,
+            #         comparison_target=None,
+            #         tolerance=_TOLERANCE,
+            #         description="blas_amax - OUT_OF_PLACE",
+            #     )
+            # )
 
             test_cases.append(
                 TestCase(

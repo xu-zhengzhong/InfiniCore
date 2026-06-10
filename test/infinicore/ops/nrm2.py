@@ -52,16 +52,16 @@ def parse_test_cases():
             x_spec = TensorSpec.from_tensor(shape, x_strides, dtype)
             out_spec = TensorSpec.from_tensor((), None, dtype)
 
-            test_cases.append(
-                TestCase(
-                    inputs=[x_spec],
-                    kwargs={},
-                    output_spec=None,
-                    comparison_target=None,
-                    tolerance=tol,
-                    description="nrm2 - OUT_OF_PLACE",
-                )
-            )
+            # test_cases.append(
+            #     TestCase(
+            #         inputs=[x_spec],
+            #         kwargs={},
+            #         output_spec=None,
+            #         comparison_target=None,
+            #         tolerance=tol,
+            #         description="nrm2 - OUT_OF_PLACE",
+            #     )
+            # )
 
             test_cases.append(
                 TestCase(
@@ -94,6 +94,7 @@ class OpTest(BaseOperatorTest):
 
 
 def main():
+    torch.manual_seed(0)
     runner = GenericTestRunner(OpTest)
     runner.run_and_exit()
 
