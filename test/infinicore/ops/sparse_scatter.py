@@ -10,12 +10,14 @@ from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
 _TEST_CASES_DATA = [
     # size, density
+    (6, 0.5),
     (128, 0.04),
     (1024, 0.02),
     (4096, 0.01),
 ]
 
 _TENSOR_DTYPES = [infinicore.float32]
+_INDEX_DTYPES = [infinicore.int32, infinicore.int64]
 
 _TOLERANCE_MAP = {
     infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
@@ -59,11 +61,12 @@ class CachedTensorSpec(TensorSpec):
 
 
 class SpVecSpec(TensorSpec):
-    def __init__(self, *, values_spec, size, indices, name="input"):
+    def __init__(self, *, values_spec, size, indices, index_dtype, name="input"):
         super().__init__(shape=(size,), dtype=values_spec.dtype, name=name)
         self.values_spec = values_spec
         self.size = size
         self.indices = indices
+        self.index_dtype = index_dtype
         self._cached_values = {}
 
     def create_torch_tensor(self, device):
@@ -74,7 +77,7 @@ class SpVecSpec(TensorSpec):
         values = self._cached_values[device]
         infini_values = infinicore_tensor_from_torch(values)
         indices_tensor = infinicore.from_list(
-            self.indices, dtype=infinicore.int64, device=infini_values.device
+            self.indices, dtype=self.index_dtype, device=infini_values.device
         )
         return infinicore.coo_spvec(indices_tensor, infini_values, self.size)
 
@@ -93,41 +96,34 @@ def parse_test_cases():
         indices = generate_indices(size, density)
         nnz = len(indices)
         for dtype in _TENSOR_DTYPES:
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
-            # test_cases.append(
-            #     SparseScatterTestCase(
-            #         inputs=[
-            #             values_spec,
-            #             SpVecSpec(values_spec=values_spec, size=size, indices=indices),
-            #         ],
-            #         kwargs={"size": size, "indices": indices},
-            #         tolerance=_TOLERANCE_MAP[dtype],
-            #         description=f"SparseScatter - OUT_OF_PLACE (size={size})",
-            #     )
-            # )
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
-            test_cases.append(
-                SparseScatterTestCase(
-                    inputs=[
-                        values_spec,
-                        SpVecSpec(values_spec=values_spec, size=size, indices=indices),
-                    ],
-                    kwargs={
-                        "size": size,
-                        "indices": indices,
-                        "out": TensorSpec.from_tensor(
-                            (size,), dtype=dtype, name="out", init_mode="zeros"
-                        ),
-                    },
-                    comparison_target="out",
-                    tolerance=_TOLERANCE_MAP[dtype],
-                    description=f"SparseScatter - OUT(out) (size={size})",
+            for index_dtype in _INDEX_DTYPES:
+                values_spec = CachedTensorSpec.from_tensor(
+                    (nnz,), dtype=dtype, name="values"
                 )
-            )
+                test_cases.append(
+                    SparseScatterTestCase(
+                        inputs=[
+                            values_spec,
+                            SpVecSpec(
+                                values_spec=values_spec,
+                                size=size,
+                                indices=indices,
+                                index_dtype=index_dtype,
+                            ),
+                        ],
+                        kwargs={
+                            "size": size,
+                            "indices": indices,
+                            "index_dtype": index_dtype,
+                            "out": TensorSpec.from_tensor(
+                                (size,), dtype=dtype, name="out", init_mode="zeros"
+                            ),
+                        },
+                        comparison_target="out",
+                        tolerance=_TOLERANCE_MAP[dtype],
+                        description=f"SparseScatter - OUT(out) (size={size})",
+                    )
+                )
     return test_cases
 
 
@@ -138,15 +134,18 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, input, *, size, indices, out=None):
+    def torch_operator(self, values, input, *, size, indices, index_dtype, out=None):
         del input
+        del index_dtype
         result = sparse_scatter_reference(values, size=size, indices=indices)
         if out is not None:
             out.copy_(result)
             return out
         return result
 
-    def infinicore_operator(self, _values, input, *, size, indices, out=None):
+    def infinicore_operator(
+        self, _values, input, *, size, indices, index_dtype, out=None
+    ):
         return infinicore.sparse_scatter(input, out=out)
 
 

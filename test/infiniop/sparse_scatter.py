@@ -20,21 +20,31 @@ from libinfiniop import (
 )
 
 _BASE_TEST_CASES = [
-    # size, indices
-    (6, [0, 2, 5]),
-    (128, [7, 1, 3, 0]),
+    # size, density
+    (6, 0.5),
+    (128, 0.04),
+    (1024, 0.02),
+    (4096, 0.01),
 ]
 
 _TENSOR_DTYPES = [InfiniDtype.F32]
-_INDEX_DTYPES = [InfiniDtype.I32, 
-# InfiniDtype.I64
-]
+_INDEX_DTYPES = [InfiniDtype.I32, InfiniDtype.I64]
 
 _TOLERANCE_MAP = {
     InfiniDtype.F32: {"atol": 1e-5, "rtol": 1e-5},
 }
 
 DEBUG = False
+_RANDOM_SEED = 42
+
+
+def generate_indices(size, density):
+    nnz = min(size, max(1, int(round(size * density))))
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(_RANDOM_SEED + size)
+    indices = torch.randperm(size, generator=generator)[:nnz]
+    indices, _ = torch.sort(indices)
+    return indices.tolist()
 
 
 def test(
@@ -121,8 +131,8 @@ if __name__ == "__main__":
 
     for device in get_test_devices(args):
         test_cases = [
-            (*case, index_dtype)
-            for case in _BASE_TEST_CASES
+            (size, generate_indices(size, density), index_dtype)
+            for size, density in _BASE_TEST_CASES
             for index_dtype in _INDEX_DTYPES
         ]
         test_operator(device, test, test_cases, _TENSOR_DTYPES)

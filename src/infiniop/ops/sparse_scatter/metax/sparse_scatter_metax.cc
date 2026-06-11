@@ -44,25 +44,19 @@ static hcsparseIndexType_t indexTypeOf(infiniDtype_t dtype) {
     }
 }
 
-static bool isAligned16(const void *ptr) {
-    return (reinterpret_cast<uintptr_t>(ptr) & 0xf) == 0;
+static char *alignPtr16(char *ptr) {
+    auto addr = reinterpret_cast<uintptr_t>(ptr);
+    addr = (addr + 15) & ~static_cast<uintptr_t>(15);
+    return reinterpret_cast<char *>(addr);
 }
 
 static size_t calculateWorkspaceSize(
-    infiniopSpVecDescriptor_t input_desc,
     size_t nnz,
     infiniDtype_t dtype,
     infiniDtype_t index_dtype) {
-    size_t size = 0;
-    if (!isAligned16(input_desc->values())) {
-        size = utils::align(size, 16);
-        size += nnz * infiniSizeOf(dtype);
-    }
-    if (!isAligned16(input_desc->indices())) {
-        size = utils::align(size, 16);
-        size += nnz * infiniSizeOf(index_dtype);
-    }
-    return size;
+    auto values_bytes = nnz * infiniSizeOf(dtype);
+    auto indices_bytes = nnz * infiniSizeOf(index_dtype);
+    return values_bytes + indices_bytes + 32;
 }
 
 Descriptor::~Descriptor() {
@@ -83,7 +77,6 @@ infiniStatus_t Descriptor::create(
     opaque->data_type = dataTypeOf(output_desc->dtype());
     opaque->index_type = indexTypeOf(input_desc->indicesDesc()->dtype());
     auto workspace_size = calculateWorkspaceSize(
-        input_desc,
         result->nnz,
         output_desc->dtype(),
         input_desc->indicesDesc()->dtype());
@@ -110,39 +103,27 @@ infiniStatus_t Descriptor::calculate(
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
 
-    auto values = const_cast<void *>(_input_desc->values());
-    auto indices = const_cast<void *>(_input_desc->indices());
     auto stream_ = reinterpret_cast<hcStream_t>(stream);
-
     auto base = reinterpret_cast<char *>(workspace);
-    size_t offset = 0;
     auto values_bytes = _info.nnz * infiniSizeOf(_dtype);
     auto indices_bytes = _info.nnz * infiniSizeOf(_index_dtype);
 
-    if (!isAligned16(values)) {
-        offset = utils::align(offset, 16);
-        values = base + offset;
-        offset += values_bytes;
-        CHECK_INTERNAL(hcMemcpyAsync(
-                           values,
-                           _input_desc->values(),
-                           values_bytes,
-                           hcMemcpyDeviceToDevice,
-                           stream_),
-                       hcSuccess);
-    }
-    if (!isAligned16(indices)) {
-        offset = utils::align(offset, 16);
-        indices = base + offset;
-        offset += indices_bytes;
-        CHECK_INTERNAL(hcMemcpyAsync(
-                           indices,
-                           _input_desc->indices(),
-                           indices_bytes,
-                           hcMemcpyDeviceToDevice,
-                           stream_),
-                       hcSuccess);
-    }
+    auto values = alignPtr16(base);
+    auto indices = alignPtr16(values + values_bytes);
+    CHECK_INTERNAL(hcMemcpyAsync(
+                       values,
+                       _input_desc->values(),
+                       values_bytes,
+                       hcMemcpyDeviceToDevice,
+                       stream_),
+                   hcSuccess);
+    CHECK_INTERNAL(hcMemcpyAsync(
+                       indices,
+                       _input_desc->indices(),
+                       indices_bytes,
+                       hcMemcpyDeviceToDevice,
+                       stream_),
+                   hcSuccess);
 
     hcsparseSpVecDescr_t vec_x = nullptr;
     auto status = hcsparseCreateSpVec(
