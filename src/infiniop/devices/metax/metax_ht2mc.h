@@ -156,6 +156,7 @@
 #define hcsparseDestroy mcsparseDestroy
 #define hcsparseSetStream mcsparseSetStream
 #define hcsparseCreateCsr mcsparseCreateCsr
+#define hcsparseCsrSetPointers mcsparseCsrSetPointers
 #define hcsparseDestroySpMat mcsparseDestroySpMat
 #define hcsparseCreateDnMat mcsparseCreateDnMat
 #define hcsparseDestroyDnMat mcsparseDestroyDnMat
@@ -190,6 +191,7 @@
 #define hcsparseOrder_t mcsparseOrder_t
 #define HCSPARSE_STATUS_SUCCESS MCSPARSE_STATUS_SUCCESS
 #define HCSPARSE_OPERATION_NON_TRANSPOSE MCSPARSE_OPERATION_NON_TRANSPOSE
+#define HCSPARSE_OPERATION_TRANSPOSE MCSPARSE_OPERATION_TRANSPOSE
 #define HCSPARSE_SPMM_ALG_DEFAULT MCSPARSE_SPMM_ALG_DEFAULT
 #define HCSPARSE_SPMV_ALG_DEFAULT MCSPARSE_SPMV_ALG_DEFAULT
 #define HCSPARSE_SPVV_ALG_DEFAULT MCSPARSE_SPVV_ALG_DEFAULT
