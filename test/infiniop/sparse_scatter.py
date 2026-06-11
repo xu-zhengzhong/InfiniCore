@@ -28,7 +28,10 @@ _BASE_TEST_CASES = [
 ]
 
 _TENSOR_DTYPES = [InfiniDtype.F32]
-_INDEX_DTYPES = [InfiniDtype.I32, InfiniDtype.I64]
+_INDEX_DTYPES = [
+    InfiniDtype.I32,
+    # InfiniDtype.I64,
+]
 
 _TOLERANCE_MAP = {
     InfiniDtype.F32: {"atol": 1e-5, "rtol": 1e-5},

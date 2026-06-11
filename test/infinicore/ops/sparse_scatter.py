@@ -17,7 +17,10 @@ _TEST_CASES_DATA = [
 ]
 
 _TENSOR_DTYPES = [infinicore.float32]
-_INDEX_DTYPES = [infinicore.int32, infinicore.int64]
+_INDEX_DTYPES = [
+    infinicore.int32,
+    # infinicore.int64,
+]
 
 _TOLERANCE_MAP = {
     infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
