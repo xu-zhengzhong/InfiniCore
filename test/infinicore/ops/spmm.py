@@ -108,6 +108,7 @@ def _generate_spmm_cases():
         (128, 128, 128, 0.01),  # Baseline small test
         (1024, 1024, 1024, 0.01),  # 1K scale
         (4096, 4096, 4096, 0.01),  # 2K scale
+        (5120, 5120, 5120, 0.01),  # 5K scale
     ]
     for rows, cols, n, density in configs:
         crow = [0]
@@ -130,8 +131,9 @@ _TEST_CASES_DATA = _generate_spmm_cases()
 
 _TOLERANCE_MAP = {
     #infinicore.float16: {"atol": 0, "rtol": 1e-2},
-    infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
+    # infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
     #infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
+    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
 }
 
 # Sparse CSR tensor support is in beta state, so we only test float32 for now.

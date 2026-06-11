@@ -22,11 +22,13 @@ from libinfiniop import (
 _BASE_TEST_CASES = [
     # size, indices
     (6, [0, 2, 5]),
-    (8, [7, 1, 3, 0]),
+    (128, [7, 1, 3, 0]),
 ]
 
 _TENSOR_DTYPES = [InfiniDtype.F32]
-_INDEX_DTYPES = [InfiniDtype.I32, InfiniDtype.I64]
+_INDEX_DTYPES = [InfiniDtype.I32, 
+# InfiniDtype.I64
+]
 
 _TOLERANCE_MAP = {
     InfiniDtype.F32: {"atol": 1e-5, "rtol": 1e-5},

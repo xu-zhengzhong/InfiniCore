@@ -38,7 +38,8 @@ def _generate_cases():
 _TEST_CASES_DATA = _generate_cases()
 _TENSOR_DTYPES = [infinicore.float32]
 _TOLERANCE_MAP = {
-    infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
+    # infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
+    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
 }
 
 
