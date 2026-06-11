@@ -244,5 +244,6 @@ class OpTest(BaseOperatorTest):
 
 
 if __name__ == "__main__":
+    torch.manual_seed(42)
     runner = GenericTestRunner(OpTest)
     runner.run_and_exit()

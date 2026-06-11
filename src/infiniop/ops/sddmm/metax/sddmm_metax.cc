@@ -2,15 +2,21 @@
 #include "../../../devices/metax/metax_common.h"
 #include "../../../devices/metax/metax_handle.h"
 
-namespace op::sddmm::metax {
+#include <cstdint>
+#include <limits>
+#include <vector>
 
-constexpr bool USE_MCSPARSE_SDDMM = false;
+namespace op::sddmm::metax {
 
 struct Descriptor::Opaque {
     std::shared_ptr<device::metax::Handle::Internal> internal;
     hcsparseSpMatDescr_t mat_c = nullptr;
     hcsparseDnMatDescr_t mat_a = nullptr;
     hcsparseDnMatDescr_t mat_b = nullptr;
+    int32_t *crow_i32 = nullptr;
+    int32_t *col_i32 = nullptr;
+    void *crow_indices = nullptr;
+    void *col_indices = nullptr;
     hcsparseOperation_t op_a = HCSPARSE_OPERATION_NON_TRANSPOSE;
     hcsparseOperation_t op_b = HCSPARSE_OPERATION_NON_TRANSPOSE;
     hcsparseSDDMMAlg_t alg = HCSPARSE_SDDMM_ALG_DEFAULT;
@@ -29,6 +35,12 @@ struct Descriptor::Opaque {
         }
         if (mat_b != nullptr) {
             hcsparseDestroyDnMat(mat_b);
+        }
+        if (crow_i32 != nullptr) {
+            hcFree(crow_i32);
+        }
+        if (col_i32 != nullptr) {
+            hcFree(col_i32);
         }
     }
 };
@@ -62,16 +74,18 @@ struct DenseLayout {
     int64_t cols;
     int64_t ld;
     hcsparseOrder_t order;
+    hcsparseOperation_t op;
 };
 
 static utils::Result<DenseLayout> denseLayoutOf(const DenseMatrix &matrix) {
     if (matrix.col_stride == 1) {
         CHECK_OR_RETURN(matrix.row_stride > 0, INFINI_STATUS_BAD_TENSOR_STRIDES);
         return utils::Result<DenseLayout>(DenseLayout{
-            static_cast<int64_t>(matrix.rows),
             static_cast<int64_t>(matrix.cols),
+            static_cast<int64_t>(matrix.rows),
             static_cast<int64_t>(matrix.row_stride),
-            HCSPARSE_ORDER_ROW});
+            HCSPARSE_ORDER_COL,
+            HCSPARSE_OPERATION_TRANSPOSE});
     }
 
     if (matrix.row_stride == 1) {
@@ -80,10 +94,15 @@ static utils::Result<DenseLayout> denseLayoutOf(const DenseMatrix &matrix) {
             static_cast<int64_t>(matrix.rows),
             static_cast<int64_t>(matrix.cols),
             static_cast<int64_t>(matrix.col_stride),
-            HCSPARSE_ORDER_COL});
+            HCSPARSE_ORDER_COL,
+            HCSPARSE_OPERATION_NON_TRANSPOSE});
     }
 
     return INFINI_STATUS_BAD_TENSOR_STRIDES;
+}
+
+static bool fitsI32(int64_t value) {
+    return value >= 0 && value <= std::numeric_limits<int32_t>::max();
 }
 
 Descriptor::~Descriptor() {
@@ -106,82 +125,160 @@ infiniStatus_t Descriptor::create(
     CHECK_RESULT(result);
     auto info = result.take();
 
+    auto a_layout = denseLayoutOf(info.a_matrix);
+    CHECK_RESULT(a_layout);
+    auto b_layout = denseLayoutOf(info.b_matrix);
+    CHECK_RESULT(b_layout);
+
     auto opaque = new Opaque(handle->internal());
     opaque->data_type = dataTypeOf(dtype);
     opaque->index_type = indexTypeOf(index_dtype);
-    size_t workspace_size = 0;
+    opaque->op_a = a_layout->op;
+    opaque->op_b = b_layout->op;
 
-    if (USE_MCSPARSE_SDDMM) {
-        auto a_layout = denseLayoutOf(info.a_matrix);
-        CHECK_RESULT(a_layout);
-        auto b_layout = denseLayoutOf(info.b_matrix);
-        CHECK_RESULT(b_layout);
+    auto *crow_indices = const_cast<void *>(c_desc->crowIndices());
+    auto *col_indices = const_cast<void *>(c_desc->colIndices());
+    if (index_dtype == INFINI_DTYPE_I64) {
+        std::vector<int64_t> crow_i64(info.m + 1);
+        std::vector<int64_t> col_i64(info.nnz);
+        CHECK_API_OR(
+            hcMemcpy(crow_i64.data(), c_desc->crowIndices(), crow_i64.size() * sizeof(int64_t), hcMemcpyDeviceToHost),
+            hcSuccess,
+            {
+                delete opaque;
+                return INFINI_STATUS_INTERNAL_ERROR;
+            });
+        if (!col_i64.empty()) {
+            CHECK_API_OR(
+                hcMemcpy(col_i64.data(), c_desc->colIndices(), col_i64.size() * sizeof(int64_t), hcMemcpyDeviceToHost),
+                hcSuccess,
+                {
+                    delete opaque;
+                    return INFINI_STATUS_INTERNAL_ERROR;
+                });
+        }
 
-        auto status = hcsparseCreateCsr(
-            &opaque->mat_c,
-            static_cast<int64_t>(info.m),
-            static_cast<int64_t>(info.n),
-            static_cast<int64_t>(info.nnz),
-            const_cast<void *>(c_desc->crowIndices()),
-            const_cast<void *>(c_desc->colIndices()),
-            const_cast<void *>(c_desc->values()),
-            opaque->index_type,
-            opaque->index_type,
-            HCSPARSE_INDEX_BASE_ZERO,
-            opaque->data_type);
-        CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
-            delete opaque;
-            return INFINI_STATUS_INTERNAL_ERROR;
-        });
+        std::vector<int32_t> crow_i32(crow_i64.size());
+        std::vector<int32_t> col_i32(col_i64.size());
+        for (size_t i = 0; i < crow_i64.size(); ++i) {
+            CHECK_OR_DO(fitsI32(crow_i64[i]), {
+                delete opaque;
+                return INFINI_STATUS_BAD_PARAM;
+            });
+            crow_i32[i] = static_cast<int32_t>(crow_i64[i]);
+        }
+        for (size_t i = 0; i < col_i64.size(); ++i) {
+            CHECK_OR_DO(fitsI32(col_i64[i]), {
+                delete opaque;
+                return INFINI_STATUS_BAD_PARAM;
+            });
+            col_i32[i] = static_cast<int32_t>(col_i64[i]);
+        }
 
-        status = hcsparseCreateDnMat(
-            &opaque->mat_a,
-            a_layout->rows,
-            a_layout->cols,
-            a_layout->ld,
-            const_cast<void *>(c_desc->values()),
-            opaque->data_type,
-            a_layout->order);
-        CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
-            delete opaque;
-            return INFINI_STATUS_INTERNAL_ERROR;
-        });
+        CHECK_API_OR(
+            hcMalloc(reinterpret_cast<void **>(&opaque->crow_i32), crow_i32.size() * sizeof(int32_t)),
+            hcSuccess,
+            {
+                delete opaque;
+                return INFINI_STATUS_INTERNAL_ERROR;
+            });
+        CHECK_API_OR(
+            hcMemcpy(opaque->crow_i32, crow_i32.data(), crow_i32.size() * sizeof(int32_t), hcMemcpyHostToDevice),
+            hcSuccess,
+            {
+                delete opaque;
+                return INFINI_STATUS_INTERNAL_ERROR;
+            });
 
-        status = hcsparseCreateDnMat(
-            &opaque->mat_b,
-            b_layout->rows,
-            b_layout->cols,
-            b_layout->ld,
-            const_cast<void *>(c_desc->values()),
-            opaque->data_type,
-            b_layout->order);
-        CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
-            delete opaque;
-            return INFINI_STATUS_INTERNAL_ERROR;
-        });
+        if (!col_i32.empty()) {
+            CHECK_API_OR(
+                hcMalloc(reinterpret_cast<void **>(&opaque->col_i32), col_i32.size() * sizeof(int32_t)),
+                hcSuccess,
+                {
+                    delete opaque;
+                    return INFINI_STATUS_INTERNAL_ERROR;
+                });
+            CHECK_API_OR(
+                hcMemcpy(opaque->col_i32, col_i32.data(), col_i32.size() * sizeof(int32_t), hcMemcpyHostToDevice),
+                hcSuccess,
+                {
+                    delete opaque;
+                    return INFINI_STATUS_INTERNAL_ERROR;
+                });
+        }
 
-        float alpha_one = 1.0f;
-        float beta_zero = 0.0f;
-        auto buffer_status = opaque->internal->useMcsparse(nullptr, [&](hcsparseHandle_t sparse_handle) {
-            CHECK_MCSPARSE(hcsparseSDDMM_bufferSize(
-                sparse_handle,
-                opaque->op_a,
-                opaque->op_b,
-                &alpha_one,
-                opaque->mat_a,
-                opaque->mat_b,
-                &beta_zero,
-                opaque->mat_c,
-                HPCC_R_32F,
-                opaque->alg,
-                &workspace_size));
-            return INFINI_STATUS_SUCCESS;
-        });
-        CHECK_API_OR(buffer_status, INFINI_STATUS_SUCCESS, {
-            delete opaque;
-            return buffer_status;
-        });
+        crow_indices = opaque->crow_i32;
+        col_indices = opaque->col_i32;
+        opaque->index_type = HCSPARSE_INDEX_32I;
     }
+    opaque->crow_indices = crow_indices;
+    opaque->col_indices = col_indices;
+
+    auto status = hcsparseCreateCsr(
+        &opaque->mat_c,
+        static_cast<int64_t>(info.m),
+        static_cast<int64_t>(info.n),
+        static_cast<int64_t>(info.nnz),
+        crow_indices,
+        col_indices,
+        const_cast<void *>(c_desc->values()),
+        opaque->index_type,
+        opaque->index_type,
+        HCSPARSE_INDEX_BASE_ZERO,
+        opaque->data_type);
+    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
+        delete opaque;
+        return INFINI_STATUS_INTERNAL_ERROR;
+    });
+
+    status = hcsparseCreateDnMat(
+        &opaque->mat_a,
+        a_layout->rows,
+        a_layout->cols,
+        a_layout->ld,
+        const_cast<void *>(c_desc->values()),
+        opaque->data_type,
+        a_layout->order);
+    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
+        delete opaque;
+        return INFINI_STATUS_INTERNAL_ERROR;
+    });
+
+    status = hcsparseCreateDnMat(
+        &opaque->mat_b,
+        b_layout->rows,
+        b_layout->cols,
+        b_layout->ld,
+        const_cast<void *>(c_desc->values()),
+        opaque->data_type,
+        b_layout->order);
+    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
+        delete opaque;
+        return INFINI_STATUS_INTERNAL_ERROR;
+    });
+
+    size_t workspace_size = 0;
+    float alpha_one = 1.0f;
+    float beta_zero = 0.0f;
+    auto buffer_status = opaque->internal->useMcsparse(nullptr, [&](hcsparseHandle_t sparse_handle) {
+        CHECK_MCSPARSE(hcsparseSDDMM_bufferSize(
+            sparse_handle,
+            opaque->op_a,
+            opaque->op_b,
+            &alpha_one,
+            opaque->mat_a,
+            opaque->mat_b,
+            &beta_zero,
+            opaque->mat_c,
+            HPCC_R_32F,
+            opaque->alg,
+            &workspace_size));
+        return INFINI_STATUS_SUCCESS;
+    });
+    CHECK_API_OR(buffer_status, INFINI_STATUS_SUCCESS, {
+        delete opaque;
+        return buffer_status;
+    });
 
     *desc_ptr = new Descriptor(
         dtype,
@@ -204,51 +301,37 @@ infiniStatus_t Descriptor::calculate(
     float alpha,
     float beta,
     void *stream) const {
-    if (USE_MCSPARSE_SDDMM) {
-        if (workspace_size < _workspace_size) {
-            return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
-        }
-
-        CHECK_MCSPARSE(hcsparseDnMatSetValues(_opaque->mat_a, const_cast<void *>(a)));
-        CHECK_MCSPARSE(hcsparseDnMatSetValues(_opaque->mat_b, const_cast<void *>(b)));
-        CHECK_MCSPARSE(hcsparseSpMatSetValues(_opaque->mat_c, c_values));
-
-        CHECK_STATUS(_opaque->internal->useMcsparse(
-            reinterpret_cast<hcStream_t>(stream),
-            [&](hcsparseHandle_t sparse_handle) {
-                CHECK_MCSPARSE(hcsparseSDDMM_preprocess(
-                    sparse_handle,
-                    _opaque->op_a,
-                    _opaque->op_b,
-                    &alpha,
-                    _opaque->mat_a,
-                    _opaque->mat_b,
-                    &beta,
-                    _opaque->mat_c,
-                    HPCC_R_32F,
-                    _opaque->alg,
-                    workspace));
-                CHECK_MCSPARSE(hcsparseSDDMM(
-                    sparse_handle,
-                    _opaque->op_a,
-                    _opaque->op_b,
-                    &alpha,
-                    _opaque->mat_a,
-                    _opaque->mat_b,
-                    &beta,
-                    _opaque->mat_c,
-                    HPCC_R_32F,
-                    _opaque->alg,
-                    workspace));
-                return INFINI_STATUS_SUCCESS;
-            }));
-
-        return INFINI_STATUS_SUCCESS;
+    if (workspace_size < _workspace_size) {
+        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
 
-    (void)workspace;
-    (void)workspace_size;
-    return launchSDDMM(_info, _c_desc, c_values, a, b, alpha, beta, _index_dtype, stream);
+    CHECK_MCSPARSE(hcsparseDnMatSetValues(_opaque->mat_a, const_cast<void *>(a)));
+    CHECK_MCSPARSE(hcsparseDnMatSetValues(_opaque->mat_b, const_cast<void *>(b)));
+    CHECK_MCSPARSE(hcsparseCsrSetPointers(
+        _opaque->mat_c,
+        _opaque->crow_indices,
+        _opaque->col_indices,
+        c_values));
+
+    CHECK_STATUS(_opaque->internal->useMcsparse(
+        reinterpret_cast<hcStream_t>(stream),
+        [&](hcsparseHandle_t sparse_handle) {
+            CHECK_MCSPARSE(hcsparseSDDMM(
+                sparse_handle,
+                _opaque->op_a,
+                _opaque->op_b,
+                &alpha,
+                _opaque->mat_a,
+                _opaque->mat_b,
+                &beta,
+                _opaque->mat_c,
+                HPCC_R_32F,
+                _opaque->alg,
+                workspace));
+            return INFINI_STATUS_SUCCESS;
+        }));
+
+    return INFINI_STATUS_SUCCESS;
 }
 
 } // namespace op::sddmm::metax

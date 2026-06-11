@@ -1,4 +1,5 @@
 import ctypes
+import random
 from ctypes import c_uint64
 
 import torch
@@ -19,11 +20,33 @@ from libinfiniop import (
     test_operator,
 )
 
-_BASE_TEST_CASES = [
-    # alpha, beta, rows, cols, k, crow, col
-    (1.0, 0.0, 3, 4, 2, [0, 2, 3, 5], [0, 2, 1, 0, 3]),
-    (0.5, 1.0, 4, 5, 3, [0, 1, 1, 3, 4], [2, 0, 4, 1]),
-]
+
+def _generate_sddmm_cases():
+    cases = []
+    random.seed(42)
+    # (rows, cols, k, density, alpha, beta)
+    configs = [
+        (128, 128, 128, 0.01, 1.0, 0.0),
+        (1024, 1024, 1024, 0.01, 0.5, 1.0),
+        (4096, 4096, 4096, 0.01, -1.25, 0.25),
+    ]
+    for rows, cols, k, density, alpha, beta in configs:
+        total = rows * cols
+        nnz = min(total, max(1, int(round(total * density))))
+        positions = sorted(random.sample(range(total), nnz))
+        crow = [0] * (rows + 1)
+        col = []
+        for pos in positions:
+            row = pos // cols
+            col.append(pos % cols)
+            crow[row + 1] += 1
+        for row in range(rows):
+            crow[row + 1] += crow[row]
+        cases.append((alpha, beta, rows, cols, k, crow, col))
+    return cases
+
+
+_BASE_TEST_CASES = _generate_sddmm_cases()
 
 _TENSOR_DTYPES = [InfiniDtype.F32]
 _INDEX_DTYPES = [InfiniDtype.I32, InfiniDtype.I64]
@@ -146,6 +169,7 @@ def test(
 
 
 if __name__ == "__main__":
+    torch.manual_seed(42)
     args = get_args()
     DEBUG = args.debug
 
