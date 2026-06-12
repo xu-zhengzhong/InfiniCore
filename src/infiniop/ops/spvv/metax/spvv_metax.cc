@@ -4,7 +4,7 @@
 
 namespace op::spvv::metax {
 
-constexpr size_t DOT_WORKSPACE_SIZE = 256;
+constexpr size_t DOT_WORKSPACE_SIZE = sizeof(float);
 
 struct Descriptor::Opaque {
     std::shared_ptr<device::metax::Handle::Internal> internal;
@@ -144,7 +144,7 @@ infiniStatus_t Descriptor::calculate(
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
 
-    auto dot = reinterpret_cast<float *>(workspace);
+    auto dot = workspace;
     auto sparse_workspace = static_cast<void *>(static_cast<char *>(workspace) + DOT_WORKSPACE_SIZE);
     CHECK_MCSPARSE(hcsparseDnVecSetValues(_opaque->vec_x, const_cast<void *>(x)));
 
@@ -162,18 +162,35 @@ infiniStatus_t Descriptor::calculate(
             return INFINI_STATUS_SUCCESS;
         }));
 
-    if (stream != nullptr) {
-        hcStreamSynchronize(reinterpret_cast<hcStream_t>(stream));
-    } else {
-        hcDeviceSynchronize();
-    }
-
-    float host_dot = 0.0f;
-    float host_y = 0.0f;
-    hcMemcpy(&host_dot, dot, sizeof(float), hcMemcpyDeviceToHost);
-    hcMemcpy(&host_y, y, sizeof(float), hcMemcpyDeviceToHost);
-    host_y = alpha * host_dot + beta * host_y;
-    hcMemcpy(y, &host_y, sizeof(float), hcMemcpyHostToDevice);
+    CHECK_STATUS(_opaque->internal->useMcblas(
+        reinterpret_cast<hcStream_t>(stream),
+        [&](hcblasHandle_t blas_handle) {
+            CHECK_MCBLAS(hcblasSetPointerMode(
+                blas_handle,
+                HCBLAS_POINTER_MODE_HOST));
+            CHECK_MCBLAS(hcblasScalEx(
+                blas_handle,
+                1,
+                &beta,
+                HPCC_R_32F,
+                y,
+                HPCC_R_32F,
+                1,
+                HPCC_R_32F));
+            CHECK_MCBLAS(hcblasAxpyEx(
+                blas_handle,
+                1,
+                &alpha,
+                HPCC_R_32F,
+                dot,
+                HPCC_R_32F,
+                1,
+                y,
+                HPCC_R_32F,
+                1,
+                HPCC_R_32F));
+            return INFINI_STATUS_SUCCESS;
+        }));
 
     return INFINI_STATUS_SUCCESS;
 }
