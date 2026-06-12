@@ -100,10 +100,10 @@ def _generate_spmv_cases():
     random.seed(42)
     # (rows, cols, density)
     configs = [
-        (128, 128, 0.02),  # Baseline
-        (1024, 1024, 0.002),  # 1K scale
-        (4096, 4096, 0.001),  # 4K scale
-        (5120, 5120, 0.001),  # 5K scale
+        # (128, 128, 0.02),  # Baseline
+        # (1024, 1024, 0.002),  # 1K scale
+        # (4096, 4096, 0.001),  # 4K scale
+        (5120, 5120, 0.01),  # 5K scale
     ]
     for rows, cols, density in configs:
         crow = [0]

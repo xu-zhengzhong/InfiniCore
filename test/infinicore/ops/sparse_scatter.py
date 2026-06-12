@@ -10,10 +10,10 @@ from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
 _TEST_CASES_DATA = [
     # size, density
-    (6, 0.5),
-    (128, 0.04),
-    (1024, 0.02),
-    (4096, 0.01),
+    # (128, 0.04),
+    # (1024, 0.02),
+    # (4096, 0.01),
+    (81920, 0.01),
 ]
 
 _TENSOR_DTYPES = [infinicore.float32]

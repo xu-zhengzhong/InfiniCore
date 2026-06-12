@@ -110,14 +110,15 @@ infiniStatus_t Descriptor::calculate(
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
 
+    auto values = const_cast<void *>(_input_desc->values());
+    auto indices = const_cast<void *>(_input_desc->indices());
     auto stream_ = reinterpret_cast<hcStream_t>(stream);
+
     auto base = reinterpret_cast<char *>(workspace);
     size_t offset = 0;
     auto values_bytes = _info.nnz * infiniSizeOf(_dtype);
     auto indices_bytes = _info.nnz * infiniSizeOf(_index_dtype);
 
-    auto values = const_cast<void *>(_input_desc->values());
-    auto indices = const_cast<void *>(_input_desc->indices());
     if (!isAligned16(values)) {
         offset = utils::align(offset, 16);
         values = base + offset;

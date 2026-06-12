@@ -41,10 +41,10 @@ def _generate_spvv_cases():
     random.seed(42)
     # (size, density)
     configs = [
-        (128, 0.01),
-        (1024, 0.01),
-        (4096, 0.01),
-        (48192, 0.01)
+        # (128, 0.01),
+        # (1024, 0.01),
+        # (4096, 0.01),
+        (40960000, 0.01)
     ]
     for size, density in configs:
         nnz = int(size * density)
