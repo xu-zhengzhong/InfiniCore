@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 from .executor import TestExecutor
 from .results import TestSummary, TestTiming
+from .utils.json_utils import save_json_report
 from .utils.load_utils import TestGenerator
 
 
@@ -139,10 +140,19 @@ class TestManager:
             self.summary.print_header(display_location, len(test_files))
 
             saved_files = []
+            report_entries = []
+            save_path = (
+                self._resolve_load_save_path(test_configs) if json_cases_list else None
+            )
             for f, run_args in zip(test_files, test_configs):
 
                 # Inject prepared args (whether from JSON or Local global) into Executor
-                result = self.executor.execute(f, test_args=run_args)
+                result = self.executor.execute(
+                    f,
+                    test_args=run_args,
+                    disable_save=bool(json_cases_list),
+                    collect_report=bool(save_path),
+                )
 
                 self.results.append(result)
                 self.summary.print_live_result(result)
@@ -150,6 +160,8 @@ class TestManager:
                 # Collect saved report files
                 if hasattr(result, "saved_file") and result.saved_file:
                     saved_files.append(result.saved_file)
+                if json_cases_list and getattr(result, "report_entries", None):
+                    report_entries.extend(result.report_entries)
 
                 if result.success:
                     self._accumulate_timing(result.timing)
@@ -166,7 +178,20 @@ class TestManager:
                 total_expected=len(test_files),
             )
 
+            if json_cases_list:
+                if save_path and report_entries:
+                    saved_file = save_json_report(save_path, report_entries)
+                    if saved_file:
+                        saved_files.append(saved_file)
+
             return all_passed, saved_files
+
+    def _resolve_load_save_path(self, test_configs):
+        for config in test_configs:
+            save_path = getattr(config, "save", None)
+            if save_path:
+                return save_path
+        return None
 
     def _accumulate_timing(self, timing):
         self.cumulative_timing.torch_host += timing.torch_host

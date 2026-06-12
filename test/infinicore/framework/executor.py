@@ -18,7 +18,9 @@ def capture_output():
 
 
 class TestExecutor:
-    def execute(self, file_path, test_args) -> OperatorResult:
+    def execute(
+        self, file_path, test_args, disable_save=False, collect_report=False
+    ) -> OperatorResult:
         """
         Execute a test file dynamically.
         Args:
@@ -28,6 +30,10 @@ class TestExecutor:
         result = OperatorResult(name=file_path.stem)
 
         try:
+            requested_save = getattr(test_args, "save", None)
+            if disable_save and requested_save is not None:
+                test_args.save = None
+
             # 1. Dynamically import the module
             module = self._import_module(file_path)
 
@@ -57,11 +63,21 @@ class TestExecutor:
 
             test_summary = TestSummary()
             test_summary.process_operator_result(result, test_results)
+            if collect_report:
+                result.report_entries = runner.collect_report_entries(internal_runner)
 
             # Store saved report file if available
             result.saved_file = runner.saved_file
+            if disable_save and requested_save is not None:
+                test_args.save = requested_save
 
         except Exception as e:
+            if (
+                "requested_save" in locals()
+                and disable_save
+                and requested_save is not None
+            ):
+                test_args.save = requested_save
             result.success = False
             result.error_message = str(e)
             result.stderr += f"\nExecutor Error: {str(e)}"

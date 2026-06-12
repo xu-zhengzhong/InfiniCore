@@ -86,26 +86,8 @@ class GenericTestRunner:
         Helper method to collect metadata and trigger report saving.
         """
         try:
-
-            # 1. Prepare metadata (Paths)
-            t_path = self._infer_op_path(self.operator_test.torch_operator, "torch")
-            i_path = self._infer_op_path(
-                self.operator_test.infinicore_operator, "infinicore"
-            )
-
-            op_paths = {"torch": t_path, "infinicore": i_path}
-
-            # 2. Generate Report Entries
             test_summary = TestSummary()
-            entries = test_summary.collect_report_entry(
-                op_name=self.operator_test.operator_name,
-                test_cases=self.operator_test.test_cases,
-                args=self.args,
-                op_paths=op_paths,
-                results_list=runner.test_results,
-            )
-
-            # 3. Save to File and return the file name
+            test_summary.report_entries.extend(self.collect_report_entries(runner))
             return test_summary.save_report(self.args.save)
 
         except Exception as e:
@@ -114,6 +96,26 @@ class GenericTestRunner:
             traceback.print_exc()
             print(f"⚠️ Failed to save report: {e}")
             return None
+
+    def collect_report_entries(self, runner):
+        # 1. Prepare metadata (Paths)
+        t_path = self._infer_op_path(self.operator_test.torch_operator, "torch")
+        i_path = self._infer_op_path(
+            self.operator_test.infinicore_operator, "infinicore"
+        )
+
+        op_paths = {"torch": t_path, "infinicore": i_path}
+
+        # 2. Generate Report Entries
+        test_summary = TestSummary()
+        test_summary.collect_report_entry(
+            op_name=self.operator_test.operator_name,
+            test_cases=self.operator_test.test_cases,
+            args=self.args,
+            op_paths=op_paths,
+            results_list=runner.test_results,
+        )
+        return test_summary.report_entries
 
     def _infer_op_path(self, method, lib_prefix):
         """

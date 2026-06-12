@@ -322,6 +322,8 @@ class TestSummary:
 
             # --- B. Helpers for Spec Processing ---
             def process_spec(spec, default_name):
+                if not isinstance(spec, TensorSpec):
+                    return spec
                 final_name = self._resolve_name(spec, default_name)
                 # Call internal method (no need for external converters file)
                 return self._spec_to_dict(spec, name=final_name)
