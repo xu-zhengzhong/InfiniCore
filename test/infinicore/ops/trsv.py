@@ -10,7 +10,6 @@ from framework import (
     TensorSpec,
     TestCase,
 )
-from framework.tensor import TensorInitializer
 
 import infinicore
 
@@ -18,6 +17,7 @@ _TEST_CASES_DATA = [
     # uplo, trans, diag, n, a_stride, x_stride
     (0, 0, 0, 128, None, (3,)),
     (0, 1, 0, 1024, None, None),
+    # (0, 0, 1, 1200, None, None),
     (0, 0, 1, 4096, None, (2,)),
     (0, 1, 1, 5120, None, None),
     (1, 0, 0, 128, None, (3,)),
@@ -35,6 +35,12 @@ _TOLERANCE_MAP = {
     infinicore.float32: {"atol": 1e-2, "rtol": 1e-2},
     infinicore.float64: {"atol": 1e-9, "rtol": 1e-9},
 }
+
+
+def _stable_triangular_init_kwargs(n):
+    # Keep the off-diagonal norm bounded for large unit-diagonal systems.
+    scale = 1.0 / max(n, 1)
+    return {"scale": scale, "bias": -0.5 * scale}
 
 
 def _triangular(a, uplo, diag):
@@ -76,7 +82,7 @@ def parse_test_cases():
                 (n, n),
                 a_stride if a_stride is not None else (1, n),
                 dtype,
-                init_mode=TensorInitializer.ONES,
+                **_stable_triangular_init_kwargs(n),
             )
             x_spec = TensorSpec.from_tensor((n,), x_stride, dtype)
 

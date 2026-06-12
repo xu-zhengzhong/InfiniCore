@@ -10,7 +10,6 @@ from framework import (
     TensorSpec,
     TestCase,
 )
-from framework.tensor import TensorInitializer
 
 import infinicore
 
@@ -35,6 +34,12 @@ _TOLERANCE_MAP = {
     infinicore.float32: {"atol": 5e-3, "rtol": 5e-3},
     infinicore.float64: {"atol": 1e-9, "rtol": 1e-9},
 }
+
+
+def _stable_packed_triangular_init_kwargs(n):
+    # Keep the off-diagonal norm bounded for large unit-diagonal systems.
+    scale = 1.0 / max(n, 1)
+    return {"scale": scale, "bias": -0.5 * scale}
 
 
 def _packed_to_triangular(ap, uplo, diag, n):
@@ -87,7 +92,10 @@ def parse_test_cases():
             packed_len = n * (n + 1) // 2
 
             ap_spec = TensorSpec.from_tensor(
-                (packed_len,), None, dtype, init_mode=TensorInitializer.ONES
+                (packed_len,),
+                None,
+                dtype,
+                **_stable_packed_triangular_init_kwargs(n),
             )
             x_spec = TensorSpec.from_tensor((n,), x_stride, dtype)
 

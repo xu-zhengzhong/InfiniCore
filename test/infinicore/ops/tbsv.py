@@ -36,6 +36,12 @@ _TOLERANCE_MAP = {
 }
 
 
+def _stable_band_init_kwargs(k):
+    # Bound each row's off-diagonal contribution by scaling with band width.
+    scale = 1.0 / max(k, 1)
+    return {"scale": scale, "bias": -0.5 * scale}
+
+
 def _full_from_band(a, uplo, diag, n, k):
     full = torch.zeros((n, n), dtype=a.dtype, device=a.device)
     if uplo == 0:
@@ -90,6 +96,7 @@ def parse_test_cases():
                 (k + 1, n),
                 a_stride if a_stride is not None else default_a_stride,
                 dtype,
+                **_stable_band_init_kwargs(k),
             )
             x_spec = TensorSpec.from_tensor((n,), x_stride, dtype)
 

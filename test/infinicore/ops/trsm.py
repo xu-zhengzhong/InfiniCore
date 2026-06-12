@@ -45,6 +45,12 @@ def _default_col_major_stride(rows):
     return (1, rows)
 
 
+def _stable_triangular_init_kwargs(n):
+    # Keep the off-diagonal norm bounded for large unit-diagonal systems.
+    scale = 1.0 / max(n, 1)
+    return {"scale": scale, "bias": -0.5 * scale}
+
+
 def _full_from_triangle(a, uplo, diag):
     triangular = torch.triu(a) if uplo == 0 else torch.tril(a)
     if diag == 1:
@@ -99,7 +105,10 @@ def parse_test_cases():
                 tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-4})
 
                 a_spec = TensorSpec.from_tensor(
-                    (dim_a, dim_a), a_stride, dtype, scale=0.2
+                    (dim_a, dim_a),
+                    a_stride,
+                    dtype,
+                    **_stable_triangular_init_kwargs(dim_a),
                 )
                 alpha_spec = TensorSpec.from_tensor(
                     (), None, dtype, init_mode=TensorInitializer.ONES
