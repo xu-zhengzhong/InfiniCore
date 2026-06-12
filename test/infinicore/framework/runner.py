@@ -8,6 +8,7 @@ import inspect
 import re
 from . import TestConfig, TestRunner, get_args, get_test_devices
 from .results import TestSummary
+from .utils.seed_utils import set_manual_seed
 
 
 class GenericTestRunner:
@@ -18,9 +19,13 @@ class GenericTestRunner:
         Args:
             operator_test_class: A class that implements BaseOperatorTest interface
         """
-        self.operator_test = operator_test_class()
         self.args = args or get_args()
+        self._set_manual_seed()
+        self.operator_test = operator_test_class()
         self.saved_file = None  # Store the path of saved report
+
+    def _set_manual_seed(self):
+        set_manual_seed(getattr(self.args, "seed", None))
 
     def run(self):
         """Execute the complete test suite
@@ -37,6 +42,7 @@ class GenericTestRunner:
             num_iterations=self.args.num_iterations,
             verbose=self.args.verbose,
             equal_nan=self.args.eq_nan,
+            seed=getattr(self.args, "seed", None),
         )
 
         runner = TestRunner(self.operator_test.test_cases, config)

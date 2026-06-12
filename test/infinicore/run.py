@@ -198,6 +198,9 @@ def load_and_override_cases(load_paths, args):
         case_args["bench"] = (
             args.bench if args.bench is not None else case_args.get("bench")
         )
+        case_args["seed"] = (
+            args.seed if args.seed is not None else case_args.get("seed")
+        )
 
         # Boolean Flags
         case_args["verbose"] = args.verbose or case_args.get("verbose", False)

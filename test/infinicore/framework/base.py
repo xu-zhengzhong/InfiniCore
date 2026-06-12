@@ -18,6 +18,7 @@ from .utils.tensor_utils import (
     synchronize_device,
 )
 from .utils.compare_utils import create_test_comparator
+from .utils.seed_utils import set_manual_seed
 from .benchmark import BenchmarkUtils
 
 
@@ -32,6 +33,7 @@ class TestConfig:
         num_iterations=1000,
         verbose=False,
         equal_nan=False,
+        seed=None,
     ):
         self.debug = debug
         self.equal_nan = equal_nan
@@ -39,6 +41,7 @@ class TestConfig:
         self.num_prerun = num_prerun
         self.num_iterations = num_iterations
         self.verbose = verbose
+        self.seed = seed
 
 
 class TestRunner:
@@ -83,6 +86,7 @@ class TestRunner:
 
             # Keep InfiniCore's runtime aligned with the selected test device.
             infinicore.set_device(infinicore.device(torch_device_map[device], 0))
+            set_manual_seed(self.config.seed, torch_device_map[device])
 
             for test_case in self.test_cases:
                 try:

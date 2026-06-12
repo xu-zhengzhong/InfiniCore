@@ -76,6 +76,13 @@ def add_common_test_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Set torch random seed before building and running each operator test",
+    )
+
+    group.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose mode to stop on first error with full traceback",

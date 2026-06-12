@@ -40,9 +40,8 @@ class TestExecutor:
             if not test_class:
                 raise ImportError("No BaseOperatorTest subclass found")
 
-            test_instance = test_class()
             runner_class = module.GenericTestRunner
-            runner = runner_class(test_instance.__class__, args=test_args)
+            runner = runner_class(test_class, args=test_args)
 
             # 4. Execute and capture output
             with capture_output() as (out, err):

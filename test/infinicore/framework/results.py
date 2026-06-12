@@ -205,7 +205,9 @@ class TestSummary:
 
         if not failed:
             if skipped or partial:
-                print(f"\n⚠️  Tests completed with some operators not fully implemented")
+                print(
+                    f"\n⚠️  Tests completed with some operators not fully implemented"
+                )
             else:
                 print(f"\n🎉 All tests passed!")
         else:
@@ -285,7 +287,14 @@ class TestSummary:
         # 2. Global Args
         global_args = {
             k: getattr(args, k)
-            for k in ["bench", "num_prerun", "num_iterations", "verbose", "debug"]
+            for k in [
+                "bench",
+                "num_prerun",
+                "num_iterations",
+                "verbose",
+                "debug",
+                "seed",
+            ]
             if hasattr(args, k)
         }
 
