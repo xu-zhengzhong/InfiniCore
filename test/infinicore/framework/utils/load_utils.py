@@ -21,6 +21,7 @@ import infinicore
 from framework import (
     BaseOperatorTest,
     TensorSpec,
+    TensorInitializer,
     TestCase,
     GenericTestRunner,
 )
@@ -39,14 +40,38 @@ def _parse_dtype(dtype_str):
     if hasattr(torch, dtype_str): return getattr(torch, dtype_str)
     return dtype_str
 
+def _parse_torch_dtype(dtype_str):
+    if hasattr(torch, dtype_str): return getattr(torch, dtype_str)
+    if hasattr(infinicore, dtype_str):
+        from framework import to_torch_dtype
+        return to_torch_dtype(getattr(infinicore, dtype_str))
+    return dtype_str
+
+def _parse_manual_tensor(value):
+    if isinstance(value, dict) and value.get("__tensor__"):
+        dtype = _parse_torch_dtype(value.get("dtype", "float32"))
+        return torch.tensor(value.get("data"), dtype=dtype)
+    return value
+
+def _parse_init_mode(mode):
+    if mode is None:
+        return TensorInitializer.RANDOM
+    return getattr(TensorInitializer, str(mode).upper(), mode)
+
 def _dict_to_spec(spec_dict):
     """Convert JSON dict to TensorSpec object."""
     if not isinstance(spec_dict, dict): return spec_dict
+    kwargs = {
+        k: _parse_manual_tensor(v)
+        for k, v in spec_dict.get('kwargs', {}).items()
+    }
     return TensorSpec(
         shape=tuple(spec_dict['shape']),
         dtype=_parse_dtype(spec_dict['dtype']),
         name=spec_dict.get('name'),
-        strides=tuple(spec_dict['strides']) if spec_dict.get('strides') else None
+        strides=tuple(spec_dict['strides']) if spec_dict.get('strides') else None,
+        init_mode=_parse_init_mode(spec_dict.get('init_mode')),
+        **kwargs
     )
 
 def parse_test_cases():
@@ -60,7 +85,7 @@ def parse_test_cases():
         for idx, inp in enumerate(case.get('inputs', [])):
             spec = _dict_to_spec(inp)
             input_specs.append(spec)
-            if spec.name:
+            if hasattr(spec, "name") and spec.name:
                 name_to_index[spec.name] = idx
 
         # 2. Parse Kwargs
@@ -93,6 +118,7 @@ def parse_test_cases():
             output_spec=output_spec,
             comparison_target=comp_target,
             tolerance=tolerance,
+            output_count=case.get('output_count', 1),
             description=case.get('description', "Dynamic Case")
         ))
     return test_cases
@@ -100,6 +126,11 @@ def parse_test_cases():
 class OpTest(BaseOperatorTest):
     def __init__(self):
         super().__init__(_OP_CONFIG.get("operator", "UnknownOp"))
+        self._source_op = None
+        source_module = _OP_CONFIG.get("source_module")
+        if source_module:
+            import importlib
+            self._source_op = importlib.import_module(source_module).OpTest()
 
     def get_test_cases(self):
         """Returns the list of parsed test cases."""
@@ -116,10 +147,14 @@ class OpTest(BaseOperatorTest):
 
     def torch_operator(self, *args, **kwargs):
         """PyTorch operator implementation."""
+        if self._source_op is not None:
+            return self._source_op.torch_operator(*args, **kwargs)
         {torch_method_body}
 
     def infinicore_operator(self, *args, **kwargs):
         """InfiniCore operator implementation."""
+        if self._source_op is not None:
+            return self._source_op.infinicore_operator(*args, **kwargs)
         {infini_method_body}
 
 def main():
