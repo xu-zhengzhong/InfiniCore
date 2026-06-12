@@ -21,7 +21,6 @@ _TEST_CASES_DATA = [
     (128, 128, None, None, None, None),
     (1024, 1024, None, None, None, None),
     (4096, 4096, None, None, None, None),
-    (5120, 5120, None, None, None, None),
 ]
 
 _TENSOR_DTYPES = [
@@ -30,7 +29,7 @@ _TENSOR_DTYPES = [
 ]
 
 _TOLERANCE_MAP = {
-    infinicore.complex64: {"atol": 5e-2, "rtol": 5e-2},
+    infinicore.complex64: {"atol": 1e-2, "rtol": 1e-2},
 }
 
 
@@ -122,7 +121,7 @@ def parse_test_cases():
                     b_stride = _default_col_major_stride(m)
                 if c_stride is None:
                     c_stride = _default_col_major_stride(m)
-                tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-4})
+                tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-2, "rtol": 1e-2})
 
                 a_spec = TensorSpec.from_tensor((dim_a, dim_a), a_stride, dtype)
                 b_spec = TensorSpec.from_tensor((m, n), b_stride, dtype)

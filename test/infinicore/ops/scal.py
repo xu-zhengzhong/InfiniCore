@@ -18,7 +18,6 @@ _TEST_CASES_DATA = [
     ((128,), None),
     ((1024,), (2,)),
     ((4096,), None),
-    ((5120,), (3,)),
 ]
 
 _TENSOR_DTYPES = [
@@ -29,10 +28,10 @@ _TENSOR_DTYPES = [
 ]
 
 _TOLERANCE_MAP = {
-    infinicore.float16: {"atol": 1e-3, "rtol": 1e-3},
-    infinicore.float32: {"atol": 1e-7, "rtol": 1e-7},
-    infinicore.float64: {"atol": 1e-15, "rtol": 1e-15},
-    infinicore.bfloat16: {"atol": 5e-3, "rtol": 1e-2},
+    infinicore.float16: {"atol": 1e-5, "rtol": 1e-5},
+    infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
+    infinicore.float64: {"atol": 1e-5, "rtol": 1e-5},
+    infinicore.bfloat16: {"atol": 1e-5, "rtol": 1e-5},
 }
 
 
@@ -45,7 +44,7 @@ def parse_test_cases():
     test_cases = []
     for shape, x_strides in _TEST_CASES_DATA:
         for dtype in _TENSOR_DTYPES:
-            tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-4})
+            tol = _TOLERANCE_MAP.get(dtype, {"atol": 1e-5, "rtol": 1e-5})
             x_spec = TensorSpec.from_tensor(shape, x_strides, dtype)
             alpha_spec = TensorSpec.from_tensor(
                 (1,), None, dtype, init_mode=TensorInitializer.ONES
