@@ -1,10 +1,23 @@
-#include "../../../devices/bang/common_bang.h"
+#include "../../blas_cnnl_bang.h"
 #include "ger_bang.h"
-#include "ger_bang_kernel.mlu"
 
 namespace op::ger::bang {
 
-Descriptor::~Descriptor() = default;
+struct Descriptor::Opaque {
+    blas_cnnl::bang::TensorDescriptor x;
+    blas_cnnl::bang::TensorDescriptor y;
+    blas_cnnl::bang::TensorDescriptor a;
+    blas_cnnl::bang::MatMulDescriptor op;
+    blas_cnnl::bang::MatMulAlgo algo;
+    blas_cnnl::bang::MatMulHeuristicResult heuristic;
+    std::shared_ptr<device::bang::Handle::Internal> internal;
+    size_t matmul_workspace_size = 0;
+    bool column_major_a = false;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
 
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
@@ -17,71 +30,97 @@ infiniStatus_t Descriptor::create(
     auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
     auto result = GerInfo::createGerInfo(alpha_desc, x_desc, y_desc, A_desc);
     CHECK_RESULT(result);
+    auto info = result.take();
+
+    if (info.data_type != INFINI_DTYPE_F32) {
+        *desc_ptr = new Descriptor(
+            info,
+            0,
+            nullptr,
+            handle->device,
+            handle->device_id);
+        return INFINI_STATUS_SUCCESS;
+    }
+
+    auto opaque = new Opaque{};
+    opaque->internal = handle->internal();
+    opaque->column_major_a = info.A_row_stride == 1 && info.A_col_stride != 1;
+    int lda = 0;
+    int ldb = 0;
+    int ldc = 0;
+
+    if (opaque->column_major_a) {
+        lda = utils::cast<int>(blas_cnnl::bang::positiveStride(info.incy));
+        ldb = utils::cast<int>(blas_cnnl::bang::positiveStride(info.incx));
+        ldc = utils::cast<int>(blas_cnnl::bang::positiveStride(info.A_col_stride));
+        CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+            opaque->x,
+            info.n,
+            1,
+            info.incy,
+            1,
+            info.data_type));
+        CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+            opaque->y,
+            info.m,
+            1,
+            info.incx,
+            1,
+            info.data_type));
+        CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+            opaque->a,
+            info.n,
+            info.m,
+            info.A_col_stride,
+            info.A_row_stride,
+            info.data_type));
+    } else {
+        lda = utils::cast<int>(blas_cnnl::bang::positiveStride(info.incx));
+        ldb = utils::cast<int>(blas_cnnl::bang::positiveStride(info.incy));
+        ldc = utils::cast<int>(blas_cnnl::bang::positiveStride(info.A_row_stride));
+        CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+            opaque->x,
+            info.m,
+            1,
+            info.incx,
+            1,
+            info.data_type));
+        CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+            opaque->y,
+            info.n,
+            1,
+            info.incy,
+            1,
+            info.data_type));
+        CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+            opaque->a,
+            info.m,
+            info.n,
+            info.A_row_stride,
+            info.A_col_stride,
+            info.data_type));
+    }
+    CHECK_STATUS(opaque->op.create(false, true, true, lda, ldb, ldc));
+    CHECK_STATUS(blas_cnnl::bang::initMatMulAlgo(
+        opaque->internal,
+        opaque->op,
+        opaque->x,
+        opaque->y,
+        opaque->a,
+        opaque->a,
+        opaque->algo,
+        opaque->heuristic,
+        &opaque->matmul_workspace_size));
 
     *desc_ptr = new Descriptor(
-        result.take(),
-        0,
-        nullptr,
+        info,
+        opaque->matmul_workspace_size,
+        opaque,
         handle->device,
         handle->device_id);
 
     return INFINI_STATUS_SUCCESS;
 }
-
-template <typename Tdata>
-infiniStatus_t calculateGer(
-    const GerInfo &info,
-    const Tdata *alpha,
-    const Tdata *x,
-    const Tdata *y,
-    Tdata *A,
-    cnrtQueue_t queue) {
-
-    int m = utils::cast<int>(info.m);
-    int n = utils::cast<int>(info.n);
-    int incx = utils::cast<int>(info.incx);
-    int incy = utils::cast<int>(info.incy);
-
-    const int A_row_stride = utils::cast<int>(info.A_row_stride);
-    const int A_col_stride = utils::cast<int>(info.A_col_stride);
-
-    int lda = A_col_stride;
-
-    // Row-major to Column-major transpose trick
-    if (A_col_stride == 1) {
-        lda = A_row_stride;
-        std::swap(m, n);
-        std::swap(x, y);
-        std::swap(incx, incy);
-    }
-
-    cnrtDim3_t k_dim;
-    cnrtFunctionType_t k_type;
-
-    k_dim.x = 4;
-    k_dim.y = 1;
-    k_dim.z = 1;
-    k_type = cnrtFuncTypeUnion1;
-
-    gerKernel<Tdata><<<k_dim, k_type, queue>>>(
-        m, n,
-        alpha,
-        x, incx,
-        y, incy,
-        A, lda);
-
-    cnrtQueueSync(queue);
-
-    return INFINI_STATUS_SUCCESS;
-}
-
-#define CALCULATE_GER(TDATA)           \
-    calculateGer(_info,                \
-                 (const TDATA *)alpha, \
-                 (const TDATA *)x,     \
-                 (const TDATA *)y,     \
-                 (TDATA *)A,           \
-                 (cnrtQueue_t)stream)
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
@@ -92,17 +131,54 @@ infiniStatus_t Descriptor::calculate(
     void *A,
     void *stream) const {
 
-    (void)workspace;
-    (void)workspace_size;
-
-    switch (_info.data_type) {
-    case INFINI_DTYPE_F32:
-        return CALCULATE_GER(float);
-    default:
+    if (_info.data_type != INFINI_DTYPE_F32) {
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
-}
 
-#undef CALCULATE_GER
+    CHECK_OR_RETURN(_opaque != nullptr, INFINI_STATUS_INTERNAL_ERROR);
+    CHECK_OR_RETURN(workspace_size >= workspaceSize(), INFINI_STATUS_INSUFFICIENT_WORKSPACE);
+    CHECK_OR_RETURN(workspace != nullptr || workspaceSize() == 0, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(alpha != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(x != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(y != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(A != nullptr, INFINI_STATUS_NULL_POINTER);
+
+    float alpha_value = 0.0f;
+    CHECK_STATUS(blas_cnnl::bang::copyScalarToFloat(&alpha_value, alpha, _info.data_type, (cnrtQueue_t)stream));
+    const float beta_value = 1.0f;
+
+    const void *x_ptr = blas_cnnl::bang::logicalVectorPtr(x, _info.m, _info.incx, _info.data_type);
+    const void *y_ptr = blas_cnnl::bang::logicalVectorPtr(y, _info.n, _info.incy, _info.data_type);
+    const void *lhs_ptr = _opaque->column_major_a ? y_ptr : x_ptr;
+    const void *rhs_ptr = _opaque->column_major_a ? x_ptr : y_ptr;
+    void *A_ptr = blas_cnnl::bang::logicalMatrixPtr(
+        A,
+        _info.m,
+        _info.n,
+        _info.A_row_stride,
+        _info.A_col_stride,
+        _info.data_type);
+
+    CHECK_STATUS(blas_cnnl::bang::cnnlMatMul(
+        _opaque->internal,
+        (cnrtQueue_t)stream,
+        _opaque->op,
+        _opaque->algo,
+        alpha_value,
+        _opaque->x,
+        lhs_ptr,
+        _opaque->y,
+        rhs_ptr,
+        beta_value,
+        _opaque->a,
+        A_ptr,
+        workspace,
+        workspace_size,
+        _opaque->a,
+        A_ptr));
+    CHECK_STATUS(blas_cnnl::bang::syncQueue((cnrtQueue_t)stream));
+
+    return INFINI_STATUS_SUCCESS;
+}
 
 } // namespace op::ger::bang

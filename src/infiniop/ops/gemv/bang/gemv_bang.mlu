@@ -1,10 +1,22 @@
-#include "../../../devices/bang/common_bang.h"
+#include "../../blas_cnnl_bang.h"
 #include "gemv_bang.h"
-#include "gemv_bang_kernel.mlu"
 
 namespace op::gemv::bang {
 
-Descriptor::~Descriptor() = default;
+struct Descriptor::Opaque {
+    blas_cnnl::bang::TensorDescriptor a;
+    blas_cnnl::bang::TensorDescriptor x;
+    blas_cnnl::bang::TensorDescriptor y;
+    blas_cnnl::bang::MatMulDescriptor op;
+    blas_cnnl::bang::MatMulAlgo algo;
+    blas_cnnl::bang::MatMulHeuristicResult heuristic;
+    std::shared_ptr<device::bang::Handle::Internal> internal;
+    size_t matmul_workspace_size = 0;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
 
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
@@ -19,74 +31,87 @@ infiniStatus_t Descriptor::create(
     auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
     auto result = GemvInfo::createGemvInfo(trans, alpha_desc, A_desc, x_desc, beta_desc, y_desc);
     CHECK_RESULT(result);
+    auto info = result.take();
+
+    if (info.data_type != INFINI_DTYPE_F32) {
+        *desc_ptr = new Descriptor(
+            info,
+            0,
+            nullptr,
+            handle->device,
+            handle->device_id);
+        return INFINI_STATUS_SUCCESS;
+    }
+
+    auto opaque = new Opaque{};
+    opaque->internal = handle->internal();
+
+    const bool row_major_a = info.A_col_stride == 1;
+    bool trans_a = false;
+    int lda = 0;
+
+    if (row_major_a) {
+        trans_a = info.trans == INFINIOP_BLAS_OP_T;
+        lda = utils::cast<int>(blas_cnnl::bang::positiveStride(info.A_row_stride));
+        CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+            opaque->a,
+            info.m,
+            info.n,
+            info.A_row_stride,
+            info.A_col_stride,
+            info.data_type));
+    } else {
+        trans_a = info.trans == INFINIOP_BLAS_OP_N;
+        lda = utils::cast<int>(blas_cnnl::bang::positiveStride(info.A_col_stride));
+        CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+            opaque->a,
+            info.n,
+            info.m,
+            info.A_col_stride,
+            info.A_row_stride,
+            info.data_type));
+    }
+
+    const size_t x_len = info.trans == INFINIOP_BLAS_OP_N ? info.n : info.m;
+    const size_t y_len = info.trans == INFINIOP_BLAS_OP_N ? info.m : info.n;
+    const int ldb = utils::cast<int>(blas_cnnl::bang::positiveStride(info.incx));
+    const int ldc = utils::cast<int>(blas_cnnl::bang::positiveStride(info.incy));
+    CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+        opaque->x,
+        x_len,
+        1,
+        info.incx,
+        1,
+        info.data_type));
+    CHECK_STATUS(blas_cnnl::bang::setMatrixTensor(
+        opaque->y,
+        y_len,
+        1,
+        info.incy,
+        1,
+        info.data_type));
+
+    CHECK_STATUS(opaque->op.create(trans_a, false, true, lda, ldb, ldc));
+    CHECK_STATUS(blas_cnnl::bang::initMatMulAlgo(
+        opaque->internal,
+        opaque->op,
+        opaque->a,
+        opaque->x,
+        opaque->y,
+        opaque->y,
+        opaque->algo,
+        opaque->heuristic,
+        &opaque->matmul_workspace_size));
 
     *desc_ptr = new Descriptor(
-        result.take(),
-        0,
-        nullptr,
+        info,
+        opaque->matmul_workspace_size,
+        opaque,
         handle->device,
         handle->device_id);
 
     return INFINI_STATUS_SUCCESS;
 }
-
-template <typename Tdata>
-infiniStatus_t calculateGemv(
-    const GemvInfo &info,
-    const Tdata *alpha,
-    const Tdata *A,
-    const Tdata *x,
-    const Tdata *beta,
-    Tdata *y,
-    cnrtQueue_t queue) {
-
-    int m = utils::cast<int>(info.m);
-    int n = utils::cast<int>(info.n);
-    const int incx = utils::cast<int>(info.incx);
-    const int incy = utils::cast<int>(info.incy);
-    const int A_row_stride = utils::cast<int>(info.A_row_stride);
-    const int A_col_stride = utils::cast<int>(info.A_col_stride);
-
-    auto trans = info.trans;
-    auto lda = A_col_stride;
-
-    // Row-major tensors are interpreted as column-major transposed matrices.
-    if (A_col_stride == 1) {
-        trans = info.trans == INFINIOP_BLAS_OP_N ? INFINIOP_BLAS_OP_T : INFINIOP_BLAS_OP_N;
-        lda = A_row_stride;
-        std::swap(m, n);
-    }
-
-    cnrtDim3_t k_dim;
-    cnrtFunctionType_t k_type;
-
-    k_dim.x = 4;
-    k_dim.y = 1;
-    k_dim.z = 1;
-    k_type = cnrtFuncTypeUnion1;
-
-    gemvKernel<Tdata><<<k_dim, k_type, queue>>>(
-        trans,
-        m, n,
-        alpha,
-        A, lda,
-        x, incx,
-        beta,
-        y, incy);
-
-    cnrtQueueSync(queue);
-
-    return INFINI_STATUS_SUCCESS;
-}
-
-#define CALCULATE_GEMV(TDATA)           \
-    calculateGemv(_info,                \
-                  (const TDATA *)alpha, \
-                  (const TDATA *)A,     \
-                  (const TDATA *)x,     \
-                  (const TDATA *)beta,  \
-                  (TDATA *)y,           \
-                  (cnrtQueue_t)stream)
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
@@ -98,17 +123,57 @@ infiniStatus_t Descriptor::calculate(
     void *y,
     void *stream) const {
 
-    (void)workspace;
-    (void)workspace_size;
-
-    switch (_info.data_type) {
-    case INFINI_DTYPE_F32:
-        return CALCULATE_GEMV(float);
-    default:
+    if (_info.data_type != INFINI_DTYPE_F32) {
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
-}
 
-#undef CALCULATE_GEMV
+    CHECK_OR_RETURN(_opaque != nullptr, INFINI_STATUS_INTERNAL_ERROR);
+    CHECK_OR_RETURN(workspace_size >= workspaceSize(), INFINI_STATUS_INSUFFICIENT_WORKSPACE);
+    CHECK_OR_RETURN(workspace != nullptr || workspaceSize() == 0, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(alpha != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(A != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(x != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(beta != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(y != nullptr, INFINI_STATUS_NULL_POINTER);
+
+    float alpha_value = 0.0f;
+    float beta_value = 0.0f;
+    CHECK_STATUS(blas_cnnl::bang::copyScalarToFloat(&alpha_value, alpha, _info.data_type, (cnrtQueue_t)stream));
+    CHECK_STATUS(blas_cnnl::bang::copyScalarToFloat(&beta_value, beta, _info.data_type, (cnrtQueue_t)stream));
+
+    const void *A_ptr = blas_cnnl::bang::logicalMatrixPtr(
+        A,
+        _info.m,
+        _info.n,
+        _info.A_row_stride,
+        _info.A_col_stride,
+        _info.data_type);
+    const void *x_ptr = blas_cnnl::bang::logicalVectorPtr(x, _info.n, _info.incx, _info.data_type);
+    if (_info.trans == INFINIOP_BLAS_OP_T) {
+        x_ptr = blas_cnnl::bang::logicalVectorPtr(x, _info.m, _info.incx, _info.data_type);
+    }
+    void *y_ptr = blas_cnnl::bang::logicalVectorPtr(y, _info.trans == INFINIOP_BLAS_OP_N ? _info.m : _info.n, _info.incy, _info.data_type);
+
+    CHECK_STATUS(blas_cnnl::bang::cnnlMatMul(
+        _opaque->internal,
+        (cnrtQueue_t)stream,
+        _opaque->op,
+        _opaque->algo,
+        alpha_value,
+        _opaque->a,
+        A_ptr,
+        _opaque->x,
+        x_ptr,
+        beta_value,
+        _opaque->y,
+        y_ptr,
+        workspace,
+        workspace_size,
+        _opaque->y,
+        y_ptr));
+    CHECK_STATUS(blas_cnnl::bang::syncQueue((cnrtQueue_t)stream));
+
+    return INFINI_STATUS_SUCCESS;
+}
 
 } // namespace op::gemv::bang

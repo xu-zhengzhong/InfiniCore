@@ -1,10 +1,29 @@
-#include "../../../devices/bang/common_bang.h"
+#include "../../blas_cnnl_bang.h"
 #include "nrm2_bang.h"
-#include "nrm2_bang_kernel.mlu"
 
 namespace op::nrm2::bang {
 
-Descriptor::~Descriptor() = default;
+namespace {
+
+bool isSupported(infiniDtype_t dtype) {
+    return dtype == INFINI_DTYPE_F16
+        || dtype == INFINI_DTYPE_BF16
+        || dtype == INFINI_DTYPE_F32;
+}
+
+} // namespace
+
+struct Descriptor::Opaque {
+    blas_cnnl::bang::TensorDescriptor x;
+    blas_cnnl::bang::TensorDescriptor result;
+    blas_cnnl::bang::ReduceDescriptor reduce;
+    std::shared_ptr<device::bang::Handle::Internal> internal;
+    size_t reduce_workspace_size = 0;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
 
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
@@ -15,59 +34,40 @@ infiniStatus_t Descriptor::create(
     auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
     auto result = Nrm2Info::createNrm2Info(x_desc, result_desc);
     CHECK_RESULT(result);
+    auto info = result.take();
 
-    // Create descriptor
+    if (!isSupported(info.data_type)) {
+        *desc_ptr = new Descriptor(
+            info,
+            0,
+            nullptr,
+            handle->device,
+            handle->device_id);
+        return INFINI_STATUS_SUCCESS;
+    }
+
+    auto opaque = new Opaque{};
+    opaque->internal = handle->internal();
+
+    CHECK_STATUS(blas_cnnl::bang::setVectorTensor(opaque->x, info.n, info.incx, info.data_type));
+    CHECK_STATUS(blas_cnnl::bang::setScalarTensor(opaque->result, info.data_type));
+    CHECK_STATUS(opaque->reduce.create(CNNL_REDUCE_NORM2));
+    CHECK_STATUS(blas_cnnl::bang::getReduceWorkspaceSize(
+        opaque->internal,
+        opaque->x,
+        opaque->result,
+        opaque->reduce,
+        &opaque->reduce_workspace_size));
+
     *desc_ptr = new Descriptor(
-        result.take(),
-        0,
-        nullptr,
+        info,
+        opaque->reduce_workspace_size,
+        opaque,
         handle->device,
         handle->device_id);
 
     return INFINI_STATUS_SUCCESS;
 }
-
-template <typename Tdata>
-infiniStatus_t calculateNrm2(
-    const Nrm2Info &info,
-    const Tdata *x,
-    Tdata *result,
-    cnrtQueue_t queue) {
-
-    cnrtDim3_t k_dim;
-    cnrtFunctionType_t k_type;
-
-    const int n = utils::cast<int>(info.n);
-    const int incx = utils::cast<int>(info.incx);
-
-    k_dim.x = 4;
-    k_dim.y = 1;
-    k_dim.z = 1;
-    k_type = cnrtFuncTypeUnion1;
-
-    if (incx == 1) {
-        Nrm2KernelContiguous<Tdata><<<k_dim, k_type, queue>>>(
-            n,
-            x,
-            result);
-    } else {
-        Nrm2KernelStrided<Tdata><<<k_dim, k_type, queue>>>(
-            n,
-            x,
-            incx,
-            result);
-    }
-
-    cnrtQueueSync(queue);
-
-    return INFINI_STATUS_SUCCESS;
-}
-
-#define CALCULATE_NRM2(TDATA)       \
-    calculateNrm2(_info,            \
-                  (const TDATA *)x, \
-                  (TDATA *)result,  \
-                  (cnrtQueue_t)stream)
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
@@ -76,21 +76,30 @@ infiniStatus_t Descriptor::calculate(
     void *result,
     void *stream) const {
 
-    (void)workspace;
-    (void)workspace_size;
-
-    switch (_info.data_type) {
-    case INFINI_DTYPE_F16:
-        return CALCULATE_NRM2(half);
-    case INFINI_DTYPE_F32:
-        return CALCULATE_NRM2(float);
-    case INFINI_DTYPE_BF16:
-        return CALCULATE_NRM2(bfloat16_t);
-    default:
+    if (!isSupported(_info.data_type)) {
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
-}
 
-#undef CALCULATE_NRM2
+    CHECK_OR_RETURN(_opaque != nullptr, INFINI_STATUS_INTERNAL_ERROR);
+    CHECK_OR_RETURN(workspace_size >= workspaceSize(), INFINI_STATUS_INSUFFICIENT_WORKSPACE);
+    CHECK_OR_RETURN(workspace != nullptr || workspaceSize() == 0, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(x != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(result != nullptr, INFINI_STATUS_NULL_POINTER);
+
+    const void *x_ptr = blas_cnnl::bang::logicalVectorPtr(x, _info.n, _info.incx, _info.data_type);
+    CHECK_STATUS(blas_cnnl::bang::cnnlReduce(
+        _opaque->internal,
+        (cnrtQueue_t)stream,
+        _opaque->reduce,
+        _opaque->x,
+        x_ptr,
+        workspace,
+        _opaque->reduce_workspace_size,
+        _opaque->result,
+        result));
+    CHECK_STATUS(blas_cnnl::bang::syncQueue((cnrtQueue_t)stream));
+
+    return INFINI_STATUS_SUCCESS;
+}
 
 } // namespace op::nrm2::bang

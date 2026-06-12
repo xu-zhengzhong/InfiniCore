@@ -1,10 +1,32 @@
-#include "../../../devices/bang/common_bang.h"
+#include "../../blas_cnnl_bang.h"
 #include "swap_bang.h"
-#include "swap_bang_kernel.mlu"
 
 namespace op::swap::bang {
 
-Descriptor::~Descriptor() = default;
+namespace {
+
+bool isSupported(infiniDtype_t dtype) {
+    return dtype == INFINI_DTYPE_F16
+        || dtype == INFINI_DTYPE_BF16
+        || dtype == INFINI_DTYPE_F32;
+}
+
+} // namespace
+
+struct Descriptor::Opaque {
+    blas_cnnl::bang::TensorDescriptor x;
+    blas_cnnl::bang::TensorDescriptor y;
+    blas_cnnl::bang::TensorDescriptor temp;
+    std::shared_ptr<device::bang::Handle::Internal> internal;
+    size_t temp_workspace_size = 0;
+    size_t x_to_temp_workspace_size = 0;
+    size_t y_to_x_workspace_size = 0;
+    size_t temp_to_y_workspace_size = 0;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
 
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
@@ -15,59 +37,54 @@ infiniStatus_t Descriptor::create(
     auto handle = reinterpret_cast<device::bang::Handle *>(handle_);
     auto result = SwapInfo::createSwapInfo(x_desc, y_desc);
     CHECK_RESULT(result);
+    auto info = result.take();
+
+    if (!isSupported(info.data_type)) {
+        *desc_ptr = new Descriptor(
+            info,
+            0,
+            nullptr,
+            handle->device,
+            handle->device_id);
+        return INFINI_STATUS_SUCCESS;
+    }
+
+    auto opaque = new Opaque{};
+    opaque->internal = handle->internal();
+    opaque->temp_workspace_size = blas_cnnl::bang::vectorBytes(info.n, info.data_type);
+
+    CHECK_STATUS(blas_cnnl::bang::setVectorTensor(opaque->x, info.n, info.incx, info.data_type));
+    CHECK_STATUS(blas_cnnl::bang::setVectorTensor(opaque->y, info.n, info.incy, info.data_type));
+    CHECK_STATUS(blas_cnnl::bang::setContiguousVectorTensor(opaque->temp, info.n, info.data_type));
+    CHECK_STATUS(blas_cnnl::bang::getCopyWorkspaceSize(
+        opaque->internal,
+        opaque->x,
+        opaque->temp,
+        &opaque->x_to_temp_workspace_size));
+    CHECK_STATUS(blas_cnnl::bang::getCopyWorkspaceSize(
+        opaque->internal,
+        opaque->y,
+        opaque->x,
+        &opaque->y_to_x_workspace_size));
+    CHECK_STATUS(blas_cnnl::bang::getCopyWorkspaceSize(
+        opaque->internal,
+        opaque->temp,
+        opaque->y,
+        &opaque->temp_to_y_workspace_size));
+
+    const size_t copy_workspace_size = std::max(
+        opaque->x_to_temp_workspace_size,
+        std::max(opaque->y_to_x_workspace_size, opaque->temp_to_y_workspace_size));
 
     *desc_ptr = new Descriptor(
-        result.take(),
-        0,
-        nullptr,
+        info,
+        opaque->temp_workspace_size + copy_workspace_size,
+        opaque,
         handle->device,
         handle->device_id);
 
     return INFINI_STATUS_SUCCESS;
 }
-
-template <typename Tdata>
-infiniStatus_t calculateSwap(
-    const SwapInfo &info,
-    Tdata *x,
-    Tdata *y,
-    cnrtQueue_t queue) {
-
-    const int n = utils::cast<int>(info.n);
-    const int incx = utils::cast<int>(info.incx);
-    const int incy = utils::cast<int>(info.incy);
-
-    cnrtDim3_t k_dim;
-    cnrtFunctionType_t k_type;
-
-    k_dim.x = 4;
-    k_dim.y = 1;
-    k_dim.z = 1;
-    k_type = cnrtFuncTypeUnion1;
-
-    if (incx == 1 && incy == 1) {
-        swapKernelContiguous<<<k_dim, k_type, queue>>>(
-            n,
-            x,
-            y);
-    } else {
-        swapKernelStrided<<<k_dim, k_type, queue>>>(
-            n,
-            x,
-            incx,
-            y,
-            incy);
-    }
-
-    cnrtQueueSync(queue);
-    return INFINI_STATUS_SUCCESS;
-}
-
-#define CALCULATE_SWAP(TDATA) \
-    calculateSwap(_info,      \
-                  (TDATA *)x, \
-                  (TDATA *)y, \
-                  (cnrtQueue_t)stream)
 
 infiniStatus_t Descriptor::calculate(
     void *workspace,
@@ -76,21 +93,52 @@ infiniStatus_t Descriptor::calculate(
     void *y,
     void *stream) const {
 
-    (void)workspace;
-    (void)workspace_size;
-
-    switch (_info.data_type) {
-    case INFINI_DTYPE_F16:
-        return CALCULATE_SWAP(half);
-    case INFINI_DTYPE_BF16:
-        return CALCULATE_SWAP(bfloat16_t);
-    case INFINI_DTYPE_F32:
-        return CALCULATE_SWAP(float);
-    default:
+    if (!isSupported(_info.data_type)) {
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
-}
 
-#undef CALCULATE_SWAP
+    CHECK_OR_RETURN(_opaque != nullptr, INFINI_STATUS_INTERNAL_ERROR);
+    CHECK_OR_RETURN(workspace_size >= workspaceSize(), INFINI_STATUS_INSUFFICIENT_WORKSPACE);
+    CHECK_OR_RETURN(workspace != nullptr || workspaceSize() == 0, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(x != nullptr, INFINI_STATUS_NULL_POINTER);
+    CHECK_OR_RETURN(y != nullptr, INFINI_STATUS_NULL_POINTER);
+
+    void *temp = workspace;
+    void *copy_workspace = blas_cnnl::bang::workspaceAt(workspace, _opaque->temp_workspace_size);
+    const size_t copy_workspace_size = workspace_size - _opaque->temp_workspace_size;
+    void *x_ptr = blas_cnnl::bang::logicalVectorPtr(x, _info.n, _info.incx, _info.data_type);
+    void *y_ptr = blas_cnnl::bang::logicalVectorPtr(y, _info.n, _info.incy, _info.data_type);
+
+    CHECK_STATUS(blas_cnnl::bang::cnnlCopy(
+        _opaque->internal,
+        (cnrtQueue_t)stream,
+        _opaque->x,
+        x_ptr,
+        _opaque->temp,
+        temp,
+        copy_workspace,
+        copy_workspace_size));
+    CHECK_STATUS(blas_cnnl::bang::cnnlCopy(
+        _opaque->internal,
+        (cnrtQueue_t)stream,
+        _opaque->y,
+        y_ptr,
+        _opaque->x,
+        x_ptr,
+        copy_workspace,
+        copy_workspace_size));
+    CHECK_STATUS(blas_cnnl::bang::cnnlCopy(
+        _opaque->internal,
+        (cnrtQueue_t)stream,
+        _opaque->temp,
+        temp,
+        _opaque->y,
+        y_ptr,
+        copy_workspace,
+        copy_workspace_size));
+    CHECK_STATUS(blas_cnnl::bang::syncQueue((cnrtQueue_t)stream));
+
+    return INFINI_STATUS_SUCCESS;
+}
 
 } // namespace op::swap::bang
