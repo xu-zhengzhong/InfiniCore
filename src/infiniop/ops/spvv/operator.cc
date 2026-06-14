@@ -85,6 +85,21 @@ __INFINI_C infiniStatus_t infiniopSpVV(
     float beta,
     void *stream) {
 
+#define PREPARE(CASE, NAMESPACE)                                                  \
+    case CASE:                                                                    \
+        CHECK_STATUS(reinterpret_cast<const op::spvv::NAMESPACE::Descriptor *>(desc) \
+                         ->prepare(workspace, workspace_size, x, stream));        \
+        break
+
+    switch (desc->device_type) {
+#ifdef ENABLE_METAX_API
+        PREPARE(INFINI_DEVICE_METAX, metax);
+#endif
+    default:
+        break;
+    }
+#undef PREPARE
+
 #define CALCULATE(CASE, NAMESPACE)                                             \
     case CASE:                                                                 \
         return reinterpret_cast<const op::spvv::NAMESPACE::Descriptor *>(desc) \

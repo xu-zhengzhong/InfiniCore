@@ -12,6 +12,8 @@ struct Descriptor::Opaque {
     hcsparseDnVecDescr_t vec_x = nullptr;
     hpccDataType data_type = HPCC_R_32F;
     hcsparseIndexType_t index_type = HCSPARSE_INDEX_64I;
+    void *dot = nullptr;
+    void *sparse_workspace = nullptr;
 
     explicit Opaque(std::shared_ptr<device::metax::Handle::Internal> internal)
         : internal(std::move(internal)) {}
@@ -143,10 +145,8 @@ infiniStatus_t Descriptor::calculate(
     if (workspace_size < _workspace_size) {
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
-
-    auto dot = workspace;
-    auto sparse_workspace = static_cast<void *>(static_cast<char *>(workspace) + DOT_WORKSPACE_SIZE);
-    CHECK_MCSPARSE(hcsparseDnVecSetValues(_opaque->vec_x, const_cast<void *>(x)));
+    (void)workspace;
+    (void)x;
 
     CHECK_STATUS(_opaque->internal->useMcsparse(
         reinterpret_cast<hcStream_t>(stream),
@@ -156,9 +156,9 @@ infiniStatus_t Descriptor::calculate(
                 HCSPARSE_OPERATION_NON_TRANSPOSE,
                 _opaque->vec_a,
                 _opaque->vec_x,
-                dot,
+                _opaque->dot,
                 HPCC_R_32F,
-                sparse_workspace));
+                _opaque->sparse_workspace));
             return INFINI_STATUS_SUCCESS;
         }));
 
@@ -182,7 +182,7 @@ infiniStatus_t Descriptor::calculate(
                 1,
                 &alpha,
                 HPCC_R_32F,
-                dot,
+                _opaque->dot,
                 HPCC_R_32F,
                 1,
                 y,
@@ -192,6 +192,22 @@ infiniStatus_t Descriptor::calculate(
             return INFINI_STATUS_SUCCESS;
         }));
 
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t Descriptor::prepare(
+    void *workspace,
+    size_t workspace_size,
+    const void *x,
+    void *stream) const {
+    if (workspace_size < _workspace_size) {
+        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+    }
+
+    _opaque->dot = workspace;
+    _opaque->sparse_workspace = static_cast<void *>(static_cast<char *>(workspace) + DOT_WORKSPACE_SIZE);
+    CHECK_MCSPARSE(hcsparseDnVecSetValues(_opaque->vec_x, const_cast<void *>(x)));
+    (void)stream;
     return INFINI_STATUS_SUCCESS;
 }
 

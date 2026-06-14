@@ -49,6 +49,11 @@
             float alpha,                                         \
             float beta,                                          \
             void *stream) const;                                 \
+        infiniStatus_t prepare(                                  \
+            void *workspace,                                     \
+            size_t workspace_size,                               \
+            const void *x,                                       \
+            void *stream) const;                                 \
     };                                                           \
     }
 
