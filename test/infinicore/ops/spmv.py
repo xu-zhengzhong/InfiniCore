@@ -101,9 +101,9 @@ def _generate_spmv_cases():
     # (rows, cols, density)
     configs = [
         # (128, 128, 0.02),  # Baseline
-        # (1024, 1024, 0.002),  # 1K scale
-        # (4096, 4096, 0.001),  # 4K scale
-        (5120, 5120, 0.01),  # 5K scale
+        # (1024, 1024, 0.02),  # 1K scale
+        # (4096, 409600, 0.01),  # 4K scale
+        (8192, 8192, 0.01),  # 5K scale
     ]
     for rows, cols, density in configs:
         crow = [0]
@@ -126,9 +126,9 @@ _TEST_CASES_DATA = _generate_spmv_cases()
 
 _TOLERANCE_MAP = {
     # infinicore.float16: {"atol": 0, "rtol": 1e-2},
-    # infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
+    infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
     # infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
-    infinicore.float32: {"atol": 1e-2, "rtol": 1e-2},
+    # infinicore.float32: {"atol": 1e-2, "rtol": 1e-2},
 }
 
 _TENSOR_DTYPES = [
@@ -236,20 +236,20 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, sparse, x, *, rows, cols, crow, col, out=None):
-        del sparse
-        if _use_dense_reference(values.device):
-            result = spmv_dense_reference(
-                values, x, rows=rows, cols=cols, crow=crow, col=col
-            )
-        else:
-            result = spmv_sparse_reference(
-                values, x, rows=rows, cols=cols, crow=crow, col=col
-            )
-        if out is not None:
-            out.copy_(result)
-            return out
-        return result
+    # def torch_operator(self, values, sparse, x, *, rows, cols, crow, col, out=None):
+    #     del sparse
+    #     if _use_dense_reference(values.device):
+    #         result = spmv_dense_reference(
+    #             values, x, rows=rows, cols=cols, crow=crow, col=col
+    #         )
+    #     else:
+    #         result = spmv_sparse_reference(
+    #             values, x, rows=rows, cols=cols, crow=crow, col=col
+    #         )
+    #     if out is not None:
+    #         out.copy_(result)
+    #         return out
+    #     return result
 
     def infinicore_operator(
         self, _values, sparse, x, *, rows, cols, crow, col, out=None

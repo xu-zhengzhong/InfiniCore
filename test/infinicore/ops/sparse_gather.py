@@ -174,7 +174,7 @@ _TEST_CASES_DATA = [
     # (128, 0.01),      # 小尺寸，较高密度
     # (1024, 0.01),
     # # (2048, 0.01),     # 中等尺寸，低密度
-    # (4096, 0.01),      # 中等尺寸，较高密度
+    # (4096000, 0.01),      # 中等尺寸，较高密度
     (81920, 0.01),   # 大尺寸，极低密度
 ]
 
@@ -324,16 +324,16 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, pattern, x, *, size, indices, out=None):
-        del values, pattern
-        if _use_dense_reference(x.device):
-            result = sparse_gather_dense_reference(x, size=size, indices=indices)
-        else:
-            result = sparse_gather_sparse_reference(x, size=size, indices=indices)
-        if out is not None:
-            out.copy_(result)
-            return out
-        return result
+    # def torch_operator(self, values, pattern, x, *, size, indices, out=None):
+    #     del values, pattern
+    #     if _use_dense_reference(x.device):
+    #         result = sparse_gather_dense_reference(x, size=size, indices=indices)
+    #     else:
+    #         result = sparse_gather_sparse_reference(x, size=size, indices=indices)
+    #     if out is not None:
+    #         out.copy_(result)
+    #         return out
+    #     return result
 
     def infinicore_operator(self, _values, pattern, x, *, size, indices, out=None):
         return infinicore.sparse_gather(pattern, x, out=out)

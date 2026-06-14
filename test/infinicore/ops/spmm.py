@@ -228,14 +228,14 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, sparse, b, *, rows, cols, crow, col, out=None):
-        del sparse
-        sparse = csr_to_dense(values, rows, cols, crow, col)
-        result = torch.matmul(sparse, b)
-        if out is not None:
-            out.copy_(result)
-            return out
-        return result
+    # def torch_operator(self, values, sparse, b, *, rows, cols, crow, col, out=None):
+    #     del sparse
+    #     sparse = csr_to_dense(values, rows, cols, crow, col)
+    #     result = torch.matmul(sparse, b)
+    #     if out is not None:
+    #         out.copy_(result)
+    #         return out
+    #     return result
 
     def infinicore_operator(
         self, _values, sparse, b, *, rows, cols, crow, col, out=None

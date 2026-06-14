@@ -47,8 +47,8 @@ _TEST_CASES_DATA = _generate_sddmm_cases()
 _TENSOR_DTYPES = [infinicore.float32]
 
 _TOLERANCE_MAP = {
-    # infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
-    infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
+    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
+    # infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
 }
 
 

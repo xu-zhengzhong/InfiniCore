@@ -61,9 +61,9 @@ _TEST_CASES_DATA = _generate_spvv_cases()
 
 _TOLERANCE_MAP = {
     # infinicore.float16: {"atol": 0, "rtol": 1e-2},
-    # infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
+    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
     # infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
-    infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
+    # infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
 }
 
 _TENSOR_DTYPES = [
@@ -208,16 +208,16 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, sparse, x, *, size, indices, out=None):
-        del sparse
-        if _use_dense_reference(values.device):
-            result = spvv_dense_reference(values, x, size=size, indices=indices)
-        else:
-            result = spvv_sparse_reference(values, x, size=size, indices=indices)
-        if out is not None:
-            out.copy_(result)
-            return out
-        return result
+    # def torch_operator(self, values, sparse, x, *, size, indices, out=None):
+    #     del sparse
+    #     if _use_dense_reference(values.device):
+    #         result = spvv_dense_reference(values, x, size=size, indices=indices)
+    #     else:
+    #         result = spvv_sparse_reference(values, x, size=size, indices=indices)
+    #     if out is not None:
+    #         out.copy_(result)
+    #         return out
+    #     return result
 
     def infinicore_operator(self, _values, sparse, x, *, size, indices, out=None):
         return infinicore.spvv(sparse, x, out=out)

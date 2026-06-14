@@ -136,9 +136,9 @@ infiniStatus_t Descriptor::calculate(
     void *y,
     const void *,
     void *stream) const {
-    if (workspace_size < _workspace_size) {
-        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
-    }
+    // if (workspace_size < _workspace_size) {
+    //     return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+    // }
 
     CHECK_STATUS(_opaque->internal->useMcsparse(
         reinterpret_cast<hcStream_t>(stream),

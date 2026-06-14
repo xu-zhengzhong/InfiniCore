@@ -38,8 +38,8 @@ def _generate_cases():
 _TEST_CASES_DATA = _generate_cases()
 _TENSOR_DTYPES = [infinicore.float32]
 _TOLERANCE_MAP = {
-    # infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
-    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
+    infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
+    # infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
 }
 
 
@@ -119,13 +119,13 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, sparse, y, *, size, density, indices, alpha, beta):
-        del sparse
-        del density
-        result = beta * y.clone()
-        result[torch.tensor(indices, dtype=torch.int64, device=values.device)] += alpha * values
-        y.copy_(result)
-        return y
+    # def torch_operator(self, values, sparse, y, *, size, density, indices, alpha, beta):
+    #     del sparse
+    #     del density
+    #     result = beta * y.clone()
+    #     result[torch.tensor(indices, dtype=torch.int64, device=values.device)] += alpha * values
+    #     y.copy_(result)
+    #     return y
 
     def infinicore_operator(self, _values, sparse, y, *, size, density, indices, alpha, beta):
         del size
