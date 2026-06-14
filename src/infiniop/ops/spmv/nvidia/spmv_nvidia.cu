@@ -66,7 +66,11 @@ infiniStatus_t Descriptor::create(
     Descriptor **desc_ptr,
     infiniopTensorDescriptor_t y_desc,
     infiniopSpMatDescriptor_t a_desc,
-    infiniopTensorDescriptor_t x_desc) {
+    infiniopTensorDescriptor_t x_desc,
+    void *y,
+    const void *x) {
+    (void)y;
+    (void)x;
     auto handle = reinterpret_cast<device::nvidia::Handle *>(handle_);
     auto dtype = y_desc->dtype();
     auto index_dtype = a_desc->crowIndicesDesc()->dtype();

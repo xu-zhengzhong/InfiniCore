@@ -42,7 +42,9 @@
             Descriptor **desc_ptr,                               \
             infiniopTensorDescriptor_t y_desc,                   \
             infiniopSpMatDescriptor_t a_desc,                    \
-            infiniopTensorDescriptor_t x_desc);                  \
+            infiniopTensorDescriptor_t x_desc,                   \
+            void *y,                                             \
+            const void *x);                                      \
                                                                  \
         infiniStatus_t calculate(                                \
             void *workspace, size_t workspace_size,              \

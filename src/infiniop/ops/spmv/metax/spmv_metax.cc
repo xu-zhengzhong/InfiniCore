@@ -63,7 +63,9 @@ infiniStatus_t Descriptor::create(
     Descriptor **desc_ptr,
     infiniopTensorDescriptor_t y_desc,
     infiniopSpMatDescriptor_t a_desc,
-    infiniopTensorDescriptor_t x_desc) {
+    infiniopTensorDescriptor_t x_desc,
+    void *y,
+    const void *x) {
     auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
     auto dtype = y_desc->dtype();
     auto index_dtype = a_desc->crowIndicesDesc()->dtype();
@@ -101,7 +103,7 @@ infiniStatus_t Descriptor::create(
     status = hcsparseCreateDnVec(
         &opaque->vec_x,
         static_cast<int64_t>(info.k),
-        const_cast<void *>(a_desc->values()),
+        const_cast<void *>(x),
         opaque->data_type);
     CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
         delete opaque;
@@ -111,7 +113,7 @@ infiniStatus_t Descriptor::create(
     status = hcsparseCreateDnVec(
         &opaque->vec_y,
         static_cast<int64_t>(info.m),
-        const_cast<void *>(a_desc->values()),
+        y,
         opaque->data_type);
     CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
         delete opaque;
@@ -155,17 +157,14 @@ infiniStatus_t Descriptor::create(
 infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
-    void *y,
-    const void *x,
+    void * /*y*/,
+    const void * /*x*/,
     float alpha,
     float beta,
     void *stream) const {
     if (workspace_size < _workspace_size) {
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
-
-    CHECK_MCSPARSE(hcsparseDnVecSetValues(_opaque->vec_x, const_cast<void *>(x)));
-    CHECK_MCSPARSE(hcsparseDnVecSetValues(_opaque->vec_y, y));
 
     CHECK_STATUS(_opaque->internal->useMcsparse(
         reinterpret_cast<hcStream_t>(stream),

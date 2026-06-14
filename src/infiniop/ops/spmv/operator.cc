@@ -20,7 +20,9 @@ __INFINI_C infiniStatus_t infiniopCreateSpMVDescriptor(
     infiniopSpMVDescriptor_t *desc_ptr,
     infiniopTensorDescriptor_t y_desc,
     infiniopSpMatDescriptor_t a_desc,
-    infiniopTensorDescriptor_t x_desc) {
+    infiniopTensorDescriptor_t x_desc,
+    void *y,
+    void const *x) {
 
 #define CREATE(CASE, NAMESPACE)                                             \
     case CASE:                                                              \
@@ -29,7 +31,9 @@ __INFINI_C infiniStatus_t infiniopCreateSpMVDescriptor(
             reinterpret_cast<op::spmv::NAMESPACE::Descriptor **>(desc_ptr), \
             y_desc,                                                         \
             a_desc,                                                         \
-            x_desc)
+            x_desc,                                                         \
+            y,                                                              \
+            x)
 
     switch (handle->device) {
 #ifdef ENABLE_CPU_API

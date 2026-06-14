@@ -106,6 +106,8 @@ def test(
             y.descriptor,
             spmat_desc,
             x.descriptor,
+            y.data(),
+            x.data(),
         )
     )
 

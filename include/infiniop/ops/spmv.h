@@ -11,7 +11,9 @@ __INFINI_C __export infiniStatus_t infiniopCreateSpMVDescriptor(
     infiniopSpMVDescriptor_t *desc_ptr,
     infiniopTensorDescriptor_t y_desc,
     infiniopSpMatDescriptor_t a_desc,
-    infiniopTensorDescriptor_t x_desc);
+    infiniopTensorDescriptor_t x_desc,
+    void *y,
+    void const *x);
 
 __INFINI_C __export infiniStatus_t infiniopGetSpMVWorkspaceSize(infiniopSpMVDescriptor_t desc, size_t *size);
 

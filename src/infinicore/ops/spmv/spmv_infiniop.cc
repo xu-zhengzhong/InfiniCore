@@ -34,7 +34,9 @@ void *plan(Tensor y, const SpMat &a, const Tensor &x, float alpha, float beta) {
         &raw_descriptor,
         y->desc(),
         a->desc(),
-        x->desc()));
+        x->desc(),
+        y->data(),
+        x->data()));
     auto descriptor = std::make_shared<Descriptor>(raw_descriptor, a);
 
     INFINIOP_WORKSPACE_TENSOR(workspace, SpMV, descriptor);
