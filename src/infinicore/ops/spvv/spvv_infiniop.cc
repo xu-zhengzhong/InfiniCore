@@ -24,17 +24,17 @@ struct PlannedMeta {
     std::shared_ptr<Descriptor> descriptor;
     graph::GraphTensor workspace, y, x;
     SpVec a;
-    float alpha, beta;
 };
 
-void *plan(Tensor y, const SpVec &a, const Tensor &x, float alpha, float beta) {
+void *plan(Tensor y, const SpVec &a, const Tensor &x) {
     infiniopSpVVDescriptor_t raw_descriptor = nullptr;
     INFINICORE_CHECK_ERROR(infiniopCreateSpVVDescriptor(
         context::getInfiniopHandle(context::getDevice()),
         &raw_descriptor,
         y->desc(),
         a->desc(),
-        x->desc()));
+        x->desc(),
+        x->data()));
     auto descriptor = std::make_shared<Descriptor>(raw_descriptor, a);
 
     INFINIOP_WORKSPACE_TENSOR(workspace, SpVV, descriptor);
@@ -44,9 +44,7 @@ void *plan(Tensor y, const SpVec &a, const Tensor &x, float alpha, float beta) {
         graph::GraphTensor(workspace),
         graph::GraphTensor(y),
         graph::GraphTensor(x),
-        a,
-        alpha,
-        beta};
+        a};
 
     return planned;
 }
@@ -56,7 +54,7 @@ void run(void *planned_meta) {
 
     INFINICORE_CHECK_ERROR(infiniopSpVV(
         planned->descriptor->desc, planned->workspace->data(), planned->workspace->numel(),
-        planned->y->data(), planned->x->data(), planned->alpha, planned->beta, context::getStream()));
+        planned->y->data(), planned->x->data(), context::getStream()));
 }
 
 void cleanup(void **planned_meta_ptr) {

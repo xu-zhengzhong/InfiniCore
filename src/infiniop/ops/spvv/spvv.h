@@ -40,18 +40,12 @@
             Descriptor **desc_ptr,                               \
             infiniopTensorDescriptor_t y_desc,                   \
             infiniopSpVecDescriptor_t a_desc,                    \
-            infiniopTensorDescriptor_t x_desc);                  \
+            infiniopTensorDescriptor_t x_desc,                   \
+            const void *x);                                      \
         infiniStatus_t calculate(                                \
             void *workspace,                                     \
             size_t workspace_size,                               \
             void *y,                                             \
-            const void *x,                                       \
-            float alpha,                                         \
-            float beta,                                          \
-            void *stream) const;                                 \
-        infiniStatus_t prepare(                                  \
-            void *workspace,                                     \
-            size_t workspace_size,                               \
             const void *x,                                       \
             void *stream) const;                                 \
     };                                                           \

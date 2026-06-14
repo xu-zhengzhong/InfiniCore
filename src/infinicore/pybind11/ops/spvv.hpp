@@ -13,8 +13,6 @@ inline void bind_spvv(py::module &m) {
           &op::spvv,
           py::arg("a"),
           py::arg("x"),
-          py::arg("alpha") = 1.0f,
-          py::arg("beta") = 0.0f,
           R"doc(Sparse COO vector dense vector dot product.)doc");
 
     m.def("spvv_",
@@ -22,8 +20,6 @@ inline void bind_spvv(py::module &m) {
           py::arg("y"),
           py::arg("a"),
           py::arg("x"),
-          py::arg("alpha") = 1.0f,
-          py::arg("beta") = 0.0f,
           R"doc(In-place sparse COO vector dense vector dot product.)doc");
 }
 

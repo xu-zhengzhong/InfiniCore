@@ -10,7 +10,9 @@ infiniStatus_t Descriptor::create(
     Descriptor **desc_ptr,
     infiniopTensorDescriptor_t y_desc,
     infiniopSpVecDescriptor_t a_desc,
-    infiniopTensorDescriptor_t x_desc) {
+    infiniopTensorDescriptor_t x_desc,
+    const void *x) {
+    (void)x;
     auto handle = reinterpret_cast<device::cpu::Handle *>(handle_);
     auto dtype = y_desc->dtype();
 
@@ -36,9 +38,7 @@ void calculate(
     const SpVVInfo &info,
     infiniopSpVecDescriptor_t a_desc,
     void *y,
-    const void *x,
-    float alpha,
-    float beta) {
+    const void *x) {
     auto values = reinterpret_cast<const Tdata *>(a_desc->values());
     auto indices = reinterpret_cast<const Tindex *>(a_desc->indices());
     auto x_data = reinterpret_cast<const Tdata *>(x);
@@ -50,11 +50,7 @@ void calculate(
         acc += utils::cast<float>(values[i]) * utils::cast<float>(x_data[index * info.x_vector.stride]);
     }
 
-    if (beta == 0) {
-        *y_data = utils::cast<Tdata>(alpha * acc);
-    } else {
-        *y_data = utils::cast<Tdata>(alpha * acc + beta * utils::cast<float>(*y_data));
-    }
+    *y_data = utils::cast<Tdata>(acc);
 }
 
 template <typename Tdata>
@@ -63,15 +59,13 @@ infiniStatus_t calculateByIndex(
     const SpVVInfo &info,
     infiniopSpVecDescriptor_t a_desc,
     void *y,
-    const void *x,
-    float alpha,
-    float beta) {
+    const void *x) {
     switch (index_dtype) {
     case INFINI_DTYPE_I32:
-        calculate<Tdata, int32_t>(info, a_desc, y, x, alpha, beta);
+        calculate<Tdata, int32_t>(info, a_desc, y, x);
         return INFINI_STATUS_SUCCESS;
     case INFINI_DTYPE_I64:
-        calculate<Tdata, int64_t>(info, a_desc, y, x, alpha, beta);
+        calculate<Tdata, int64_t>(info, a_desc, y, x);
         return INFINI_STATUS_SUCCESS;
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
@@ -79,23 +73,21 @@ infiniStatus_t calculateByIndex(
 }
 
 infiniStatus_t Descriptor::calculate(
-    void *workspace,
+    void *,
     size_t workspace_size,
     void *y,
     const void *x,
-    float alpha,
-    float beta,
-    void *stream) const {
+    void *) const {
     if (workspace_size < _workspace_size) {
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
     switch (_dtype) {
     case INFINI_DTYPE_F16:
-        return calculateByIndex<fp16_t>(_index_dtype, _info, _a_desc, y, x, alpha, beta);
+        return calculateByIndex<fp16_t>(_index_dtype, _info, _a_desc, y, x);
     case INFINI_DTYPE_BF16:
-        return calculateByIndex<bf16_t>(_index_dtype, _info, _a_desc, y, x, alpha, beta);
+        return calculateByIndex<bf16_t>(_index_dtype, _info, _a_desc, y, x);
     case INFINI_DTYPE_F32:
-        return calculateByIndex<float>(_index_dtype, _info, _a_desc, y, x, alpha, beta);
+        return calculateByIndex<float>(_index_dtype, _info, _a_desc, y, x);
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }

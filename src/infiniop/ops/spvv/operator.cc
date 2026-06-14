@@ -20,7 +20,8 @@ __INFINI_C infiniStatus_t infiniopCreateSpVVDescriptor(
     infiniopSpVVDescriptor_t *desc_ptr,
     infiniopTensorDescriptor_t y_desc,
     infiniopSpVecDescriptor_t a_desc,
-    infiniopTensorDescriptor_t x_desc) {
+    infiniopTensorDescriptor_t x_desc,
+    const void *x) {
 
 #define CREATE(CASE, NAMESPACE)                                             \
     case CASE:                                                              \
@@ -29,7 +30,8 @@ __INFINI_C infiniStatus_t infiniopCreateSpVVDescriptor(
             reinterpret_cast<op::spvv::NAMESPACE::Descriptor **>(desc_ptr), \
             y_desc,                                                         \
             a_desc,                                                         \
-            x_desc)
+            x_desc,                                                         \
+            x)
 
     switch (handle->device) {
 #ifdef ENABLE_CPU_API
@@ -81,29 +83,12 @@ __INFINI_C infiniStatus_t infiniopSpVV(
     size_t workspace_size,
     void *y,
     const void *x,
-    float alpha,
-    float beta,
     void *stream) {
-
-#define PREPARE(CASE, NAMESPACE)                                                  \
-    case CASE:                                                                    \
-        CHECK_STATUS(reinterpret_cast<const op::spvv::NAMESPACE::Descriptor *>(desc) \
-                         ->prepare(workspace, workspace_size, x, stream));        \
-        break
-
-    switch (desc->device_type) {
-#ifdef ENABLE_METAX_API
-        PREPARE(INFINI_DEVICE_METAX, metax);
-#endif
-    default:
-        break;
-    }
-#undef PREPARE
 
 #define CALCULATE(CASE, NAMESPACE)                                             \
     case CASE:                                                                 \
         return reinterpret_cast<const op::spvv::NAMESPACE::Descriptor *>(desc) \
-            ->calculate(workspace, workspace_size, y, x, alpha, beta, stream)
+            ->calculate(workspace, workspace_size, y, x, stream)
 
     switch (desc->device_type) {
 #ifdef ENABLE_CPU_API

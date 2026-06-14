@@ -4,17 +4,12 @@
 
 namespace op::spvv::metax {
 
-constexpr size_t DOT_WORKSPACE_SIZE = sizeof(float);
-
 struct Descriptor::Opaque {
     std::shared_ptr<device::metax::Handle::Internal> internal;
     hcsparseSpVecDescr_t vec_a = nullptr;
     hcsparseDnVecDescr_t vec_x = nullptr;
     hpccDataType data_type = HPCC_R_32F;
     hcsparseIndexType_t index_type = HCSPARSE_INDEX_64I;
-    void *dot = nullptr;
-    void *sparse_workspace = nullptr;
-
     explicit Opaque(std::shared_ptr<device::metax::Handle::Internal> internal)
         : internal(std::move(internal)) {}
 
@@ -61,7 +56,8 @@ infiniStatus_t Descriptor::create(
     Descriptor **desc_ptr,
     infiniopTensorDescriptor_t y_desc,
     infiniopSpVecDescriptor_t a_desc,
-    infiniopTensorDescriptor_t x_desc) {
+    infiniopTensorDescriptor_t x_desc,
+    const void *x) {
     auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
     auto dtype = y_desc->dtype();
     auto index_dtype = a_desc->indicesDesc()->dtype();
@@ -95,14 +91,14 @@ infiniStatus_t Descriptor::create(
     status = hcsparseCreateDnVec(
         &opaque->vec_x,
         static_cast<int64_t>(info.size),
-        const_cast<void *>(a_desc->values()),
+        const_cast<void *>(x),
         opaque->data_type);
     CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
         delete opaque;
         return INFINI_STATUS_INTERNAL_ERROR;
     });
 
-    size_t workspace_size = DOT_WORKSPACE_SIZE;
+    size_t workspace_size = 0;
     float result_dummy = 0.0f;
     auto buffer_status = opaque->internal->useMcsparse(nullptr, [&](hcsparseHandle_t sparse_handle) {
         size_t sparse_workspace_size = 0;
@@ -138,15 +134,11 @@ infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
     void *y,
-    const void *x,
-    float alpha,
-    float beta,
+    const void *,
     void *stream) const {
     if (workspace_size < _workspace_size) {
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
-    (void)workspace;
-    (void)x;
 
     CHECK_STATUS(_opaque->internal->useMcsparse(
         reinterpret_cast<hcStream_t>(stream),
@@ -156,58 +148,12 @@ infiniStatus_t Descriptor::calculate(
                 HCSPARSE_OPERATION_NON_TRANSPOSE,
                 _opaque->vec_a,
                 _opaque->vec_x,
-                _opaque->dot,
+                y,
                 HPCC_R_32F,
-                _opaque->sparse_workspace));
+                workspace));
             return INFINI_STATUS_SUCCESS;
         }));
 
-    CHECK_STATUS(_opaque->internal->useMcblas(
-        reinterpret_cast<hcStream_t>(stream),
-        [&](hcblasHandle_t blas_handle) {
-            CHECK_MCBLAS(hcblasSetPointerMode(
-                blas_handle,
-                HCBLAS_POINTER_MODE_HOST));
-            CHECK_MCBLAS(hcblasScalEx(
-                blas_handle,
-                1,
-                &beta,
-                HPCC_R_32F,
-                y,
-                HPCC_R_32F,
-                1,
-                HPCC_R_32F));
-            CHECK_MCBLAS(hcblasAxpyEx(
-                blas_handle,
-                1,
-                &alpha,
-                HPCC_R_32F,
-                _opaque->dot,
-                HPCC_R_32F,
-                1,
-                y,
-                HPCC_R_32F,
-                1,
-                HPCC_R_32F));
-            return INFINI_STATUS_SUCCESS;
-        }));
-
-    return INFINI_STATUS_SUCCESS;
-}
-
-infiniStatus_t Descriptor::prepare(
-    void *workspace,
-    size_t workspace_size,
-    const void *x,
-    void *stream) const {
-    if (workspace_size < _workspace_size) {
-        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
-    }
-
-    _opaque->dot = workspace;
-    _opaque->sparse_workspace = static_cast<void *>(static_cast<char *>(workspace) + DOT_WORKSPACE_SIZE);
-    CHECK_MCSPARSE(hcsparseDnVecSetValues(_opaque->vec_x, const_cast<void *>(x)));
-    (void)stream;
     return INFINI_STATUS_SUCCESS;
 }
 

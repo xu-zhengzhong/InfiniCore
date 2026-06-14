@@ -20,9 +20,9 @@ from libinfiniop import (
 )
 
 _BASE_TEST_CASES = [
-    # alpha, beta, size, indices
-    (1.0, 0.0, 6, [0, 2, 5]),
-    (0.5, 1.0, 8, [1, 3, 4, 7]),
+    # size, indices
+    (6, [0, 2, 5]),
+    (8, [1, 3, 4, 7]),
 ]
 
 _TENSOR_DTYPES = [
@@ -44,8 +44,6 @@ DEBUG = False
 def test(
     handle,
     device,
-    alpha,
-    beta,
     size,
     indices,
     index_dtype=InfiniDtype.I32,
@@ -53,8 +51,7 @@ def test(
     sync=None,
 ):
     print(
-        f"Testing SpVV on {InfiniDeviceNames[device]} with alpha:{alpha}, beta:{beta},"
-        f" shape:({size},) dot ({size},), dtype:{InfiniDtypeNames[dtype]},"
+        f"Testing SpVV on {InfiniDeviceNames[device]} with shape:({size},) dot ({size},), dtype:{InfiniDtypeNames[dtype]},"
         f" index_dtype:{InfiniDtypeNames[index_dtype]}"
     )
 
@@ -67,7 +64,7 @@ def test(
 
     sparse_dense = torch.zeros(size, dtype=values.torch_tensor().dtype, device=values.torch_tensor().device)
     sparse_dense[indices_tensor.torch_tensor().long()] = values.torch_tensor()
-    ans.set_tensor(alpha * torch.dot(sparse_dense, x.torch_tensor()) + beta * y.torch_tensor())
+    ans.set_tensor(torch.dot(sparse_dense, x.torch_tensor()))
 
     if sync is not None:
         sync()
@@ -93,6 +90,7 @@ def test(
             y.descriptor,
             spvec_desc,
             x.descriptor,
+            x.data(),
         )
     )
 
@@ -114,8 +112,6 @@ def test(
             workspace_size.value,
             y.data(),
             x.data(),
-            alpha,
-            beta,
             None,
         )
     )

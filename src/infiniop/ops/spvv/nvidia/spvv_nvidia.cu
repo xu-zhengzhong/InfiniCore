@@ -7,10 +7,6 @@
 
 namespace op::spvv::nvidia {
 
-__global__ void applyAlphaBeta(float *y, const float *dot, float alpha, float beta) {
-    *y = alpha * (*dot) + beta * (*y);
-}
-
 struct Descriptor::Opaque {
     std::shared_ptr<device::nvidia::Handle::Internal> internal;
     cusparseSpVecDescr_t vec_a = nullptr;
@@ -64,7 +60,9 @@ infiniStatus_t Descriptor::create(
     Descriptor **desc_ptr,
     infiniopTensorDescriptor_t y_desc,
     infiniopSpVecDescriptor_t a_desc,
-    infiniopTensorDescriptor_t x_desc) {
+    infiniopTensorDescriptor_t x_desc,
+    const void *x) {
+    (void)x;
     auto handle = reinterpret_cast<device::nvidia::Handle *>(handle_);
     auto dtype = y_desc->dtype();
     auto index_dtype = a_desc->indicesDesc()->dtype();
@@ -105,7 +103,7 @@ infiniStatus_t Descriptor::create(
         return INFINI_STATUS_INTERNAL_ERROR;
     });
 
-    size_t workspace_size = sizeof(float);
+    size_t workspace_size = 0;
     float result_dummy = 0.0f;
     auto buffer_status = opaque->internal->useCusparse(nullptr, [&](cusparseHandle_t sparse_handle) {
         size_t sparse_workspace_size = 0;
@@ -142,16 +140,11 @@ infiniStatus_t Descriptor::calculate(
     size_t workspace_size,
     void *y,
     const void *x,
-    float alpha,
-    float beta,
     void *stream) const {
     if (workspace_size < _workspace_size) {
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
 
-    auto dot = reinterpret_cast<float *>(workspace);
-    auto sparse_workspace = static_cast<void *>(dot + 1);
-    auto sparse_workspace_size = workspace_size - sizeof(float);
     CHECK_CUSPARSE(cusparseDnVecSetValues(_opaque->vec_x, const_cast<void *>(x)));
 
     CHECK_STATUS(_opaque->internal->useCusparse(
@@ -162,17 +155,11 @@ infiniStatus_t Descriptor::calculate(
                 CUSPARSE_OPERATION_NON_TRANSPOSE,
                 _opaque->vec_a,
                 _opaque->vec_x,
-                dot,
+                y,
                 CUDA_R_32F,
-                sparse_workspace));
+                workspace));
             return INFINI_STATUS_SUCCESS;
         }));
-
-    applyAlphaBeta<<<1, 1, 0, reinterpret_cast<cudaStream_t>(stream)>>>(
-        reinterpret_cast<float *>(y),
-        dot,
-        alpha,
-        beta);
 
     return INFINI_STATUS_SUCCESS;
 }

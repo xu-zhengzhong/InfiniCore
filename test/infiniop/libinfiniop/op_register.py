@@ -670,8 +670,6 @@ def spmm_(lib):
         c_size_t,
         c_void_p,
         c_void_p,
-        c_float,
-        c_float,
         c_void_p,
     ]
 
@@ -705,8 +703,6 @@ def spmv_(lib):
         c_size_t,
         c_void_p,
         c_void_p,
-        c_float,
-        c_float,
         c_void_p,
     ]
 
@@ -725,6 +721,7 @@ def spvv_(lib):
         infiniopTensorDescriptor_t,
         infiniopSpVecDescriptor_t,
         infiniopTensorDescriptor_t,
+        c_void_p,
     ]
 
     lib.infiniopGetSpVVWorkspaceSize.restype = c_int32
@@ -740,8 +737,6 @@ def spvv_(lib):
         c_size_t,
         c_void_p,
         c_void_p,
-        c_float,
-        c_float,
         c_void_p,
     ]
 

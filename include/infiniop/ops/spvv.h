@@ -10,7 +10,8 @@ __INFINI_C __export infiniStatus_t infiniopCreateSpVVDescriptor(infiniopHandle_t
                                                                 infiniopSpVVDescriptor_t *desc_ptr,
                                                                 infiniopTensorDescriptor_t y_desc,
                                                                 infiniopSpVecDescriptor_t a_desc,
-                                                                infiniopTensorDescriptor_t x_desc);
+                                                                infiniopTensorDescriptor_t x_desc,
+                                                                const void *x);
 
 __INFINI_C __export infiniStatus_t infiniopGetSpVVWorkspaceSize(infiniopSpVVDescriptor_t desc, size_t *size);
 
@@ -19,8 +20,6 @@ __INFINI_C __export infiniStatus_t infiniopSpVV(infiniopSpVVDescriptor_t desc,
                                                 size_t workspace_size,
                                                 void *y,
                                                 const void *x,
-                                                float alpha,
-                                                float beta,
                                                 void *stream);
 
 __INFINI_C __export infiniStatus_t infiniopDestroySpVVDescriptor(infiniopSpVVDescriptor_t desc);
