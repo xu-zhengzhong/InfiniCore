@@ -12,7 +12,7 @@ from framework import (
     TestCase,
 )
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import load_csr
+from sparse_mtx import ValuesFromListSpec, load_csr
 
 
 class SparseTestCase(TestCase):
@@ -84,8 +84,8 @@ def _generate_spmm_cases():
         (5120, 5120, 5120, 0.01),  # 5K scale
     ]
     for rows, cols, n, density in configs:
-        crow, col = load_csr("spmm", rows, cols, density=density)
-        cases.append((rows, cols, n, density, crow, col))
+        crow, col, values = load_csr("spmm", rows, cols, density=density)
+        cases.append((rows, cols, n, density, crow, col, values))
     return cases
 
 
@@ -126,12 +126,10 @@ def csr_to_dense(values, rows, cols, crow, col):
 
 def parse_test_cases():
     test_cases = []
-    for rows, cols, n, density, crow, col in _TEST_CASES_DATA:
+    for rows, cols, n, density, crow, col, values in _TEST_CASES_DATA:
         nnz = len(col)
         for dtype in _TENSOR_DTYPES:
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
+            values_spec = ValuesFromListSpec(values, dtype=dtype, name="values")
             # test_cases.append(
             #     SparseTestCase(
             #         inputs=[
@@ -155,9 +153,7 @@ def parse_test_cases():
             #         description="SpMM - OUT_OF_PLACE",
             #     )
             # )
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
+            values_spec = ValuesFromListSpec(values, dtype=dtype, name="values")
             test_cases.append(
                 SparseTestCase(
                     inputs=[

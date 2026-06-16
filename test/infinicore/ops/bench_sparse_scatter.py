@@ -7,7 +7,7 @@ import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import load_spvec
+from sparse_mtx import ValuesFromListSpec, load_spvec
 
 _TEST_CASES_DATA = [
     # size, density
@@ -88,13 +88,11 @@ class ScatterTestCase(TestCase):
 def parse_test_cases():
     test_cases = []
     for size, density in _TEST_CASES_DATA:
-        indices = load_spvec("sparse_scatter", size, density=density)
+        indices, values = load_spvec("sparse_scatter", size, density=density)
         nnz = len(indices)
         for dtype in _TENSOR_DTYPES:
             for index_dtype in _INDEX_DTYPES:
-                values_spec = CachedTensorSpec.from_tensor(
-                    (nnz,), dtype=dtype, name="values"
-                )
+                values_spec = ValuesFromListSpec(values, dtype=dtype, name="values")
                 test_cases.append(
                     ScatterTestCase(
                         inputs=[

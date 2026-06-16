@@ -1,6 +1,11 @@
 import os
 from glob import glob
 
+import torch
+from framework import TensorSpec
+from framework.datatypes import to_torch_dtype
+from framework.devices import torch_device_map
+
 
 def _output_dir():
     return os.environ.get("INFINICORE_SPARSE_MTX_DIR")
@@ -46,8 +51,9 @@ def _read_coordinate_mtx(path):
         for line in f:
             if not line.strip() or line.startswith("%"):
                 continue
-            row, col, *_ = line.split()
-            entries.append((int(row) - 1, int(col) - 1))
+            row, col, *rest = line.split()
+            value = float(rest[0]) if rest else 1.0
+            entries.append((int(row) - 1, int(col) - 1, value))
 
     if len(entries) != nnz:
         raise ValueError(f"Expected {nnz} entries in {path}, got {len(entries)}")
@@ -71,14 +77,16 @@ def load_csr(name, rows, cols, *, density):
     entries.sort()
     crow = [0] * (rows + 1)
     col = []
-    for row, col_idx in entries:
+    values = []
+    for row, col_idx, value in entries:
         if row < 0 or row >= rows or col_idx < 0 or col_idx >= cols:
             raise ValueError(f"Out-of-range entry in {path}: ({row}, {col_idx})")
         crow[row + 1] += 1
         col.append(col_idx)
+        values.append(value)
     for row in range(rows):
         crow[row + 1] += crow[row]
-    return crow, col
+    return crow, col, values
 
 
 def load_spvec(name, size, *, density):
@@ -93,11 +101,27 @@ def load_spvec(name, size, *, density):
         raise ValueError(f"Shape mismatch in {path}: expected ({size}, 1), got ({rows}, {cols})")
 
     indices = []
-    for row, col in entries:
+    values = []
+    for row, col, value in entries:
         if col != 0 or row < 0 or row >= size:
             raise ValueError(f"Out-of-range vector entry in {path}: ({row}, {col})")
         indices.append(row)
-    return sorted(indices)
+        values.append(value)
+    pairs = sorted(zip(indices, values), key=lambda item: item[0])
+    return [index for index, _ in pairs], [value for _, value in pairs]
+
+
+class ValuesFromListSpec(TensorSpec):
+    def __init__(self, values, *, dtype, name="values"):
+        super().__init__(shape=(len(values),), dtype=dtype, name=name)
+        self.values = list(values)
+
+    def create_torch_tensor(self, device):
+        return torch.tensor(
+            self.values,
+            dtype=to_torch_dtype(self.dtype),
+            device=torch_device_map[device],
+        )
 
 
 def _write_header(f, rows, cols, nnz, *, name, density):
@@ -108,7 +132,15 @@ def _write_header(f, rows, cols, nnz, *, name, density):
     f.write(f"{rows} {cols} {nnz}\n")
 
 
-def maybe_write_csr(name, rows, cols, crow, col, *, density=None):
+def _value_at(values, index):
+    if values is None:
+        return 1.0
+    if hasattr(values, "detach"):
+        return float(values.detach().cpu().reshape(-1)[index].item())
+    return float(values[index])
+
+
+def maybe_write_csr(name, rows, cols, crow, col, *, values=None, density=None):
     out_dir = _output_dir()
     if not out_dir:
         return
@@ -121,10 +153,10 @@ def maybe_write_csr(name, rows, cols, crow, col, *, density=None):
         _write_header(f, rows, cols, len(col), name=name, density=density)
         for row in range(rows):
             for ptr in range(crow[row], crow[row + 1]):
-                f.write(f"{row + 1} {col[ptr] + 1} 1\n")
+                f.write(f"{row + 1} {col[ptr] + 1} {_value_at(values, ptr):.9g}\n")
 
 
-def maybe_write_spvec(name, size, indices, *, density=None):
+def maybe_write_spvec(name, size, indices, *, values=None, density=None):
     out_dir = _output_dir()
     if not out_dir:
         return
@@ -135,5 +167,5 @@ def maybe_write_spvec(name, size, indices, *, density=None):
     )
     with open(path, "w", encoding="utf-8") as f:
         _write_header(f, size, 1, len(indices), name=name, density=density)
-        for index in indices:
-            f.write(f"{index + 1} 1 1\n")
+        for ptr, index in enumerate(indices):
+            f.write(f"{index + 1} 1 {_value_at(values, ptr):.9g}\n")

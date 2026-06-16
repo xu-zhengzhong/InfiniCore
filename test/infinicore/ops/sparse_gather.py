@@ -249,11 +249,22 @@ class CachedTensorSpec(TensorSpec):
 
 
 class SpVecSpec(TensorSpec):
-    def __init__(self, *, values_spec, size, indices, name="pattern"):
+    def __init__(
+        self,
+        *,
+        values_spec,
+        size,
+        indices,
+        mtx_name=None,
+        density=None,
+        name="pattern",
+    ):
         super().__init__(shape=(size,), dtype=values_spec.dtype, name=name)
         self.values_spec = values_spec
         self.size = size
         self.indices = indices
+        self.mtx_name = mtx_name
+        self.density = density
         self._cached_values = {}
 
     def create_torch_tensor(self, device):
@@ -262,6 +273,14 @@ class SpVecSpec(TensorSpec):
                 device
             ).clone()
         values = self._cached_values[device]
+        if self.mtx_name is not None:
+            maybe_write_spvec(
+                self.mtx_name,
+                self.size,
+                self.indices,
+                values=values,
+                density=self.density,
+            )
         infini_values = infinicore_tensor_from_torch(values)
         indices_tensor = infinicore.from_list(
             self.indices, dtype=infinicore.int32, device=infini_values.device
@@ -285,7 +304,6 @@ def parse_test_cases():
     for size, density in _TEST_CASES_DATA:
         # 修改: 根据 size 和 density 动态生成索引
         indices = _generate_indices(size, density)
-        maybe_write_spvec("sparse_gather", size, indices, density=density)
         nnz = len(indices)
         
         for dtype in _TENSOR_DTYPES:
@@ -311,7 +329,13 @@ def parse_test_cases():
                 GatherTestCase(
                     inputs=[
                         values_spec,
-                        SpVecSpec(values_spec=values_spec, size=size, indices=indices),
+                        SpVecSpec(
+                            values_spec=values_spec,
+                            size=size,
+                            indices=indices,
+                            mtx_name="sparse_gather",
+                            density=density,
+                        ),
                         TensorSpec.from_tensor((size,), dtype=dtype, name="x"),
                     ],
                     kwargs={

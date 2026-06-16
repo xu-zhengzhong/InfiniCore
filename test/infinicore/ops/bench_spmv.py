@@ -7,7 +7,7 @@ import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import load_csr
+from sparse_mtx import ValuesFromListSpec, load_csr
 
 
 class SparseTestCase(TestCase):
@@ -79,8 +79,8 @@ def _generate_spmv_cases():
         (8192, 8192, 0.01),  # 5K scale
     ]
     for rows, cols, density in configs:
-        crow, col = load_csr("spmv", rows, cols, density=density)
-        cases.append((rows, cols, density, crow, col))
+        crow, col, values = load_csr("spmv", rows, cols, density=density)
+        cases.append((rows, cols, density, crow, col, values))
     return cases
 
 
@@ -136,12 +136,10 @@ def spmv_dense_reference(values, x, *, rows, cols, crow, col):
 
 def parse_test_cases():
     test_cases = []
-    for rows, cols, density, crow, col in _TEST_CASES_DATA:
+    for rows, cols, density, crow, col, values in _TEST_CASES_DATA:
         nnz = len(col)
         for dtype in _TENSOR_DTYPES:
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
+            values_spec = ValuesFromListSpec(values, dtype=dtype, name="values")
             # test_cases.append(
             #     SparseTestCase(
             #         inputs=[
@@ -165,9 +163,7 @@ def parse_test_cases():
             #         description="SpMV - OUT_OF_PLACE",
             #     )
             # )
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
+            values_spec = ValuesFromListSpec(values, dtype=dtype, name="values")
             test_cases.append(
                 SparseTestCase(
                     inputs=[

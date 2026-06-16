@@ -39,7 +39,6 @@ def _generate_sddmm_cases():
             crow[row + 1] += 1
         for row in range(rows):
             crow[row + 1] += crow[row]
-        maybe_write_csr("sddmm", rows, cols, crow, col, density=density)
         cases.append((rows, cols, k, density, crow, col, alpha, beta))
     return cases
 
@@ -117,13 +116,26 @@ class CachedTensorSpec(TensorSpec):
 
 
 class CsrSpMatSpec(TensorSpec):
-    def __init__(self, *, values_spec, rows, cols, crow, col, name="sparse"):
+    def __init__(
+        self,
+        *,
+        values_spec,
+        rows,
+        cols,
+        crow,
+        col,
+        mtx_name=None,
+        density=None,
+        name="sparse",
+    ):
         super().__init__(shape=(rows, cols), dtype=values_spec.dtype, name=name)
         self.values_spec = values_spec
         self.rows = rows
         self.cols = cols
         self.crow = crow
         self.col = col
+        self.mtx_name = mtx_name
+        self.density = density
         self._cached_values = {}
 
     def create_torch_tensor(self, device):
@@ -132,6 +144,16 @@ class CsrSpMatSpec(TensorSpec):
                 device
             ).clone()
         values = self._cached_values[device]
+        if self.mtx_name is not None:
+            maybe_write_csr(
+                self.mtx_name,
+                self.rows,
+                self.cols,
+                self.crow,
+                self.col,
+                values=values,
+                density=self.density,
+            )
         infini_values = infinicore_tensor_from_torch(values)
         infini_device = infini_values.device
         crow_tensor = infinicore.from_list(
@@ -166,6 +188,8 @@ def parse_test_cases():
                             cols=cols,
                             crow=crow,
                             col=col,
+                            mtx_name="sddmm",
+                            density=density,
                         ),
                         TensorSpec.from_tensor((rows, k), dtype=dtype, name="a"),
                         TensorSpec.from_tensor((k, cols), dtype=dtype, name="b"),

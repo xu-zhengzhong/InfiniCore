@@ -13,7 +13,7 @@ from framework import (
     TestCase,
 )
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import load_csr
+from sparse_mtx import ValuesFromListSpec, load_csr
 
 
 def _generate_sddmm_cases():
@@ -26,8 +26,8 @@ def _generate_sddmm_cases():
         (5120, 5120, 5120, 0.01, 1.0, 0.0),
     ]
     for rows, cols, k, density, alpha, beta in configs:
-        crow, col = load_csr("sddmm", rows, cols, density=density)
-        cases.append((rows, cols, k, density, crow, col, alpha, beta))
+        crow, col, values = load_csr("sddmm", rows, cols, density=density)
+        cases.append((rows, cols, k, density, crow, col, values, alpha, beta))
     return cases
 
 
@@ -137,12 +137,10 @@ class CsrSpMatSpec(TensorSpec):
 
 def parse_test_cases():
     test_cases = []
-    for rows, cols, k, density, crow, col, alpha, beta in _TEST_CASES_DATA:
+    for rows, cols, k, density, crow, col, values, alpha, beta in _TEST_CASES_DATA:
         nnz = len(col)
         for dtype in _TENSOR_DTYPES:
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
+            values_spec = ValuesFromListSpec(values, dtype=dtype, name="values")
             test_cases.append(
                 SparseTestCase(
                     inputs=[

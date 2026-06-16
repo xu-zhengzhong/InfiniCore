@@ -39,13 +39,26 @@ class CachedTensorSpec(TensorSpec):
 
 
 class CsrSpMatSpec(TensorSpec):
-    def __init__(self, *, values_spec, rows, cols, crow, col, name="sparse"):
+    def __init__(
+        self,
+        *,
+        values_spec,
+        rows,
+        cols,
+        crow,
+        col,
+        mtx_name=None,
+        density=None,
+        name="sparse",
+    ):
         super().__init__(shape=(rows, cols), dtype=values_spec.dtype, name=name)
         self.values_spec = values_spec
         self.rows = rows
         self.cols = cols
         self.crow = crow
         self.col = col
+        self.mtx_name = mtx_name
+        self.density = density
         self._cached_values = {}
 
     def create_torch_tensor(self, device):
@@ -54,6 +67,16 @@ class CsrSpMatSpec(TensorSpec):
                 device
             ).clone()
         values = self._cached_values[device]
+        if self.mtx_name is not None:
+            maybe_write_csr(
+                self.mtx_name,
+                self.rows,
+                self.cols,
+                self.crow,
+                self.col,
+                values=values,
+                density=self.density,
+            )
         infini_values = infinicore_tensor_from_torch(values)
         infini_device = infini_values.device
         crow_tensor = infinicore.from_list(
@@ -88,7 +111,6 @@ def _generate_spmv_cases():
             if nnz_row > 0:
                 col.extend(sorted(random.sample(range(cols), nnz_row)))
             crow.append(len(col))
-        maybe_write_csr("spmv", rows, cols, crow, col, density=density)
         cases.append((rows, cols, density, crow, col))
     return cases
 
@@ -187,6 +209,8 @@ def parse_test_cases():
                             cols=cols,
                             crow=crow,
                             col=col,
+                            mtx_name="spmv",
+                            density=density,
                         ),
                         TensorSpec.from_tensor((cols,), dtype=dtype, name="x"),
                     ],

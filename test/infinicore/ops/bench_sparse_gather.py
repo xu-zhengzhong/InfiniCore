@@ -166,7 +166,7 @@ import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import load_spvec
+from sparse_mtx import ValuesFromListSpec, load_spvec
 
 # 修改: 测试用例改为 (size, density) 格式
 # density 表示稀疏度，例如 0.01 表示 1% 的非零元素
@@ -260,13 +260,11 @@ class GatherTestCase(TestCase):
 def parse_test_cases():
     test_cases = []
     for size, density in _TEST_CASES_DATA:
-        indices = load_spvec("sparse_gather", size, density=density)
+        indices, values = load_spvec("sparse_gather", size, density=density)
         nnz = len(indices)
         
         for dtype in _TENSOR_DTYPES:
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
+            values_spec = ValuesFromListSpec(values, dtype=dtype, name="values")
             # test_cases.append(
             #     TestCase(
             #         inputs=[
@@ -279,9 +277,7 @@ def parse_test_cases():
             #         description=f"SparseGather - OUT_OF_PLACE (size={size})",
             #     )
             # )
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
+            values_spec = ValuesFromListSpec(values, dtype=dtype, name="values")
             test_cases.append(
                 GatherTestCase(
                     inputs=[

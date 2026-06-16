@@ -65,12 +65,24 @@ class CachedTensorSpec(TensorSpec):
 
 
 class SpVecSpec(TensorSpec):
-    def __init__(self, *, values_spec, size, indices, index_dtype, name="input"):
+    def __init__(
+        self,
+        *,
+        values_spec,
+        size,
+        indices,
+        index_dtype,
+        mtx_name=None,
+        density=None,
+        name="input",
+    ):
         super().__init__(shape=(size,), dtype=values_spec.dtype, name=name)
         self.values_spec = values_spec
         self.size = size
         self.indices = indices
         self.index_dtype = index_dtype
+        self.mtx_name = mtx_name
+        self.density = density
         self._cached_values = {}
 
     def create_torch_tensor(self, device):
@@ -79,6 +91,14 @@ class SpVecSpec(TensorSpec):
                 device
             ).clone()
         values = self._cached_values[device]
+        if self.mtx_name is not None:
+            maybe_write_spvec(
+                self.mtx_name,
+                self.size,
+                self.indices,
+                values=values,
+                density=self.density,
+            )
         infini_values = infinicore_tensor_from_torch(values)
         indices_tensor = infinicore.from_list(
             self.indices, dtype=self.index_dtype, device=infini_values.device
@@ -101,7 +121,6 @@ def parse_test_cases():
     test_cases = []
     for size, density in _TEST_CASES_DATA:
         indices = generate_indices(size, density)
-        maybe_write_spvec("sparse_scatter", size, indices, density=density)
         nnz = len(indices)
         for dtype in _TENSOR_DTYPES:
             for index_dtype in _INDEX_DTYPES:
@@ -117,6 +136,8 @@ def parse_test_cases():
                                 size=size,
                                 indices=indices,
                                 index_dtype=index_dtype,
+                                mtx_name="sparse_scatter",
+                                density=density,
                             ),
                         ],
                         kwargs={

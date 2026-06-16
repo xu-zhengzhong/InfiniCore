@@ -7,7 +7,7 @@ import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import load_spvec
+from sparse_mtx import ValuesFromListSpec, load_spvec
 
 
 class SparseTestCase(TestCase):
@@ -28,8 +28,8 @@ def _generate_cases():
     ]
     cases = []
     for size, density, alpha, beta in configs:
-        indices = load_spvec("axpby", size, density=density)
-        cases.append((size, density, indices, alpha, beta))
+        indices, values = load_spvec("axpby", size, density=density)
+        cases.append((size, density, indices, values, alpha, beta))
     return cases
 
 
@@ -84,10 +84,10 @@ class SpVecSpec(TensorSpec):
 
 def parse_test_cases():
     test_cases = []
-    for size, density, indices, alpha, beta in _TEST_CASES_DATA:
+    for size, density, indices, values, alpha, beta in _TEST_CASES_DATA:
         nnz = len(indices)
         for dtype in _TENSOR_DTYPES:
-            values_spec = CachedTensorSpec.from_tensor((nnz,), dtype=dtype, name="values")
+            values_spec = ValuesFromListSpec(values, dtype=dtype, name="values")
             test_cases.append(
                 SparseTestCase(
                     inputs=[

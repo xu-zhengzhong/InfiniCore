@@ -32,7 +32,6 @@ def _generate_cases():
     for size, density, alpha, beta in configs:
         nnz = max(1, int(size * density))
         indices = sorted(random.sample(range(size), nnz))
-        maybe_write_spvec("axpby", size, indices, density=density)
         cases.append((size, density, indices, alpha, beta))
     return cases
 
@@ -65,17 +64,36 @@ class CachedTensorSpec(TensorSpec):
 
 
 class SpVecSpec(TensorSpec):
-    def __init__(self, *, values_spec, size, indices, name="sparse"):
+    def __init__(
+        self,
+        *,
+        values_spec,
+        size,
+        indices,
+        mtx_name=None,
+        density=None,
+        name="sparse",
+    ):
         super().__init__(shape=(size,), dtype=values_spec.dtype, name=name)
         self.values_spec = values_spec
         self.size = size
         self.indices = indices
+        self.mtx_name = mtx_name
+        self.density = density
         self._cached_values = {}
 
     def create_torch_tensor(self, device):
         if device not in self._cached_values:
             self._cached_values[device] = self.values_spec.create_torch_tensor(device)
         values = self._cached_values[device]
+        if self.mtx_name is not None:
+            maybe_write_spvec(
+                self.mtx_name,
+                self.size,
+                self.indices,
+                values=values,
+                density=self.density,
+            )
         infini_values = infinicore_tensor_from_torch(values)
         indices_tensor = infinicore.from_list(
             self.indices, dtype=infinicore.int32, device=infini_values.device
@@ -96,7 +114,13 @@ def parse_test_cases():
                 SparseTestCase(
                     inputs=[
                         values_spec,
-                        SpVecSpec(values_spec=values_spec, size=size, indices=indices),
+                        SpVecSpec(
+                            values_spec=values_spec,
+                            size=size,
+                            indices=indices,
+                            mtx_name="axpby",
+                            density=density,
+                        ),
                         TensorSpec.from_tensor((size,), dtype=dtype, name="y"),
                     ],
                     kwargs={
