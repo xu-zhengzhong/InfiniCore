@@ -81,6 +81,8 @@ def test(
             out.descriptor,
             spvec_desc,
             x.descriptor,
+            out.data(),
+            x.data(),
         )
     )
 

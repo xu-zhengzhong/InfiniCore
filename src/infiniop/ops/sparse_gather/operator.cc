@@ -20,7 +20,9 @@ __INFINI_C infiniStatus_t infiniopCreateSparseGatherDescriptor(
     infiniopSparseGatherDescriptor_t *desc_ptr,
     infiniopTensorDescriptor_t output_desc,
     infiniopSpVecDescriptor_t pattern_desc,
-    infiniopTensorDescriptor_t input_desc) {
+    infiniopTensorDescriptor_t input_desc,
+    void *output,
+    const void *input) {
 #define CREATE(CASE, NAMESPACE)                                                      \
     case CASE:                                                                       \
         return op::sparse_gather::NAMESPACE::Descriptor::create(                     \
@@ -28,7 +30,9 @@ __INFINI_C infiniStatus_t infiniopCreateSparseGatherDescriptor(
             reinterpret_cast<op::sparse_gather::NAMESPACE::Descriptor **>(desc_ptr), \
             output_desc,                                                             \
             pattern_desc,                                                            \
-            input_desc)
+            input_desc,                                                              \
+            output,                                                                  \
+            input)
 
     switch (handle->device) {
 #ifdef ENABLE_CPU_API

@@ -11,7 +11,9 @@ __INFINI_C __export infiniStatus_t infiniopCreateSparseGatherDescriptor(
     infiniopSparseGatherDescriptor_t *desc_ptr,
     infiniopTensorDescriptor_t output_desc,
     infiniopSpVecDescriptor_t pattern_desc,
-    infiniopTensorDescriptor_t input_desc);
+    infiniopTensorDescriptor_t input_desc,
+    void *output,
+    const void *input);
 
 __INFINI_C __export infiniStatus_t infiniopGetSparseGatherWorkspaceSize(infiniopSparseGatherDescriptor_t desc, size_t *size);
 

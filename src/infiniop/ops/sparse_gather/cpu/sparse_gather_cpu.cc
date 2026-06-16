@@ -10,7 +10,11 @@ infiniStatus_t Descriptor::create(
     Descriptor **desc_ptr,
     infiniopTensorDescriptor_t output_desc,
     infiniopSpVecDescriptor_t pattern_desc,
-    infiniopTensorDescriptor_t input_desc) {
+    infiniopTensorDescriptor_t input_desc,
+    void *output,
+    const void *input) {
+    (void)output;
+    (void)input;
     auto handle = reinterpret_cast<device::cpu::Handle *>(handle_);
     auto dtype = output_desc->dtype();
     CHECK_DTYPE(dtype, INFINI_DTYPE_F16, INFINI_DTYPE_BF16, INFINI_DTYPE_F32, INFINI_DTYPE_F64);

@@ -33,7 +33,9 @@ void *plan(Tensor output, const SpVec &pattern, const Tensor &input) {
         &raw_descriptor,
         output->desc(),
         pattern->desc(),
-        input->desc()));
+        input->desc(),
+        output->data(),
+        input->data()));
     auto descriptor = std::make_shared<Descriptor>(raw_descriptor, pattern);
 
     INFINIOP_WORKSPACE_TENSOR(workspace, SparseGather, descriptor);

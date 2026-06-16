@@ -6,7 +6,49 @@
 
 namespace op::sparse_gather::metax {
 
-struct Descriptor::Opaque {};
+struct Descriptor::Opaque {
+    std::shared_ptr<device::metax::Handle::Internal> internal;
+    hcsparseSpVecDescr_t vec_x = nullptr;
+    hcsparseDnVecDescr_t vec_y = nullptr;
+    hpccDataType data_type = HPCC_R_32F;
+    hcsparseIndexType_t index_type = HCSPARSE_INDEX_64I;
+
+    explicit Opaque(std::shared_ptr<device::metax::Handle::Internal> internal)
+        : internal(std::move(internal)) {}
+
+    ~Opaque() {
+        if (vec_y != nullptr) {
+            hcsparseDestroyDnVec(vec_y);
+        }
+        if (vec_x != nullptr) {
+            hcsparseDestroySpVec(vec_x);
+        }
+    }
+};
+
+static hpccDataType dataTypeOf(infiniDtype_t dtype) {
+    switch (dtype) {
+    case INFINI_DTYPE_F16:
+        return HPCC_R_16F;
+    case INFINI_DTYPE_F32:
+        return HPCC_R_32F;
+    case INFINI_DTYPE_F64:
+        return HPCC_R_64F;
+    default:
+        return HPCC_R_32F;
+    }
+}
+
+static hcsparseIndexType_t indexTypeOf(infiniDtype_t dtype) {
+    switch (dtype) {
+    case INFINI_DTYPE_I32:
+        return HCSPARSE_INDEX_32I;
+    case INFINI_DTYPE_I64:
+        return HCSPARSE_INDEX_64I;
+    default:
+        return HCSPARSE_INDEX_64I;
+    }
+}
 
 Descriptor::~Descriptor() {
     delete _opaque;
@@ -17,7 +59,9 @@ infiniStatus_t Descriptor::create(
     Descriptor **desc_ptr,
     infiniopTensorDescriptor_t output_desc,
     infiniopSpVecDescriptor_t pattern_desc,
-    infiniopTensorDescriptor_t input_desc) {
+    infiniopTensorDescriptor_t input_desc,
+    void *output,
+    const void *input) {
     auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
     auto dtype = output_desc->dtype();
     CHECK_DTYPE(dtype, INFINI_DTYPE_F16, INFINI_DTYPE_F32, INFINI_DTYPE_F64);
@@ -25,13 +69,44 @@ infiniStatus_t Descriptor::create(
     auto result = SparseGatherInfo::create(output_desc, pattern_desc, input_desc);
     CHECK_RESULT(result);
 
+    auto opaque = new Opaque(handle->internal());
+    opaque->data_type = dataTypeOf(dtype);
+    opaque->index_type = indexTypeOf(pattern_desc->indicesDesc()->dtype());
+    auto info = result.take();
+
+    if (info.input_vector.stride == 1 && info.output_stride == 1) {
+        auto status = hcsparseCreateSpVec(
+            &opaque->vec_x,
+            static_cast<int64_t>(info.input_vector.size),
+            static_cast<int64_t>(info.nnz),
+            const_cast<void *>(pattern_desc->indices()),
+            output,
+            opaque->index_type,
+            HCSPARSE_INDEX_BASE_ZERO,
+            opaque->data_type);
+        CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
+            delete opaque;
+            return INFINI_STATUS_INTERNAL_ERROR;
+        });
+
+        status = hcsparseCreateDnVec(
+            &opaque->vec_y,
+            static_cast<int64_t>(info.input_vector.size),
+            const_cast<void *>(input),
+            opaque->data_type);
+        CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
+            delete opaque;
+            return INFINI_STATUS_INTERNAL_ERROR;
+        });
+    }
+
     *desc_ptr = new Descriptor(
         dtype,
         pattern_desc->indicesDesc()->dtype(),
-        result.take(),
+        std::move(info),
         pattern_desc,
         0,
-        new Opaque(),
+        opaque,
         handle->device,
         handle->device_id);
     return INFINI_STATUS_SUCCESS;
@@ -101,6 +176,26 @@ static infiniStatus_t launchByIndex(
     }
 }
 
+static infiniStatus_t calculateByKernel(
+    infiniDtype_t dtype,
+    infiniDtype_t index_dtype,
+    const SparseGatherInfo &info,
+    infiniopSpVecDescriptor_t pattern_desc,
+    void *output,
+    const void *input,
+    void *stream) {
+    switch (dtype) {
+    case INFINI_DTYPE_F16:
+        return launchByIndex<half>(index_dtype, info, pattern_desc, output, input, stream);
+    case INFINI_DTYPE_F32:
+        return launchByIndex<float>(index_dtype, info, pattern_desc, output, input, stream);
+    case INFINI_DTYPE_F64:
+        return launchByIndex<double>(index_dtype, info, pattern_desc, output, input, stream);
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
 infiniStatus_t Descriptor::calculate(
     void *workspace,
     size_t workspace_size,
@@ -110,16 +205,20 @@ infiniStatus_t Descriptor::calculate(
     (void)workspace;
     (void)workspace_size;
 
-    switch (_dtype) {
-    case INFINI_DTYPE_F16:
-        return launchByIndex<half>(_index_dtype, _info, _pattern_desc, output, input, stream);
-    case INFINI_DTYPE_F32:
-        return launchByIndex<float>(_index_dtype, _info, _pattern_desc, output, input, stream);
-    case INFINI_DTYPE_F64:
-        return launchByIndex<double>(_index_dtype, _info, _pattern_desc, output, input, stream);
-    default:
-        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    if (_info.input_vector.stride != 1 || _info.output_stride != 1) {
+        return calculateByKernel(_dtype, _index_dtype, _info, _pattern_desc, output, input, stream);
     }
+
+    CHECK_STATUS(_opaque->internal->useMcsparse(
+        reinterpret_cast<hcStream_t>(stream),
+        [&](hcsparseHandle_t sparse_handle) {
+            CHECK_MCSPARSE(hcsparseGather(
+                sparse_handle,
+                _opaque->vec_y,
+                _opaque->vec_x));
+            return INFINI_STATUS_SUCCESS;
+        }));
+    return INFINI_STATUS_SUCCESS;
 }
 
 } // namespace op::sparse_gather::metax

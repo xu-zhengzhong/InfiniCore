@@ -40,7 +40,9 @@
             Descriptor **desc_ptr,                               \
             infiniopTensorDescriptor_t output_desc,              \
             infiniopSpVecDescriptor_t pattern_desc,              \
-            infiniopTensorDescriptor_t input_desc);              \
+            infiniopTensorDescriptor_t input_desc,               \
+            void *output,                                        \
+            const void *input);                                  \
         infiniStatus_t calculate(                                \
             void *workspace,                                     \
             size_t workspace_size,                               \

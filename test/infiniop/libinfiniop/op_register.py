@@ -795,6 +795,8 @@ def sparse_gather_(lib):
         infiniopTensorDescriptor_t,
         infiniopSpVecDescriptor_t,
         infiniopTensorDescriptor_t,
+        c_void_p,
+        c_void_p,
     ]
 
     lib.infiniopGetSparseGatherWorkspaceSize.restype = c_int32
