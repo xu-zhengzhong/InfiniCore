@@ -1,5 +1,4 @@
 import os
-import random
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -14,12 +13,11 @@ from framework import (
     TestCase,
 )
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import maybe_write_csr
+from sparse_mtx import maybe_write_csr, random_csr_indices
 
 
 def _generate_sddmm_cases():
     cases = []
-    random.seed(42)
     # (rows, cols, k, density, alpha, beta)
     configs = [
         # (128, 128, 128, 0.01, 1.0, 0.0),
@@ -28,17 +26,7 @@ def _generate_sddmm_cases():
         (5120, 5120, 5120, 0.01, 1.0, 0.0),
     ]
     for rows, cols, k, density, alpha, beta in configs:
-        total = rows * cols
-        nnz = min(total, max(1, int(round(total * density))))
-        positions = sorted(random.sample(range(total), nnz))
-        crow = [0] * (rows + 1)
-        col = []
-        for pos in positions:
-            row = pos // cols
-            col.append(pos % cols)
-            crow[row + 1] += 1
-        for row in range(rows):
-            crow[row + 1] += crow[row]
+        crow, col = random_csr_indices(rows, cols, density, seed=42)
         cases.append((rows, cols, k, density, crow, col, alpha, beta))
     return cases
 

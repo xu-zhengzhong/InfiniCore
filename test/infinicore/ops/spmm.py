@@ -1,6 +1,5 @@
 import os
 import sys
-import random
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -13,7 +12,7 @@ from framework import (
     TestCase,
 )
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import maybe_write_csr
+from sparse_mtx import maybe_write_csr, random_csr_indices
 
 
 class SparseTestCase(TestCase):
@@ -100,7 +99,6 @@ class CsrSpMatSpec(TensorSpec):
 
 def _generate_spmm_cases():
     cases = []
-    random.seed(42)
     # (rows, cols, n, density)
     configs = [
         # (128, 128, 128, 0.01),  # Baseline small test
@@ -109,13 +107,7 @@ def _generate_spmm_cases():
         (5120, 5120, 5120, 0.01),  # 5K scale
     ]
     for rows, cols, n, density in configs:
-        crow = [0]
-        col = []
-        for _ in range(rows):
-            nnz_row = int(cols * density)
-            if nnz_row > 0:
-                col.extend(sorted(random.sample(range(cols), nnz_row)))
-            crow.append(len(col))
+        crow, col = random_csr_indices(rows, cols, density, seed=42)
         cases.append((rows, cols, n, density, crow, col))
     return cases
 

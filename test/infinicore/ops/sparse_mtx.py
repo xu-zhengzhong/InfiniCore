@@ -1,4 +1,5 @@
 import os
+import random
 from glob import glob
 
 import torch
@@ -14,6 +15,35 @@ def _output_dir():
 
 def _fmt_density(density):
     return f"{density:.6g}".replace(".", "p")
+
+
+def density_nnz(total, density):
+    if total <= 0:
+        raise ValueError("total element count must be positive")
+    nnz = int(total * density + 0.5)
+    return min(total, max(1, nnz))
+
+
+def random_csr_indices(rows, cols, density, *, seed):
+    total = rows * cols
+    nnz = density_nnz(total, density)
+    rng = random.Random(seed)
+    positions = sorted(rng.sample(range(total), nnz))
+    crow = [0] * (rows + 1)
+    col = []
+    for position in positions:
+        row = position // cols
+        crow[row + 1] += 1
+        col.append(position % cols)
+    for row in range(rows):
+        crow[row + 1] += crow[row]
+    return crow, col
+
+
+def random_spvec_indices(size, density, *, seed):
+    nnz = density_nnz(size, density)
+    rng = random.Random(seed)
+    return sorted(rng.sample(range(size), nnz))
 
 
 def _require_output_dir():

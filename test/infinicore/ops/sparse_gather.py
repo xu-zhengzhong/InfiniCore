@@ -166,7 +166,7 @@ import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import maybe_write_spvec
+from sparse_mtx import maybe_write_spvec, random_spvec_indices
 
 # 修改: 测试用例改为 (size, density) 格式
 # density 表示稀疏度，例如 0.01 表示 1% 的非零元素
@@ -184,29 +184,6 @@ _TENSOR_DTYPES = [infinicore.float32]
 _TOLERANCE_MAP = {
     infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
 }
-
-# 固定随机种子以保证测试可复现
-_RANDOM_SEED = 42
-
-
-def _generate_indices(size, density, device="cpu"):
-    """
-    根据给定的 size 和 density 生成随机且不重复的索引。
-    返回排序后的索引列表（COO 格式通常需要有序索引）。
-    """
-    nnz = max(1, int(size * density))  # 至少保证有1个非零元素
-    nnz = min(nnz, size)  # 不能超过总大小
-    
-    generator = torch.Generator(device=device)
-    generator.manual_seed(_RANDOM_SEED)
-    
-    # 使用 randperm 生成不重复的随机索引
-    indices = torch.randperm(size, generator=generator, device=device)[:nnz]
-    # COO 格式通常要求索引有序
-    indices, _ = torch.sort(indices)
-    
-    return indices.tolist()
-
 
 def _use_dense_reference(device):
     return device.type == "mlu"
@@ -303,7 +280,7 @@ def parse_test_cases():
     test_cases = []
     for size, density in _TEST_CASES_DATA:
         # 修改: 根据 size 和 density 动态生成索引
-        indices = _generate_indices(size, density)
+        indices = random_spvec_indices(size, density, seed=42)
         nnz = len(indices)
         
         for dtype in _TENSOR_DTYPES:
