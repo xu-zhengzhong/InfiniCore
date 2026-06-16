@@ -1,6 +1,5 @@
 import os
 import sys
-import random
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -8,7 +7,7 @@ import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import maybe_write_csr
+from sparse_mtx import load_csr
 
 
 class SparseTestCase(TestCase):
@@ -72,7 +71,6 @@ class CsrSpMatSpec(TensorSpec):
 
 def _generate_spmv_cases():
     cases = []
-    random.seed(42)
     # (rows, cols, density)
     configs = [
         # (128, 128, 0.02),  # Baseline
@@ -81,14 +79,7 @@ def _generate_spmv_cases():
         (8192, 8192, 0.01),  # 5K scale
     ]
     for rows, cols, density in configs:
-        crow = [0]
-        col = []
-        for _ in range(rows):
-            nnz_row = int(cols * density)
-            if nnz_row > 0:
-                col.extend(sorted(random.sample(range(cols), nnz_row)))
-            crow.append(len(col))
-        maybe_write_csr("spmv", rows, cols, crow, col, density=density)
+        crow, col = load_csr("spmv", rows, cols, density=density)
         cases.append((rows, cols, density, crow, col))
     return cases
 

@@ -7,7 +7,7 @@ import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import maybe_write_spvec
+from sparse_mtx import load_spvec
 
 _TEST_CASES_DATA = [
     # size, density
@@ -26,18 +26,6 @@ _INDEX_DTYPES = [
 _TOLERANCE_MAP = {
     infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
 }
-
-_RANDOM_SEED = 42
-
-
-def generate_indices(size, density):
-    nnz = min(size, max(1, int(round(size * density))))
-    generator = torch.Generator(device="cpu")
-    generator.manual_seed(_RANDOM_SEED + size)
-    indices = torch.randperm(size, generator=generator)[:nnz]
-    indices, _ = torch.sort(indices)
-    return indices.tolist()
-
 
 def sparse_scatter_reference(values, *, size, indices):
     result = torch.zeros((size,), dtype=values.dtype, device=values.device)
@@ -100,8 +88,7 @@ class ScatterTestCase(TestCase):
 def parse_test_cases():
     test_cases = []
     for size, density in _TEST_CASES_DATA:
-        indices = generate_indices(size, density)
-        maybe_write_spvec("sparse_scatter", size, indices, density=density)
+        indices = load_spvec("sparse_scatter", size, density=density)
         nnz = len(indices)
         for dtype in _TENSOR_DTYPES:
             for index_dtype in _INDEX_DTYPES:

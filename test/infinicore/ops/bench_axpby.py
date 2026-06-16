@@ -1,5 +1,4 @@
 import os
-import random
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -8,7 +7,7 @@ import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-from sparse_mtx import maybe_write_spvec
+from sparse_mtx import load_spvec
 
 
 class SparseTestCase(TestCase):
@@ -21,7 +20,6 @@ class SparseTestCase(TestCase):
 
 
 def _generate_cases():
-    random.seed(42)
     configs = [
         # (128, 0.03, 1.0, 0.0),
         # (4096, 0.01, 0.5, 1.0),
@@ -30,9 +28,7 @@ def _generate_cases():
     ]
     cases = []
     for size, density, alpha, beta in configs:
-        nnz = max(1, int(size * density))
-        indices = sorted(random.sample(range(size), nnz))
-        maybe_write_spvec("axpby", size, indices, density=density)
+        indices = load_spvec("axpby", size, density=density)
         cases.append((size, density, indices, alpha, beta))
     return cases
 
