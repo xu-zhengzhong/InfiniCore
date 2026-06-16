@@ -219,15 +219,8 @@ class OpTest(BaseOperatorTest):
     #     )
 
     def infinicore_operator(
-        self, values, sparse, a, b, *, rows, cols, k, density, crow, col, alpha, beta
+        self, _values, sparse, a, b, *, alpha, beta, **_unused
     ):
-        del values
-        del rows
-        del cols
-        del k
-        del density
-        del crow
-        del col
         return infinicore.sddmm(sparse, a, b, alpha=alpha, beta=beta).values
 
 

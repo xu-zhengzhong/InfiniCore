@@ -153,10 +153,7 @@ class OpTest(BaseOperatorTest):
         y.copy_(result)
         return y
 
-    def infinicore_operator(self, _values, sparse, y, *, size, density, indices, alpha, beta):
-        del size
-        del density
-        del indices
+    def infinicore_operator(self, _values, sparse, y, *, alpha, beta, **_unused):
         return infinicore.axpby(sparse, y, alpha=alpha, beta=beta, out=y)
 
 

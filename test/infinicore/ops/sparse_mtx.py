@@ -5,6 +5,7 @@ import torch
 from framework import TensorSpec
 from framework.datatypes import to_torch_dtype
 from framework.devices import torch_device_map
+from scipy.io import mmread
 
 
 def _output_dir():
@@ -35,28 +36,18 @@ def _find_one(pattern):
 
 
 def _read_coordinate_mtx(path):
-    with open(path, "r", encoding="utf-8") as f:
-        header = f.readline().strip()
-        if not header.startswith("%%MatrixMarket matrix coordinate"):
-            raise ValueError(f"Unsupported MatrixMarket file: {path}")
+    matrix = mmread(path)
+    if hasattr(matrix, "tocoo"):
+        coo = matrix.tocoo()
+        rows, cols = coo.shape
+        return rows, cols, list(zip(coo.row.tolist(), coo.col.tolist(), coo.data.tolist()))
 
-        line = f.readline()
-        while line and line.startswith("%"):
-            line = f.readline()
-        if not line:
-            raise ValueError(f"Missing MatrixMarket size line: {path}")
-
-        rows, cols, nnz = (int(v) for v in line.split())
-        entries = []
-        for line in f:
-            if not line.strip() or line.startswith("%"):
-                continue
-            row, col, *rest = line.split()
-            value = float(rest[0]) if rest else 1.0
-            entries.append((int(row) - 1, int(col) - 1, value))
-
-    if len(entries) != nnz:
-        raise ValueError(f"Expected {nnz} entries in {path}, got {len(entries)}")
+    rows, cols = matrix.shape
+    coo = matrix.nonzero()
+    entries = [
+        (int(row), int(col), float(matrix[row, col]))
+        for row, col in zip(coo[0].tolist(), coo[1].tolist())
+    ]
     return rows, cols, entries
 
 
@@ -132,12 +123,17 @@ def _write_header(f, rows, cols, nnz, *, name, density):
     f.write(f"{rows} {cols} {nnz}\n")
 
 
-def _value_at(values, index):
+_WRITE_BATCH_LINES = 65536
+
+
+def _values_for_write(values, nnz):
     if values is None:
-        return 1.0
+        return None
     if hasattr(values, "detach"):
-        return float(values.detach().cpu().reshape(-1)[index].item())
-    return float(values[index])
+        values = values.detach().cpu().reshape(-1).tolist()
+    if len(values) < nnz:
+        raise ValueError(f"Expected at least {nnz} sparse values, got {len(values)}")
+    return values
 
 
 def maybe_write_csr(name, rows, cols, crow, col, *, values=None, density=None):
@@ -149,11 +145,20 @@ def maybe_write_csr(name, rows, cols, crow, col, *, values=None, density=None):
         out_dir,
         f"{name}_rows{rows}_cols{cols}_nnz{len(col)}_density{_fmt_density(density or 0)}.mtx",
     )
+    values = _values_for_write(values, len(col))
     with open(path, "w", encoding="utf-8") as f:
         _write_header(f, rows, cols, len(col), name=name, density=density)
+        lines = []
         for row in range(rows):
+            row_index = row + 1
             for ptr in range(crow[row], crow[row + 1]):
-                f.write(f"{row + 1} {col[ptr] + 1} {_value_at(values, ptr):.9g}\n")
+                value = 1.0 if values is None else float(values[ptr])
+                lines.append(f"{row_index} {col[ptr] + 1} {value:.9g}\n")
+                if len(lines) >= _WRITE_BATCH_LINES:
+                    f.writelines(lines)
+                    lines.clear()
+        if lines:
+            f.writelines(lines)
 
 
 def maybe_write_spvec(name, size, indices, *, values=None, density=None):
@@ -165,7 +170,15 @@ def maybe_write_spvec(name, size, indices, *, values=None, density=None):
         out_dir,
         f"{name}_size{size}_nnz{len(indices)}_density{_fmt_density(density or 0)}.mtx",
     )
+    values = _values_for_write(values, len(indices))
     with open(path, "w", encoding="utf-8") as f:
         _write_header(f, size, 1, len(indices), name=name, density=density)
+        lines = []
         for ptr, index in enumerate(indices):
-            f.write(f"{index + 1} 1 {_value_at(values, ptr):.9g}\n")
+            value = 1.0 if values is None else float(values[ptr])
+            lines.append(f"{index + 1} 1 {value:.9g}\n")
+            if len(lines) >= _WRITE_BATCH_LINES:
+                f.writelines(lines)
+                lines.clear()
+        if lines:
+            f.writelines(lines)

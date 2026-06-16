@@ -256,9 +256,8 @@ class OpTest(BaseOperatorTest):
         return result
 
     def infinicore_operator(
-        self, _values, sparse, x, *, rows, cols, density, crow, col, out=None
+        self, _values, sparse, x, *, out=None, **_unused
     ):
-        del rows, cols, density, crow, col
         return infinicore.spmv(sparse, x, out=out)
 
 

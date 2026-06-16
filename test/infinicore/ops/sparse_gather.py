@@ -371,8 +371,7 @@ class OpTest(BaseOperatorTest):
             return out
         return result
 
-    def infinicore_operator(self, _values, pattern, x, *, size, density, indices, out=None):
-        del size, density, indices
+    def infinicore_operator(self, _values, pattern, x, *, out=None, **_unused):
         return infinicore.sparse_gather(pattern, x, out=out)
 
 

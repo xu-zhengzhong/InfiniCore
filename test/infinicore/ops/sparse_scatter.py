@@ -177,9 +177,8 @@ class OpTest(BaseOperatorTest):
         return result
 
     def infinicore_operator(
-        self, _values, input, *, size, density, indices, index_dtype, out=None
+        self, _values, input, *, out=None, **_unused
     ):
-        del size, density, indices, index_dtype
         return infinicore.sparse_scatter(input, out=out)
 
 
