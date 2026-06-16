@@ -271,6 +271,14 @@ class SpVecSpec(TensorSpec):
         return f"{self.name}: spvec(size={self.size})"
 
 
+class SparseGatherTestCase(TestCase):
+    def __str__(self):
+        return (
+            f"TestCase({self.description} - "
+            f"size={self.kwargs['size']}; density={self.kwargs['density']:.6f})"
+        )
+
+
 def parse_test_cases():
     test_cases = []
     for size, density in _TEST_CASES_DATA:
@@ -298,7 +306,7 @@ def parse_test_cases():
                 (nnz,), dtype=dtype, name="values"
             )
             test_cases.append(
-                TestCase(
+                SparseGatherTestCase(
                     inputs=[
                         values_spec,
                         SpVecSpec(values_spec=values_spec, size=size, indices=indices),
@@ -306,6 +314,7 @@ def parse_test_cases():
                     ],
                     kwargs={
                         "size": size,
+                        "density": density,
                         "indices": indices,
                         "out": TensorSpec.from_tensor((nnz,), dtype=dtype, name="out"),
                     },
@@ -324,7 +333,8 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, pattern, x, *, size, indices, out=None):
+    def torch_operator(self, values, pattern, x, *, size, density, indices, out=None):
+        del density
         del values, pattern
         if _use_dense_reference(x.device):
             result = sparse_gather_dense_reference(x, size=size, indices=indices)
@@ -335,7 +345,8 @@ class OpTest(BaseOperatorTest):
             return out
         return result
 
-    def infinicore_operator(self, _values, pattern, x, *, size, indices, out=None):
+    def infinicore_operator(self, _values, pattern, x, *, size, density, indices, out=None):
+        del size, density, indices
         return infinicore.sparse_gather(pattern, x, out=out)
 
 
