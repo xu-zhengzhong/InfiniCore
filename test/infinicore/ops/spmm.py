@@ -13,39 +13,14 @@ from framework import (
     TestCase,
 )
 from framework.utils.tensor_utils import infinicore_tensor_from_torch
-
-
-def _summarize_sparse_data(rows, cols, crow, col, limit=6):
-    def preview(values):
-        if len(values) <= limit:
-            return str(values)
-        head = ", ".join(str(v) for v in values[: limit // 2])
-        tail = ", ".join(str(v) for v in values[-(limit // 2) :])
-        return f"[{head}, ..., {tail}]"
-
-    return [
-        f"rows={rows}",
-        f"cols={cols}",
-        f"crow={preview(crow)}",
-        f"col={preview(col)}",
-    ]
+from sparse_mtx import maybe_write_csr
 
 
 class SparseTestCase(TestCase):
     def __str__(self):
-        input_str = "; ".join(str(inp) for inp in self.inputs)
-        kwargs_strs = _summarize_sparse_data(
-            self.kwargs["rows"],
-            self.kwargs["cols"],
-            self.kwargs["crow"],
-            self.kwargs["col"],
-        )
-        out = self.kwargs.get("out")
-        if out is not None:
-            kwargs_strs.append(f"out={out}")
         return (
-            f"TestCase({self.description} - inputs=[{input_str}], "
-            f"kwargs={{{'; '.join(kwargs_strs)}}})"
+            f"TestCase({self.description} - rows={self.kwargs['rows']}; "
+            f"cols={self.kwargs['cols']}; density={self.kwargs['density']:.6f})"
         )
 
 
@@ -118,7 +93,8 @@ def _generate_spmm_cases():
             if nnz_row > 0:
                 col.extend(sorted(random.sample(range(cols), nnz_row)))
             crow.append(len(col))
-        cases.append((rows, cols, n, crow, col))
+        maybe_write_csr("spmm", rows, cols, crow, col, density=density)
+        cases.append((rows, cols, n, density, crow, col))
     return cases
 
 
@@ -159,7 +135,7 @@ def csr_to_dense(values, rows, cols, crow, col):
 
 def parse_test_cases():
     test_cases = []
-    for rows, cols, n, crow, col in _TEST_CASES_DATA:
+    for rows, cols, n, density, crow, col in _TEST_CASES_DATA:
         nnz = len(col)
         for dtype in _TENSOR_DTYPES:
             values_spec = CachedTensorSpec.from_tensor(
@@ -207,6 +183,7 @@ def parse_test_cases():
                     kwargs={
                         "rows": rows,
                         "cols": cols,
+                        "density": density,
                         "crow": crow,
                         "col": col,
                         "out": TensorSpec.from_tensor(
@@ -228,18 +205,22 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    # def torch_operator(self, values, sparse, b, *, rows, cols, crow, col, out=None):
-    #     del sparse
-    #     sparse = csr_to_dense(values, rows, cols, crow, col)
-    #     result = torch.matmul(sparse, b)
-    #     if out is not None:
-    #         out.copy_(result)
-    #         return out
-    #     return result
+    def torch_operator(
+        self, values, sparse, b, *, rows, cols, density, crow, col, out=None
+    ):
+        del sparse
+        del density
+        sparse = csr_to_dense(values, rows, cols, crow, col)
+        result = torch.matmul(sparse, b)
+        if out is not None:
+            out.copy_(result)
+            return out
+        return result
 
     def infinicore_operator(
-        self, _values, sparse, b, *, rows, cols, crow, col, out=None
+        self, _values, sparse, b, *, rows, cols, density, crow, col, out=None
     ):
+        del rows, cols, density, crow, col
         return infinicore.spmm(sparse, b, out=out)
 
 

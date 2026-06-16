@@ -2,16 +2,17 @@
 #include "../../../devices/metax/metax_ht2mc.h"
 #include "../../../devices/metax/metax_common.h"
 #include "../../../devices/metax/metax_kernel_common.h"
+#include "../../../../utils.h"
 #include "sparse_gather_metax.h"
+
+#include <cstdint>
 
 namespace op::sparse_gather::metax {
 
 struct Descriptor::Opaque {
     std::shared_ptr<device::metax::Handle::Internal> internal;
-    hcsparseSpVecDescr_t vec_x = nullptr;
     hcsparseDnVecDescr_t vec_y = nullptr;
     hpccDataType data_type = HPCC_R_32F;
-    hcsparseIndexType_t index_type = HCSPARSE_INDEX_64I;
 
     explicit Opaque(std::shared_ptr<device::metax::Handle::Internal> internal)
         : internal(std::move(internal)) {}
@@ -19,9 +20,6 @@ struct Descriptor::Opaque {
     ~Opaque() {
         if (vec_y != nullptr) {
             hcsparseDestroyDnVec(vec_y);
-        }
-        if (vec_x != nullptr) {
-            hcsparseDestroySpVec(vec_x);
         }
     }
 };
@@ -39,15 +37,25 @@ static hpccDataType dataTypeOf(infiniDtype_t dtype) {
     }
 }
 
-static hcsparseIndexType_t indexTypeOf(infiniDtype_t dtype) {
-    switch (dtype) {
-    case INFINI_DTYPE_I32:
-        return HCSPARSE_INDEX_32I;
-    case INFINI_DTYPE_I64:
-        return HCSPARSE_INDEX_64I;
-    default:
-        return HCSPARSE_INDEX_64I;
+static bool isAligned16(const void *ptr) {
+    return (reinterpret_cast<uintptr_t>(ptr) & 0xf) == 0;
+}
+
+static size_t calculateWorkspaceSize(
+    infiniopSpVecDescriptor_t pattern_desc,
+    infiniopTensorDescriptor_t output_desc,
+    const void *output,
+    size_t nnz) {
+    size_t size = 0;
+    if (!isAligned16(pattern_desc->indices())) {
+        size = utils::align(size, 16);
+        size += nnz * sizeof(int32_t);
     }
+    if (!isAligned16(output)) {
+        size = utils::align(size, 16);
+        size += nnz * infiniSizeOf(output_desc->dtype());
+    }
+    return size;
 }
 
 Descriptor::~Descriptor() {
@@ -65,31 +73,18 @@ infiniStatus_t Descriptor::create(
     auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
     auto dtype = output_desc->dtype();
     CHECK_DTYPE(dtype, INFINI_DTYPE_F16, INFINI_DTYPE_F32, INFINI_DTYPE_F64);
+    CHECK_OR_RETURN(pattern_desc->indicesDesc()->dtype() == INFINI_DTYPE_I32, INFINI_STATUS_BAD_TENSOR_DTYPE);
 
     auto result = SparseGatherInfo::create(output_desc, pattern_desc, input_desc);
     CHECK_RESULT(result);
 
     auto opaque = new Opaque(handle->internal());
     opaque->data_type = dataTypeOf(dtype);
-    opaque->index_type = indexTypeOf(pattern_desc->indicesDesc()->dtype());
     auto info = result.take();
+    auto workspace_size = calculateWorkspaceSize(pattern_desc, output_desc, output, info.nnz);
 
     if (info.input_vector.stride == 1 && info.output_stride == 1) {
-        auto status = hcsparseCreateSpVec(
-            &opaque->vec_x,
-            static_cast<int64_t>(info.input_vector.size),
-            static_cast<int64_t>(info.nnz),
-            const_cast<void *>(pattern_desc->indices()),
-            output,
-            opaque->index_type,
-            HCSPARSE_INDEX_BASE_ZERO,
-            opaque->data_type);
-        CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, {
-            delete opaque;
-            return INFINI_STATUS_INTERNAL_ERROR;
-        });
-
-        status = hcsparseCreateDnVec(
+        auto status = hcsparseCreateDnVec(
             &opaque->vec_y,
             static_cast<int64_t>(info.input_vector.size),
             const_cast<void *>(input),
@@ -105,7 +100,7 @@ infiniStatus_t Descriptor::create(
         pattern_desc->indicesDesc()->dtype(),
         std::move(info),
         pattern_desc,
-        0,
+        workspace_size,
         opaque,
         handle->device,
         handle->device_id);
@@ -202,22 +197,80 @@ infiniStatus_t Descriptor::calculate(
     void *output,
     const void *input,
     void *stream) const {
-    (void)workspace;
-    (void)workspace_size;
+    (void)input;
 
     if (_info.input_vector.stride != 1 || _info.output_stride != 1) {
         return calculateByKernel(_dtype, _index_dtype, _info, _pattern_desc, output, input, stream);
     }
+    if (_index_dtype != INFINI_DTYPE_I32) {
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+    if (workspace_size < _workspace_size) {
+        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+    }
 
-    CHECK_STATUS(_opaque->internal->useMcsparse(
+    auto values = output;
+    auto indices = const_cast<void *>(_pattern_desc->indices());
+    auto stream_ = reinterpret_cast<hcStream_t>(stream);
+    auto base = reinterpret_cast<char *>(workspace);
+    size_t offset = 0;
+    auto values_bytes = _info.nnz * infiniSizeOf(_dtype);
+    auto indices_bytes = _info.nnz * sizeof(int32_t);
+
+    if (!isAligned16(indices)) {
+        offset = utils::align(offset, 16);
+        indices = base + offset;
+        offset += indices_bytes;
+        CHECK_INTERNAL(hcMemcpyAsync(
+                           indices,
+                           _pattern_desc->indices(),
+                           indices_bytes,
+                           hcMemcpyDeviceToDevice,
+                           stream_),
+                       hcSuccess);
+    }
+
+    auto aligned_values = values;
+    if (!isAligned16(values)) {
+        offset = utils::align(offset, 16);
+        aligned_values = base + offset;
+        offset += values_bytes;
+    }
+
+    hcsparseSpVecDescr_t vec_x = nullptr;
+    auto status = hcsparseCreateSpVec(
+        &vec_x,
+        static_cast<int64_t>(_info.input_vector.size),
+        static_cast<int64_t>(_info.nnz),
+        indices,
+        aligned_values,
+        HCSPARSE_INDEX_32I,
+        HCSPARSE_INDEX_BASE_ZERO,
+        _opaque->data_type);
+    CHECK_API_OR(status, HCSPARSE_STATUS_SUCCESS, return INFINI_STATUS_INTERNAL_ERROR);
+
+    auto ret = _opaque->internal->useMcsparse(
         reinterpret_cast<hcStream_t>(stream),
         [&](hcsparseHandle_t sparse_handle) {
             CHECK_MCSPARSE(hcsparseGather(
                 sparse_handle,
                 _opaque->vec_y,
-                _opaque->vec_x));
+                vec_x));
             return INFINI_STATUS_SUCCESS;
-        }));
+        });
+    auto destroy_status = hcsparseDestroySpVec(vec_x);
+    CHECK_API_OR(destroy_status, HCSPARSE_STATUS_SUCCESS, return INFINI_STATUS_INTERNAL_ERROR);
+    CHECK_STATUS(ret);
+
+    if (aligned_values != values) {
+        CHECK_INTERNAL(hcMemcpyAsync(
+                           values,
+                           aligned_values,
+                           values_bytes,
+                           hcMemcpyDeviceToDevice,
+                           stream_),
+                       hcSuccess);
+    }
     return INFINI_STATUS_SUCCESS;
 }
 

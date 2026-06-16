@@ -213,23 +213,20 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(
-        self, values, sparse, x, *, rows, cols, density, crow, col, out=None
-    ):
-        del sparse
-        del density
-        if _use_dense_reference(values.device):
-            result = spmv_dense_reference(
-                values, x, rows=rows, cols=cols, crow=crow, col=col
-            )
-        else:
-            result = spmv_sparse_reference(
-                values, x, rows=rows, cols=cols, crow=crow, col=col
-            )
-        if out is not None:
-            out.copy_(result)
-            return out
-        return result
+    # def torch_operator(self, values, sparse, x, *, rows, cols, crow, col, out=None):
+    #     del sparse
+    #     if _use_dense_reference(values.device):
+    #         result = spmv_dense_reference(
+    #             values, x, rows=rows, cols=cols, crow=crow, col=col
+    #         )
+    #     else:
+    #         result = spmv_sparse_reference(
+    #             values, x, rows=rows, cols=cols, crow=crow, col=col
+    #         )
+    #     if out is not None:
+    #         out.copy_(result)
+    #         return out
+    #     return result
 
     def infinicore_operator(
         self, _values, sparse, x, *, rows, cols, density, crow, col, out=None

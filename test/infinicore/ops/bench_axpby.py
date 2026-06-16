@@ -121,13 +121,13 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, sparse, y, *, size, density, indices, alpha, beta):
-        del sparse
-        del density
-        result = beta * y.clone()
-        result[torch.tensor(indices, dtype=torch.int64, device=values.device)] += alpha * values
-        y.copy_(result)
-        return y
+    # def torch_operator(self, values, sparse, y, *, size, density, indices, alpha, beta):
+    #     del sparse
+    #     del density
+    #     result = beta * y.clone()
+    #     result[torch.tensor(indices, dtype=torch.int64, device=values.device)] += alpha * values
+    #     y.copy_(result)
+    #     return y
 
     def infinicore_operator(self, _values, sparse, y, *, size, density, indices, alpha, beta):
         del size

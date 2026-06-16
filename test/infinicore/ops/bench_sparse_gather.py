@@ -335,17 +335,17 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
-    def torch_operator(self, values, pattern, x, *, size, density, indices, out=None):
-        del density
-        del values, pattern
-        if _use_dense_reference(x.device):
-            result = sparse_gather_dense_reference(x, size=size, indices=indices)
-        else:
-            result = sparse_gather_sparse_reference(x, size=size, indices=indices)
-        if out is not None:
-            out.copy_(result)
-            return out
-        return result
+    # def torch_operator(self, values, pattern, x, *, size, density, indices, out=None):
+    #     del density
+    #     del values, pattern
+    #     if _use_dense_reference(x.device):
+    #         result = sparse_gather_dense_reference(x, size=size, indices=indices)
+    #     else:
+    #         result = sparse_gather_sparse_reference(x, size=size, indices=indices)
+    #     if out is not None:
+    #         out.copy_(result)
+    #         return out
+    #     return result
 
     def infinicore_operator(self, _values, pattern, x, *, size, density, indices, out=None):
         del size, density, indices

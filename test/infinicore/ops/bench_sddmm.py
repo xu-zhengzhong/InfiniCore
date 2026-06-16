@@ -202,36 +202,36 @@ class OpTest(BaseOperatorTest):
         finally:
             self._target_device = None
 
-    def torch_operator(
-        self, values, sparse, a, b, *, rows, cols, k, density, crow, col, alpha, beta
-    ):
-        del sparse
-        del k
-        del density
-        if _use_dense_reference(values.device, self._target_device):
-            return sddmm_dense_reference(
-                values,
-                a,
-                b,
-                rows=rows,
-                cols=cols,
-                crow=crow,
-                col=col,
-                alpha=alpha,
-                beta=beta,
-                force_cpu=True,
-            )
-        return sddmm_sparse_reference(
-            values,
-            a,
-            b,
-            rows=rows,
-            cols=cols,
-            crow=crow,
-            col=col,
-            alpha=alpha,
-            beta=beta,
-        )
+    # def torch_operator(
+    #     self, values, sparse, a, b, *, rows, cols, k, density, crow, col, alpha, beta
+    # ):
+    #     del sparse
+    #     del k
+    #     del density
+    #     if _use_dense_reference(values.device, self._target_device):
+    #         return sddmm_dense_reference(
+    #             values,
+    #             a,
+    #             b,
+    #             rows=rows,
+    #             cols=cols,
+    #             crow=crow,
+    #             col=col,
+    #             alpha=alpha,
+    #             beta=beta,
+    #             force_cpu=True,
+    #         )
+    #     return sddmm_sparse_reference(
+    #         values,
+    #         a,
+    #         b,
+    #         rows=rows,
+    #         cols=cols,
+    #         crow=crow,
+    #         col=col,
+    #         alpha=alpha,
+    #         beta=beta,
+    #     )
 
     def infinicore_operator(
         self, values, sparse, a, b, *, rows, cols, k, density, crow, col, alpha, beta
